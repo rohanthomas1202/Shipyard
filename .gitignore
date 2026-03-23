@@ -1,4 +1,12 @@
 .env
-traces/
 __pycache__/
 *.egg-info/
+ship-rebuild/
+shipyard_state.db
+.pytest_cache/
+ShipyardChatGPT/
+ShipyardClaude/
+.DS_Store
+Shipyard.pdf
+Shipyard.pdf
+PRESEARCH.pdf

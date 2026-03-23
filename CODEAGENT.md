@@ -39,8 +39,9 @@ Shipyard uses a single LangGraph StateGraph with the following nodes wired in se
 
 ## Trace Links (MVP)
 
-- Trace 1 (normal run): _to be filled after first successful run_
-- Trace 2 (error/recovery path): _to be filled after first error recovery run_
+- **Trace 1 (normal run):** `traces/trace-1-normal-edit.json` — Single-file edit on Ship's `api/src/routes/search.ts`. Path: `receive → planner (2 steps) → coordinator → reader → editor → validator → advance → reader → editor → validator → reporter`. 1 successful anchor-based edit adding a rate limit comment above the /mentions endpoint.
+
+- **Trace 2 (different execution path — read-only + edit branching):** `traces/trace-2-branching-path.json` — Multi-step plan with mixed step types. Path: `receive → planner (3 steps) → coordinator → reader (read-only, skips editor) → advance → reader (read-only, skips editor) → advance → reader → editor → validator → reporter`. Demonstrates the `after_reader` conditional routing: read-only steps advance directly without invoking the editor, while edit steps go through the full reader → editor → validator pipeline. 2 read-only steps + 1 edit step = different branching condition from Trace 1.
 
 ## Architecture Decisions (Final Submission)
 
