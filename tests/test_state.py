@@ -1,0 +1,29 @@
+from agent.state import AgentState
+
+def test_agent_state_has_required_fields():
+    state = AgentState(
+        messages=[],
+        instruction="test instruction",
+        working_directory="/tmp/test",
+        context={},
+        plan=[],
+        current_step=0,
+        file_buffer={},
+        edit_history=[],
+        error_state=None,
+        is_parallel=False,
+        parallel_batches=[],
+        sequential_first=[],
+        has_conflicts=False,
+    )
+    assert state["instruction"] == "test instruction"
+    assert state["working_directory"] == "/tmp/test"
+    assert state["messages"] == []
+    assert state["context"] == {}
+    assert state["plan"] == []
+    assert state["current_step"] == 0
+    assert state["file_buffer"] == {}
+    assert state["edit_history"] == []
+    assert state["error_state"] is None
+    assert state["is_parallel"] is False
+    assert state["parallel_batches"] == []
