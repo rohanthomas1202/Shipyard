@@ -27,3 +27,5 @@ def test_agent_state_has_required_fields():
     assert state["error_state"] is None
     assert state["is_parallel"] is False
     assert state["parallel_batches"] == []
+    assert state["sequential_first"] == []
+    assert state["has_conflicts"] is False
