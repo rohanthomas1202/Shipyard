@@ -1,7 +1,7 @@
 # ast-grep + LSP Integration Design
 
 **Date:** 2026-03-25
-**Status:** Approved
+**Status:** Approved (pending review)
 **Approach:** Layered Integration (Hybrid)
 
 ## Overview
@@ -72,9 +72,9 @@ class AnchorResult:
 
 ### 1b. Structural Replace (Pure Function)
 
-`structural_replace(content: str, anchor: str, replacement: str, language: str) -> tuple[str, str]`
+`structural_replace(content: str, anchor: str, replacement: str, language: str) -> str`
 
-**Critical design decision:** This is a **pure function** that returns `(old_content, new_content)` without writing to disk. The caller (editor_node) feeds the result into the existing ApprovalManager flow. This preserves supervised mode correctness — `structural_replace()` never bypasses human approval gates.
+**Critical design decision:** This is a **pure function** that returns the new file content as a string without writing to disk. The caller (editor_node) feeds `(content, new_content)` into the existing ApprovalManager flow as `(old_content, new_content)`. This preserves supervised mode correctness — `structural_replace()` never bypasses human approval gates.
 
 Uses ast-grep's tree-sitter-aware engine to perform the replacement.
 
@@ -113,13 +113,13 @@ LRU cache keyed on `(file_path, content_hash)`:
 - Avoids re-parsing on sequential edits to the same file (common: 5-10 edits to one file in a complex step)
 - Cache is per-run, cleared at run end
 - Configurable size: `ast_grep.cache_size` (default 64 entries)
-- **Invalidation:** Cache entries are cleared for files modified by exec/test steps (see Section 9)
+- **Invalidation:** Cache entries are cleared for files modified by exec/test steps (see Section 7)
 
 ### 1e. Language Detection
 
 `detect_languages(working_directory: str) -> dict[str, bool]`
 
-Called once at run start in `receive_node`. Scans file extensions in the working directory, probes ast-grep-py grammar support for each detected language. Populates `ast_available` in AgentState.
+**Synchronous function.** Called once at run start in `receive_node`. Scans file extensions in the working directory, probes ast-grep-py grammar support for each detected language via `ast_grep_py.SgRoot` (instantiation with a language string raises if grammar is unavailable — this is the probe mechanism). Populates `ast_available` in AgentState. No async required.
 
 ```python
 # Example output
@@ -203,11 +203,23 @@ Configurable per-language in server registry (rust-analyzer gets longer defaults
 
 ### Integration with validator_node
 
-The `validator_node` interface is unchanged — still returns `{"error_state": ...}` or `{"error_state": None}`. The upgrade is internal:
+The `validator_node` return contract is unchanged — still returns `{"error_state": ...}` or `{"error_state": None}`. However, the function signature must change:
 
-1. Check if an LSP client is available for this file's language (via `lsp_manager.get_client()`)
-2. If yes: call `get_diagnostics()`, return errors
-3. If no: fall back to current `_syntax_check()` subprocess checks
+**Migration: sync → async.** The current `validator_node` is `def validator_node(state: dict) -> dict:` — a synchronous function with no `config` parameter. To access `lsp_manager` from `config["configurable"]` and call `await get_diagnostics()`, it must become:
+
+```python
+async def validator_node(state: dict, config: dict) -> dict:
+```
+
+**Implications:**
+- LangGraph handles async node functions natively — no graph edge changes needed
+- The existing `_syntax_check()` helper uses synchronous `subprocess.run`. Wrap in `asyncio.to_thread(_syntax_check, file_path)` to avoid blocking the event loop, or convert to `asyncio.create_subprocess_exec` for consistency
+- This is a **Phase 3 change** (LSP integration). Phase 1 (ast-grep only) does not require this migration since `validate_anchor()` and `structural_replace()` are synchronous
+
+**Updated flow:**
+1. Get `lsp_manager` from `config["configurable"].get("lsp_manager")`
+2. If `lsp_manager` exists and has a client for this language: call `await client.get_diagnostics()`, return errors
+3. If no LSP client: fall back to `_syntax_check()` subprocess checks (wrapped in `asyncio.to_thread`)
 
 ---
 
@@ -259,7 +271,7 @@ At run start, scans the project for file extensions, then for each detected lang
 
 ### Installation Responsibility
 
-Shipyard does **not** install LSP servers. It discovers what's available in the project environment. For containerized/remote runs, the container image must include the relevant servers. This matches IDE behavior — VS Code doesn't install language servers automatically either.
+Shipyard does **not** install LSP servers. It discovers what's available in the project environment. For containerized/remote runs, the container image must include the relevant servers.
 
 ### Lifecycle: Async Context Manager
 
@@ -282,22 +294,29 @@ class LspManager:
         ...
 ```
 
-Used as a context manager wrapping the entire graph run. The FastAPI endpoint that creates the run:
+Used as a context manager wrapping the graph invocation. **Important:** This lives inside the `execute()` background coroutine (the `asyncio.create_task` target in `server/main.py` lines 157-195), NOT at the HTTP endpoint level. Placing it at the endpoint level would block the HTTP response until the entire graph run completes, defeating the fire-and-forget async task pattern.
 
 ```python
-async with LspManager(project_path, detected_languages, config) as lsp_mgr:
-    result = await graph.ainvoke(state, config={
-        "configurable": {
-            "lsp_manager": lsp_mgr,
-            "approval_manager": approval_mgr,
-            ...
-        }
-    })
+# Inside the execute() background coroutine in server/main.py
+async def execute():
+    try:
+        async with LspManager(project_path, detected_languages, lsp_config) as lsp_mgr:
+            result = await graph.ainvoke(state, config={
+                "configurable": {
+                    "lsp_manager": lsp_mgr,
+                    "approval_manager": approval_mgr,
+                    "router": router,
+                    "store": store,
+                }
+            })
+            # ... handle result ...
+    except Exception as e:
+        runs[run_id] = {"status": "error", "result": str(e)}
 ```
 
 This guarantees cleanup even if the graph errors out before reaching `reporter_node`.
 
-**Additional safety:** `atexit` handler registered as a fallback for ungraceful shutdowns. Background reader tasks per server run inside an `asyncio.TaskGroup` (Python 3.11+) — automatically cancelled on context exit.
+**Additional safety:** Signal handlers (`SIGINT`/`SIGTERM`) registered to schedule async cleanup on the running event loop. As a last resort, an `atexit` handler kills subprocess PIDs via `os.kill()` (note: `atexit` handlers are synchronous and cannot `await` — they are limited to forceful process termination). Background reader tasks per server run inside an `asyncio.TaskGroup` (Python 3.11+) — automatically cancelled on context exit.
 
 ### Server Crash Handling
 
@@ -340,7 +359,12 @@ The planner emits a step of type `refactor`:
 
 ### Planner Changes
 
-`PlanStep.kind` expands from `Literal["read", "edit", "exec", "test", "git"]` to include `"refactor"`. The planner system prompt gets a new section:
+**`agent/steps.py` modifications:**
+- Update `PlanStep.kind` Literal type from `Literal["read", "edit", "exec", "test", "git"]` to include `"refactor"`
+- Update `validate_kind` field_validator's `allowed` set to include `"refactor"` (currently raises `ValueError` for unknown kinds)
+- Add optional fields to `PlanStep` for refactor metadata: `pattern: str | None`, `refactor_replacement: str | None`, `language: str | None`, `scope: str | None`
+
+The planner system prompt (`agent/prompts/planner.py`) gets a new section:
 
 > **When to emit `refactor` vs `edit`:**
 > - `edit` — change specific code in 1-3 known files
@@ -368,12 +392,14 @@ All edits from a single refactor step share a `batch_id` (UUID). The `edit_histo
 ```python
 {
     "file": str,
-    "old": str,
-    "new": str,
-    "snapshot": str,
-    "batch_id": str,  # NEW: groups refactor edits
+    "old": str,          # anchor text (for display)
+    "new": str,          # replacement text (for display)
+    "snapshot": str,     # FULL file content before edit (required for rollback)
+    "batch_id": str,     # NEW: groups refactor edits
 }
 ```
+
+**Snapshot consistency note:** The current approval path in `editor.py` (lines 82-87, 96-101) does NOT save a full-file snapshot — it only stores `"old": anchor` (the anchor text, not the full content). The refactor node must store full-file snapshots independently by reading the file content before applying each edit. The `rollback_batch()` function depends on `entry["snapshot"]` being the complete original file content. As a Phase 2 prerequisite, the approval path should also be updated to store full-file snapshots for consistency.
 
 New function in `file_ops.py`:
 
@@ -382,6 +408,8 @@ def rollback_batch(edit_history: list[dict], batch_id: str) -> None:
     """Revert all files in a batch atomically."""
     batch_entries = [e for e in edit_history if e.get("batch_id") == batch_id]
     for entry in batch_entries:
+        if "snapshot" not in entry:
+            raise ValueError(f"Cannot rollback {entry['file']}: no snapshot stored")
         with open(entry["file"], "w") as f:
             f.write(entry["snapshot"])
 ```
@@ -416,12 +444,34 @@ Default exclusions: `node_modules/`, `.git/`, `__pycache__/`, `dist/`, `build/`,
 ### Updated Graph Topology
 
 ```
-planner → coordinator → [reader → editor → validator] → merger → reporter
-                    ↘ [refactor → validator] ↗
+planner → coordinator → classify → [reader → editor → validator] → advance → classify ...
+                                 ↘ [refactor → validator] → advance → classify ...
+                                 ↘ [executor] → advance → classify ...
+                                 ↘ reporter (when all steps done)
 ```
 
-- **coordinator** inspects each step's `type` field. Steps with `type: "refactor"` route to `refactor_node`. Refactor steps are always placed in `sequential_first`.
-- **LspManager** injected at graph construction (FastAPI endpoint), not inside any node
+**`classify_step` in `agent/graph.py`** — add routing for `kind == "refactor"`:
+The current `classify_step` function (line 44-75) routes based on `step["kind"]`. It must add:
+```python
+if kind == "refactor":
+    return "refactor"
+```
+And the conditional edges map must include `"refactor": "refactor"`.
+
+**`coordinator_node` in `agent/nodes/coordinator.py`** — enforce sequential refactors:
+The current coordinator operates on raw strings (`step_lower = step.lower()`) for directory-based grouping. It must be updated to:
+1. Handle typed `PlanStep` dicts (check `isinstance(step, dict)` and read `step["kind"]`)
+2. Filter steps with `kind == "refactor"` into `sequential_first`, never into `parallel_batches`
+3. Preserve backward compatibility with string-based steps (existing fallback path)
+
+**Graph construction** — register the new node:
+```python
+graph.add_node("refactor", refactor_node)
+```
+And add edges: `refactor → validator` (reuses existing validator path).
+
+**Other integration points:**
+- **LspManager** injected at graph construction (inside the `execute()` background task in `server/main.py`), not inside any node
 - **receive_node** calls `detect_languages()` to populate `ast_available`
 
 ### State Additions to AgentState
@@ -430,6 +480,7 @@ planner → coordinator → [reader → editor → validator] → merger → rep
 class AgentState(TypedDict):
     # ... existing fields ...
     ast_available: dict[str, bool]  # per-language ast-grep support flags
+    invalidated_files: list[str]    # files modified by exec/test steps, cleared after reader re-reads
 ```
 
 `LspManager` is **not** in state — it lives in `config["configurable"]["lsp_manager"]`.
@@ -442,7 +493,13 @@ class AgentState(TypedDict):
 
 ### Updated Flow
 
+**File selection fix:** The current editor (line 23) does `file_path = list(file_buffer.keys())[0]` — always picking the first file. With typed `PlanStep` objects, the editor should use `step["target_files"][0]` when available, falling back to the first buffer key for legacy string steps. This ensures the correct file is edited when `file_buffer` contains multiple entries.
+
 ```
+Determine file_path:
+    → if step is dict with target_files: file_path = step["target_files"][0]
+    → else: file_path = list(file_buffer.keys())[0]  [existing fallback]
+
 LLM → parse {"anchor", "replacement"}
     → ast_ops.validate_anchor(file_path, content, anchor)
         → structural_match:
@@ -599,7 +656,56 @@ LSP servers must be installed in the user's environment. Shipyard discovers what
 
 ---
 
-## Section 11: Rollout Plan
+## Section 11: Testing Strategy
+
+### Phase 1 Tests (ast-grep)
+
+**Pre-implementation:** 5-10 indentation test cases as acceptance criteria for `structural_replace()`:
+1. Single-line replacement in a function body
+2. Multi-line replacement at top level (0 indent)
+3. Nested replacement: method body inside class inside module (3+ levels)
+4. Python-specific: replacing an indented function body
+5. Replacement containing string literals with embedded newlines
+6. Multi-line replacement with mixed indentation (switch/case)
+7. Replacement that adds/removes indent levels
+8. Empty replacement (deletion)
+
+**Unit tests for `ast_ops.py`:**
+- `validate_anchor()` with structural match, partial match, string literal match, unsupported language
+- `structural_replace()` correctness against each indentation test case
+- `detect_languages()` with known and unknown extensions
+- Parse tree cache: hit/miss/invalidation behavior
+
+**Integration tests:**
+- Full editor flow: LLM output → validate → replace → approval → validate
+- Fallback path: unsupported language → text-based edit (no regression)
+
+### Phase 2 Tests (Refactor)
+
+- `apply_rule()` dry-run: correct match count, no files modified
+- `apply_rule()` apply: files modified, snapshots stored
+- `rollback_batch()`: all files reverted atomically
+- Coordinator: refactor steps in sequential_first, never parallel
+- Planner: LLM reliably distinguishes edit vs refactor steps
+
+### Phase 3 Tests (LSP)
+
+**Integration test (critical):** Start a real `typescript-language-server`, open a file with a known type error, verify the diagnostic comes back through `get_diagnostics()`. This single test will flush out ~80% of protocol issues.
+
+- `LspConnection`: JSON-RPC framing, Content-Length parsing, notification dispatch
+- `LspDiagnosticClient`: capability detection (push vs pull), timeout handling, rollback document sync
+- `LspManager`: server discovery, startup, crash detection, degradation
+- `validator_node` async migration: same results as sync path for subprocess fallback
+
+### Phase 4 Tests
+
+- Multi-language LSP: Python, Rust, Go servers produce diagnostics
+- Parallel step file locking: concurrent edits to different files succeed; same-file edits serialize
+- Observability: metrics are logged at run end
+
+---
+
+## Section 12: Rollout Plan
 
 | Phase | Scope | Risk | Deliverable | Includes |
 |---|---|---|---|---|
@@ -625,15 +731,17 @@ Phase 1 delivers immediate value with zero operational complexity. Phase 3 is sc
 
 | File | Changes |
 |---|---|
-| `agent/nodes/editor.py` | Add ast-grep validate/replace before approval flow |
-| `agent/nodes/validator.py` | Use LSP diagnostics when available, add notify_rollback |
-| `agent/nodes/coordinator.py` | Route refactor steps to sequential_first, never parallel |
+| `agent/nodes/editor.py` | Add ast-grep validate/replace before approval flow; use step target_files for file selection |
+| `agent/nodes/validator.py` | **Migrate to async** (Phase 3); add config param; use LSP diagnostics when available; add notify_rollback; wrap _syntax_check in asyncio.to_thread |
+| `agent/nodes/coordinator.py` | Handle typed PlanStep dicts (not just strings); route refactor steps to sequential_first |
 | `agent/nodes/receive.py` | Call detect_languages() at run start |
 | `agent/nodes/executor.py` | Return invalidated_files for cache busting |
 | `agent/nodes/reporter.py` | Log final observability metrics |
-| `agent/graph.py` | Add refactor_node, inject LspManager via config |
-| `agent/state.py` | Add ast_available field |
+| `agent/graph.py` | Add refactor_node; add `"refactor"` to classify_step routing and conditional edges map |
+| `agent/state.py` | Add ast_available and invalidated_files fields |
+| `agent/steps.py` | Add `"refactor"` to PlanStep.kind Literal and validate_kind allowed set; add optional refactor fields (pattern, refactor_replacement, language, scope) |
 | `agent/tools/file_ops.py` | Add rollback_batch() function |
-| `agent/prompts/planner.py` | Add refactor step type documentation |
-| `store/models.py` | Add batch_id to EditRecord |
-| `server/main.py` | Wrap graph run in LspManager context manager |
+| `agent/prompts/planner.py` | Add refactor step type documentation and heuristics |
+| `agent/approval.py` | Add propose_batch() and approve_batch() methods for batch refactor approval |
+| `store/models.py` | Add batch_id field to EditRecord |
+| `server/main.py` | Wrap graph.ainvoke inside LspManager context manager in execute() background coroutine |
