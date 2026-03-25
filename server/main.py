@@ -125,21 +125,25 @@ async def _resume_run(run_id: str) -> None:
         state["error_state"] = None
         state["waiting_for_human"] = False
         state["invalidated_files"] = []
-        config = {
-            "configurable": {
-                "store": store,
-                "router": router,
-                "approval_manager": app.state.approval_manager,
-                "run_id": run_id,
+        from agent.tools.lsp_manager import LspManager
+        working_dir = state.get("working_directory", "")
+        async with LspManager(working_dir, {}) as lsp_mgr:
+            config = {
+                "configurable": {
+                    "store": store,
+                    "router": router,
+                    "approval_manager": app.state.approval_manager,
+                    "run_id": run_id,
+                    "lsp_manager": lsp_mgr,
+                }
             }
-        }
-        result = await graph.ainvoke(state, config=config)
-        if result.get("waiting_for_human"):
-            runs[run_id] = {"status": "waiting_for_human", "result": result}
-        elif result.get("error_state") is None:
-            runs[run_id] = {"status": "completed", "result": result}
-        else:
-            runs[run_id] = {"status": "failed", "result": result}
+            result = await graph.ainvoke(state, config=config)
+            if result.get("waiting_for_human"):
+                runs[run_id] = {"status": "waiting_for_human", "result": result}
+            elif result.get("error_state") is None:
+                runs[run_id] = {"status": "completed", "result": result}
+            else:
+                runs[run_id] = {"status": "failed", "result": result}
     except Exception as e:
         runs[run_id] = {"status": "error", "result": str(e)}
 
@@ -191,21 +195,24 @@ async def submit_instruction(req: InstructionRequest):
                 "ast_available": {},
                 "invalidated_files": [],
             }
-            config = {
-                "configurable": {
-                    "store": store,
-                    "router": router,
-                    "approval_manager": app.state.approval_manager,
-                    "run_id": run_id,
+            from agent.tools.lsp_manager import LspManager
+            async with LspManager(req.working_directory, {}) as lsp_mgr:
+                config = {
+                    "configurable": {
+                        "store": store,
+                        "router": router,
+                        "approval_manager": app.state.approval_manager,
+                        "run_id": run_id,
+                        "lsp_manager": lsp_mgr,
+                    }
                 }
-            }
-            result = await graph.ainvoke(initial_state, config=config)
-            if result.get("waiting_for_human"):
-                runs[run_id] = {"status": "waiting_for_human", "result": result}
-            elif result.get("error_state") is None:
-                runs[run_id] = {"status": "completed", "result": result}
-            else:
-                runs[run_id] = {"status": "failed", "result": result}
+                result = await graph.ainvoke(initial_state, config=config)
+                if result.get("waiting_for_human"):
+                    runs[run_id] = {"status": "waiting_for_human", "result": result}
+                elif result.get("error_state") is None:
+                    runs[run_id] = {"status": "completed", "result": result}
+                else:
+                    runs[run_id] = {"status": "failed", "result": result}
         except Exception as e:
             runs[run_id] = {"status": "error", "result": str(e)}
 
@@ -238,21 +245,25 @@ async def continue_run(run_id: str, req: InstructionRequest):
             state["instruction"] = req.instruction
             state["context"] = req.context
             state["error_state"] = None
-            config = {
-                "configurable": {
-                    "store": store,
-                    "router": router,
-                    "approval_manager": app.state.approval_manager,
-                    "run_id": run_id,
+            from agent.tools.lsp_manager import LspManager
+            working_dir = state.get("working_directory", req.working_directory)
+            async with LspManager(working_dir, {}) as lsp_mgr:
+                config = {
+                    "configurable": {
+                        "store": store,
+                        "router": router,
+                        "approval_manager": app.state.approval_manager,
+                        "run_id": run_id,
+                        "lsp_manager": lsp_mgr,
+                    }
                 }
-            }
-            result = await graph.ainvoke(state, config=config)
-            if result.get("waiting_for_human"):
-                runs[run_id] = {"status": "waiting_for_human", "result": result}
-            elif result.get("error_state") is None:
-                runs[run_id] = {"status": "completed", "result": result}
-            else:
-                runs[run_id] = {"status": "failed", "result": result}
+                result = await graph.ainvoke(state, config=config)
+                if result.get("waiting_for_human"):
+                    runs[run_id] = {"status": "waiting_for_human", "result": result}
+                elif result.get("error_state") is None:
+                    runs[run_id] = {"status": "completed", "result": result}
+                else:
+                    runs[run_id] = {"status": "failed", "result": result}
         except Exception as e:
             runs[run_id] = {"status": "error", "result": str(e)}
 
