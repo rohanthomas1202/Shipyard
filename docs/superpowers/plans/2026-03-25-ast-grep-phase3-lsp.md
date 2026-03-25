@@ -473,6 +473,7 @@ from __future__ import annotations
 import asyncio
 import os
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -530,6 +531,16 @@ def _file_uri(path: str) -> str:
     return Path(path).as_uri()
 
 
+# --- Version-aware diagnostic waiter (fixes P0 race conditions) ---
+
+@dataclass
+class _DiagnosticWaiter:
+    """Tracks expected version to prevent stale diagnostic notifications."""
+    expected_version: int
+    event: asyncio.Event = field(default_factory=asyncio.Event)
+    diagnostics: list = field(default_factory=list)
+
+
 # --- LspConnection: Layer 1 ---
 
 class LspConnection:
@@ -554,11 +565,11 @@ class LspConnection:
         self.diagnostic_mode: str = "push"  # "push" (publishDiagnostics) or "pull" (textDocument/diagnostic) or "none"
         self._client = None
         self._capabilities = None
-        self._diagnostic_events: dict[str, asyncio.Event] = {}  # uri → Event
-        self._diagnostics: dict[str, list[types.Diagnostic]] = {}  # uri → diagnostics
+        self._waiters: dict[str, _DiagnosticWaiter] = {}  # uri → version-aware waiter
         self._progress_tokens: set[str] = set()
         self._ready_event = asyncio.Event()
         self._stderr_task: asyncio.Task | None = None
+        self._doc_versions: dict[str, int] = {}  # uri → current version
 
     async def start(self) -> None:
         """Start the LSP server and perform initialize handshake."""
@@ -566,13 +577,17 @@ class LspConnection:
 
         self._client = BaseLanguageClient(f"shipyard-{self.language}", "v1")
 
-        # Register diagnostic handler
+        # Register diagnostic handler with version tracking (prevents stale notification races)
         @self._client.feature(types.TEXT_DOCUMENT_PUBLISH_DIAGNOSTICS)
         def on_diagnostics(params: types.PublishDiagnosticsParams):
             uri = params.uri
-            self._diagnostics[uri] = list(params.diagnostics)
-            if uri in self._diagnostic_events:
-                self._diagnostic_events[uri].set()
+            waiter = self._waiters.get(uri)
+            if waiter is None:
+                return
+            # Accept diagnostics if version matches or server doesn't report version
+            if params.version is None or params.version >= waiter.expected_version:
+                waiter.diagnostics = list(params.diagnostics)
+                waiter.event.set()
 
         # Register progress handler for readiness tracking
         @self._client.feature(types.WINDOW_WORK_DONE_PROGRESS_CREATE)
@@ -632,15 +647,17 @@ class LspConnection:
         })
 
     async def _drain_stderr(self, stderr_stream) -> None:
-        """Background task: drain server stderr to prevent pipe buffer deadlock."""
+        """Background task: drain server stderr to prevent pipe buffer deadlock.
+
+        Note: stderr EOF does NOT indicate crash — many servers close stderr
+        normally during shutdown. Degradation is detected from request failures
+        (timeouts + retries), not stderr state.
+        """
         try:
             while True:
                 line = await stderr_stream.readline()
                 if not line:
-                    # EOF on stderr — server process may have crashed
-                    self.is_degraded = True
-                    tracer.log("lsp_connection", {"language": self.language, "status": "degraded", "reason": "stderr EOF"})
-                    break
+                    break  # EOF — normal during shutdown, NOT a crash signal
                 tracer.log("lsp_stderr", {"language": self.language, "line": line.decode(errors="replace").rstrip()})
         except asyncio.CancelledError:
             pass
@@ -660,8 +677,8 @@ class LspConnection:
     async def open_document(self, file_path: str, content: str, version: int = 1) -> None:
         """Send textDocument/didOpen."""
         uri = _file_uri(file_path)
-        self._diagnostic_events[uri] = asyncio.Event()
-        self._diagnostics[uri] = []
+        self._doc_versions[uri] = version
+        self._waiters[uri] = _DiagnosticWaiter(expected_version=version)
         self._client.text_document_did_open(
             types.DidOpenTextDocumentParams(
                 text_document=types.TextDocumentItem(
@@ -676,8 +693,9 @@ class LspConnection:
     async def change_document(self, file_path: str, content: str, version: int = 2) -> None:
         """Send textDocument/didChange with full content."""
         uri = _file_uri(file_path)
-        self._diagnostic_events[uri] = asyncio.Event()
-        self._diagnostics[uri] = []
+        self._doc_versions[uri] = version
+        # Create new waiter with updated version (atomically replaces old one)
+        self._waiters[uri] = _DiagnosticWaiter(expected_version=version)
         self._client.text_document_did_change(
             types.DidChangeTextDocumentParams(
                 text_document=types.VersionedTextDocumentIdentifier(
@@ -685,7 +703,7 @@ class LspConnection:
                     version=version,
                 ),
                 content_changes=[
-                    types.TextDocumentContentChangeEvent_Type1(text=content),
+                    types.TextDocumentContentChangeWholeDocument(text=content),
                 ],
             )
         )
@@ -698,17 +716,17 @@ class LspConnection:
                 text_document=types.TextDocumentIdentifier(uri=uri),
             )
         )
-        self._diagnostic_events.pop(uri, None)
-        self._diagnostics.pop(uri, None)
+        self._waiters.pop(uri, None)
+        self._doc_versions.pop(uri, None)
 
     async def wait_for_diagnostics(self, file_path: str, timeout: float = 5.0) -> list[types.Diagnostic]:
         """Wait for publishDiagnostics notification for a file."""
         uri = _file_uri(file_path)
-        event = self._diagnostic_events.get(uri)
-        if event is None:
+        waiter = self._waiters.get(uri)
+        if waiter is None:
             return []
         try:
-            await asyncio.wait_for(event.wait(), timeout=timeout)
+            await asyncio.wait_for(waiter.event.wait(), timeout=timeout)
         except asyncio.TimeoutError:
             tracer.log("lsp_connection", {
                 "language": self.language,
@@ -716,7 +734,7 @@ class LspConnection:
                 "timeout": timeout,
                 "status": "diagnostic_timeout",
             })
-        return self._diagnostics.get(uri, [])
+        return waiter.diagnostics
 
     async def stop(self) -> None:
         """Shutdown and stop the server."""
@@ -786,8 +804,9 @@ class LspDiagnosticClient:
         diagnostics = await self.connection.wait_for_diagnostics(file_path, timeout=timeout)
 
         # First-timeout retry: if first call got no diagnostics, retry with 2x timeout
-        if self._first_call_just_happened and not diagnostics and not self.connection.is_degraded:
-            self._first_call_just_happened = False
+        if self._first_call_just_happened:
+            self._first_call_just_happened = False  # always reset, regardless of outcome
+        if not diagnostics and not self.connection.is_degraded and timeout == self.timeout_first:
             tracer.log("lsp_diagnostic", {"file": file_path, "status": "first_timeout_retry", "timeout": timeout * 2})
             version = self._next_version(file_path)
             await self.connection.change_document(file_path, content, version)
@@ -994,7 +1013,6 @@ class LspManager:
         self._connections: dict[str, LspConnection] = {}
         self._clients: dict[str, LspDiagnosticClient] = {}
         self._status: dict[str, str] = {}  # language → "running" | "degraded" | "unavailable"
-        self._file_locks: dict[str, asyncio.Lock] = {}
 
     async def __aenter__(self) -> LspManager:
         """Start available LSP servers for detected languages."""
@@ -1030,6 +1048,9 @@ class LspManager:
                     timeout_incremental=entry.get("timeout_incremental", 5.0),
                 )
                 self._status[language] = "running"
+                # Track PID for atexit cleanup
+                if hasattr(conn._client, '_server') and conn._client._server:
+                    _active_pids.append(conn._client._server.pid)
                 tracer.log("lsp_manager", {"language": language, "status": "running", "cmd": cmd[0]})
             except Exception as e:
                 self._status[language] = "unavailable"
@@ -1059,11 +1080,7 @@ class LspManager:
         """Get status of all servers."""
         return dict(self._status)
 
-    def get_file_lock(self, file_path: str) -> asyncio.Lock:
-        """Get or create a per-file lock for serializing LSP interactions."""
-        if file_path not in self._file_locks:
-            self._file_locks[file_path] = asyncio.Lock()
-        return self._file_locks[file_path]
+    # Note: Per-file locking deferred to Phase 4 (when multi-language parallel validation is added)
 ```
 
 - [ ] **Step 3: Run tests**
@@ -1214,12 +1231,18 @@ def _detect_language(file_path: str) -> str | None:
     return ext_map.get(ext.lower())
 
 
-async def validator_node(state: dict, config: dict) -> dict:
+async def validator_node(state: dict, config: dict | None = None) -> dict:
     """Validate the most recent edit. Rollback if validation fails.
 
     Uses LSP diagnostics when lsp_manager is available, falls back to
     subprocess syntax checks otherwise.
+
+    Note: config parameter added for LSP integration. LangGraph auto-injects
+    it for nodes that declare it. Default None for backward compatibility
+    with existing tests that call validator_node(state) without config.
     """
+    if config is None:
+        config = {"configurable": {}}
     edit_history = state.get("edit_history", [])
     if not edit_history:
         return {"error_state": None}
