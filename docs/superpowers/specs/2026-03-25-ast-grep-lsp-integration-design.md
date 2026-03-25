@@ -53,13 +53,22 @@ Dependencies: `ast-grep-py` (PyPI)
 
 ### 1a. Structural Anchor Validation
 
+**Phase 0 prerequisite: spike required.** Before implementing, write a standalone script (~50 lines) that demonstrates AST boundary detection against ast-grep-py's actual API. Timebox: 1 day. If the spike reveals the approach is infeasible, Phase 1 simplifies to "add ast-grep for codebase search" without the anchor validation layer. This is a go/no-go gate.
+
 `validate_anchor(file_path: str, content: str, anchor: str) -> AnchorResult`
 
-Parses the file with ast-grep and checks whether the anchor text maps to one or more complete AST nodes (not a partial expression, not inside a string literal or comment).
+**Algorithm sketch:**
+1. Parse the full file content with `ast_grep_py.SgRoot(language, content)`
+2. Find the anchor's byte offset in the file via `content.find(anchor)` (yes, this is `str.find` — the same as current approach)
+3. Walk the AST to find the smallest node whose text range contains the anchor span
+4. Check if any node (or contiguous sequence of sibling nodes) has a text range that **exactly** covers the anchor span
+5. If exact match → `structural_match: True`. If anchor partially overlaps a node boundary → `structural_match: False` with the enclosing node's type for actionable feedback
+
+**Match cardinality:** `validate_anchor` checks the **first** occurrence only, matching `str.replace(..., 1)` semantics. If the anchor appears multiple times, the existing uniqueness check in `edit_file()` catches it before `validate_anchor` is called.
 
 Returns one of:
 - `structural_match: True` — anchor aligns with AST boundaries, safe for structural replace
-- `structural_match: False, node_type: str` — anchor cuts across AST nodes; includes the node type for actionable retry feedback
+- `structural_match: False, node_type: str` — anchor cuts across AST nodes; includes the enclosing node type for actionable retry feedback
 - `unsupported_language` — no tree-sitter grammar available, skip validation
 
 ```python
@@ -69,6 +78,8 @@ class AnchorResult:
     unsupported_language: bool = False
     node_type: str | None = None  # e.g. "function_declaration", "if_statement"
 ```
+
+**Value proposition note:** Even if the anchor location step is `str.find()`, the AST boundary check adds value by: (a) detecting anchors that cut across nodes before applying the edit, enabling better retry messages, and (b) gating whether to use ast-grep's indentation-aware replacement or plain text replacement. The overhead is ~5-10ms per edit for tree-sitter parsing (cached after first parse).
 
 ### 1b. Structural Replace (Pure Function)
 
@@ -119,7 +130,7 @@ LRU cache keyed on `(file_path, content_hash)`:
 
 `detect_languages(working_directory: str) -> dict[str, bool]`
 
-**Synchronous function.** Called once at run start in `receive_node`. Scans file extensions in the working directory, probes ast-grep-py grammar support for each detected language via `ast_grep_py.SgRoot` (instantiation with a language string raises if grammar is unavailable — this is the probe mechanism). Populates `ast_available` in AgentState. No async required.
+**Synchronous function.** Called once at run start in `receive_node`. Uses `git ls-files` to enumerate tracked files (respects `.gitignore`, handles monorepos efficiently, avoids scanning `node_modules/` etc.). Extracts unique file extensions, maps to languages, probes ast-grep-py grammar support via `ast_grep_py.SgRoot` (instantiation with a language string raises if grammar is unavailable — this is the probe mechanism). Populates `ast_available` in AgentState. No async required. Falls back to `os.walk` with exclusion list if not in a git repository.
 
 ```python
 # Example output
@@ -169,6 +180,20 @@ async def notify_rollback(file_path: str, restored_content: str) -> None
 ```
 
 Sends `didChange` with full restored content after a validator rollback. Prevents stale virtual document state in the LSP server.
+
+**Note on notify_rollback timing:** After rollback, the LSP server may still be processing diagnostics for the pre-rollback (broken) content. To avoid a race where stale diagnostics leak into the next validation, `notify_rollback()` sends `didChange` and then waits for one fresh `publishDiagnostics` response (or timeout) before returning. This ensures the server's virtual document state is synchronized before the next edit.
+
+### Diagnostic Diffing (Baseline vs Post-Edit)
+
+**Critical for real-world usability.** If a project already has type errors before Shipyard edits (common), absolute diagnostic checking would roll back correct edits because of pre-existing errors.
+
+**Solution:** The validator captures a **baseline** diagnostic snapshot before applying the edit:
+1. Before edit: `baseline = await client.get_diagnostics(file_path, original_content)`
+2. Apply edit
+3. After edit: `post_edit = await client.get_diagnostics(file_path, new_content)`
+4. **Only new errors trigger rollback:** `new_errors = post_edit.errors - baseline.errors` (compared by diagnostic code + message, not line number, since line numbers shift after edits)
+
+If `new_errors` is empty, the edit passes validation even if pre-existing errors remain. This means Shipyard never makes things worse but doesn't require a clean codebase to start.
 
 ### Capability Detection
 
@@ -385,7 +410,7 @@ The planner system prompt (`agent/prompts/planner.py`) gets a new section:
 7. **Validate:** Run LSP diagnostics on all changed files
 8. **Record:** All changes written to `edit_history` with `batch_id`
 
-### Atomic Rollback via batch_id
+### Best-Effort Batch Rollback via batch_id
 
 All edits from a single refactor step share a `batch_id` (UUID). The `edit_history` entry format:
 
@@ -416,6 +441,8 @@ def rollback_batch(edit_history: list[dict], batch_id: str) -> None:
 
 If any file in the batch fails LSP validation, the entire batch rolls back.
 
+**Not truly atomic:** `rollback_batch()` iterates files and writes them sequentially. If the process dies mid-rollback (OOM, SIGKILL), the codebase may be partially rolled back. For v1 this is acceptable — the git working tree can always be restored via `git checkout`. The spec uses "best-effort batch rollback" rather than "atomic" to reflect this limitation.
+
 ### Batch Approval
 
 New methods on `ApprovalManager`:
@@ -426,6 +453,13 @@ async def approve_batch(self, batch_id: str, op_id: str) -> list[EditRecord]
 ```
 
 Supervised mode: one human decision per refactor batch, not per-file.
+
+**New HTTP endpoint** in `server/main.py`:
+```
+PATCH /runs/{run_id}/batches/{batch_id}
+Body: {"action": "approve" | "reject"}
+```
+The existing single-edit endpoint (`PATCH /runs/{run_id}/edits/{edit_id}`) remains unchanged. The frontend shows the full batch changeset and offers a single approve/reject action.
 
 ### Serialization Constraint
 
@@ -503,7 +537,11 @@ Determine file_path:
 LLM → parse {"anchor", "replacement"}
     → ast_ops.validate_anchor(file_path, content, anchor)
         → structural_match:
-            new_content = ast_ops.structural_replace(content, anchor, replacement, language)
+            try:
+                new_content = ast_ops.structural_replace(content, anchor, replacement, language)
+            except Exception:
+                new_content = content.replace(anchor, replacement, 1)  [fallback on any failure]
+                log reason for structural_replace failure
             [pure function, returns string — does NOT write to disk]
         → not structural / unsupported:
             new_content = content.replace(anchor, replacement, 1)
@@ -543,10 +581,12 @@ The executor runs shell commands (formatters, code generators, build scripts) th
 
 After `executor_node` and test steps return successfully:
 
-1. **Invalidate file_buffer:** Clear entries for files in the step's target scope. The next reader node re-reads from disk.
-2. **Clear parse tree cache:** Remove entries for affected files from the LRU cache.
+1. **Invalidate entire file_buffer:** Clear all entries. The next reader node re-reads from disk.
+2. **Clear entire parse tree cache:** Flush the LRU cache.
 
-Implementation: `executor_node` returns a new state field `invalidated_files: list[str]` listing files that may have changed. Downstream nodes check this before using cached data.
+**Why invalidate everything:** The executor runs arbitrary shell commands. There is no reliable way to determine which files a command modified — `git diff --name-only` is fragile if the command does git operations, and filesystem watchers add complexity for minimal gain. The reader is cheap (just file I/O), so blanket invalidation is the pragmatic choice. Per-file tracking can be optimized later if profiling shows it matters.
+
+Implementation: `executor_node` sets `invalidated_files: ["*"]` (sentinel value meaning "all"). Downstream nodes check this flag and re-read from disk.
 
 For refactor steps: `refactor_node` updates `file_buffer` with post-refactor content for all changed files before returning. No invalidation needed — the buffer is authoritative.
 
@@ -607,7 +647,9 @@ All metrics flow through `TraceLogger` (and LangSmith when configured). No new o
 | ast-grep structural_replace fails | Fall back to `str.replace()` + log reason |
 | Parallel steps touch same file | Per-file asyncio.Lock serializes LSP interactions |
 | Graph errors before reporter_node | `async with LspManager` context manager guarantees server cleanup |
-| Refactor validation fails on any file | Entire batch rolled back atomically via `batch_id` |
+| Refactor validation fails on any file | Best-effort batch rollback via `batch_id` |
+| structural_replace() raises exception | Caught in editor flow, falls back to `str.replace()` + log reason |
+| Pre-existing type errors in project | Diagnostic diffing: only new errors (introduced by edit) trigger rollback |
 | Exec step modifies files on disk | `file_buffer` and parse tree cache invalidated for affected files |
 | LSP rollback without document sync | `notify_rollback()` sends `didChange` with restored content |
 
@@ -618,7 +660,8 @@ All metrics flow through `TraceLogger` (and LangSmith when configured). No new o
 ### New Python Dependencies
 
 - `ast-grep-py` — ast-grep Python bindings (PyPI, ~5MB)
-- No new deps for LSP client — thin JSON-RPC over `asyncio.subprocess`
+- `lsprotocol` — LSP message types and JSON-RPC serialization (PyPI). Provides typed dataclasses for all LSP messages, Content-Length framing, and capability negotiation. Using this instead of raw JSON-RPC avoids weeks of debugging server-specific quirks (partial reads, `$/cancelRequest` notifications, URI encoding, `textDocument/didSave` expectations). The "no new dependencies" approach for LSP is false economy — the protocol surface area is large.
+- Optional: `pygls` — full Python LSP framework. Evaluate during Phase 3 spike. If `lsprotocol` (types only) proves insufficient, `pygls` provides a complete client/server implementation.
 
 ### Configuration (shipyard.toml / project settings)
 
@@ -658,6 +701,15 @@ LSP servers must be installed in the user's environment. Shipyard discovers what
 
 ## Section 11: Testing Strategy
 
+### Phase 0 Tests (Spike)
+
+- Standalone script: given a TypeScript file and an anchor string, demonstrate AST boundary detection
+- Test with anchors that align with AST nodes (function body, if statement, variable declaration)
+- Test with anchors that cut across nodes (half a function signature, partial expression)
+- Test with anchors inside string literals and comments
+- Measure parse time on files of varying size (100, 1000, 5000 lines)
+- **Go/no-go criteria:** Can reliably detect structural vs non-structural anchors in <10ms per check
+
 ### Phase 1 Tests (ast-grep)
 
 **Pre-implementation:** 5-10 indentation test cases as acceptance criteria for `structural_replace()`:
@@ -684,7 +736,7 @@ LSP servers must be installed in the user's environment. Shipyard discovers what
 
 - `apply_rule()` dry-run: correct match count, no files modified
 - `apply_rule()` apply: files modified, snapshots stored
-- `rollback_batch()`: all files reverted atomically
+- `rollback_batch()`: all files reverted (best-effort)
 - Coordinator: refactor steps in sequential_first, never parallel
 - Planner: LLM reliably distinguishes edit vs refactor steps
 
@@ -692,8 +744,9 @@ LSP servers must be installed in the user's environment. Shipyard discovers what
 
 **Integration test (critical):** Start a real `typescript-language-server`, open a file with a known type error, verify the diagnostic comes back through `get_diagnostics()`. This single test will flush out ~80% of protocol issues.
 
-- `LspConnection`: JSON-RPC framing, Content-Length parsing, notification dispatch
+- `LspConnection`: JSON-RPC framing via `lsprotocol`, notification dispatch, stderr draining
 - `LspDiagnosticClient`: capability detection (push vs pull), timeout handling, rollback document sync
+- **Diagnostic diffing:** file with pre-existing errors → edit that doesn't add new errors → passes validation. Edit that introduces new error → fails.
 - `LspManager`: server discovery, startup, crash detection, degradation
 - `validator_node` async migration: same results as sync path for subprocess fallback
 
@@ -709,12 +762,13 @@ LSP servers must be installed in the user's environment. Shipyard discovers what
 
 | Phase | Scope | Risk | Deliverable | Includes |
 |---|---|---|---|---|
-| **Phase 1** | ast-grep edit layer + editor integration | Low | Better edit accuracy, actionable retry messages | Sections 1a-1e, 6, 7. RC1 (pure-function structural_replace), RC5 (language detection), RC6 (cache invalidation). Pre-req: 5-10 indentation test cases. |
-| **Phase 2** | Refactor node + planner changes + batch rollback | Medium | Codebase-wide refactoring capability | Sections 1c, 4, 5 (graph edges). RC3 (refactors always sequential). Batch approval on ApprovalManager. |
-| **Phase 3** | LSP client + lifecycle manager — **TypeScript only** | High | LSP validation for TS/JS files | Sections 2, 3. RC2 (rollback document sync), RC4 (readiness tracking). Stderr piping. Integration test: start real server, open file with type error, verify diagnostic. |
+| **Phase 0** | Spike `validate_anchor()` against ast-grep-py API | None | Go/no-go gate for Phase 1 | Standalone script demonstrating AST boundary detection. Timebox: 1-2 days. If infeasible, Phase 1 simplifies to ast-grep for codebase search only. |
+| **Phase 1** | ast-grep edit layer + editor integration | Low | Better edit accuracy, actionable retry messages | Sections 1a-1e, 6, 7. Pure-function structural_replace, language detection via git ls-files, blanket cache invalidation after exec. Pre-req: 5-10 indentation test cases. |
+| **Phase 2** | Refactor node + planner changes + batch rollback | Medium | Codebase-wide refactoring capability | Sections 1c, 4, 5 (graph edges). Refactors always sequential. Batch approval on ApprovalManager + new batch HTTP endpoint. Update editor.py snapshot storage as prerequisite. |
+| **Phase 3** | LSP client + lifecycle manager — **TypeScript only** | High | LSP validation for TS/JS files | Sections 2, 3. Use `lsprotocol` for message types. Diagnostic diffing (baseline vs post-edit). Rollback document sync. Readiness tracking. Stderr piping. Integration test: start real server, open file with type error, verify diagnostic. **Budget 3-4 weeks** — LSP protocol edge cases are the primary risk. |
 | **Phase 4** | Expand LSP to Python, Rust, Go + full observability | Medium | Full multi-language LSP support | Section 3 (registry expansion), Section 8 (all metrics). Parallel step file locking. |
 
-Phase 1 delivers immediate value with zero operational complexity. Phase 3 is scoped to one LSP server to contain blast radius while protocol edge cases are discovered.
+Phase 0 is a 1-2 day spike that de-risks the entire design. Phase 1 delivers immediate value with zero operational complexity. Phase 3 is scoped to one LSP server to contain blast radius while protocol edge cases are discovered.
 
 ---
 
@@ -725,7 +779,7 @@ Phase 1 delivers immediate value with zero operational complexity. Phase 3 is sc
 | `agent/tools/ast_ops.py` | ast-grep wrapper: validate_anchor, structural_replace, apply_rule, detect_languages, parse cache |
 | `agent/tools/lsp_client.py` | Two-layer LSP client: LspConnection (transport) + LspDiagnosticClient (diagnostics) |
 | `agent/tools/lsp_manager.py` | LSP server lifecycle: registry, auto-discovery, context manager, per-file locking |
-| `agent/nodes/refactor.py` | Codebase-wide refactoring: dry-run, batch approval, atomic rollback |
+| `agent/nodes/refactor.py` | Codebase-wide refactoring: dry-run, batch approval, best-effort batch rollback |
 
 ## Modified Files Summary
 
@@ -744,4 +798,4 @@ Phase 1 delivers immediate value with zero operational complexity. Phase 3 is sc
 | `agent/prompts/planner.py` | Add refactor step type documentation and heuristics |
 | `agent/approval.py` | Add propose_batch() and approve_batch() methods for batch refactor approval |
 | `store/models.py` | Add batch_id field to EditRecord |
-| `server/main.py` | Wrap graph.ainvoke inside LspManager context manager in execute() background coroutine |
+| `server/main.py` | Wrap graph.ainvoke inside LspManager context manager in execute() background coroutine; add `PATCH /runs/{run_id}/batches/{batch_id}` endpoint for batch approval |
