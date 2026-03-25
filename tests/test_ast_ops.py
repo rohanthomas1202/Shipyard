@@ -179,6 +179,57 @@ class TestCacheOperations:
         assert stats.fallbacks_to_text == 0
 
 
+class TestEndToEndIntegration:
+    def test_full_flow_structural_edit(self, tmp_path):
+        from agent.tools.ast_ops import detect_languages, validate_anchor, structural_replace, reset_stats, get_stats
+        import subprocess
+
+        (tmp_path / "index.ts").write_text(
+            "function greet(name: string) {\n"
+            "    console.log(`Hello ${name}`);\n"
+            "    return name;\n"
+            "}\n"
+        )
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+
+        reset_stats()
+        langs = detect_languages(str(tmp_path))
+        assert langs.get("typescript") is True
+
+        content = (tmp_path / "index.ts").read_text()
+        anchor = "console.log(`Hello ${name}`);"
+        result = validate_anchor(content, anchor, "typescript")
+        assert result.structural_match is True
+
+        new_content = structural_replace(content, anchor, 'console.log(`Hi ${name}!`);', "typescript")
+        assert 'console.log(`Hi ${name}!`);' in new_content
+        assert "return name;" in new_content
+
+        stats = get_stats()
+        assert stats.structural_matches >= 1
+
+    def test_full_flow_fallback_to_text(self, tmp_path):
+        from agent.tools.ast_ops import detect_languages, validate_anchor, structural_replace, reset_stats, get_stats
+        import subprocess
+
+        (tmp_path / "app.ts").write_text("const a = 1;\n\nconst b = 2;\n")
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+
+        reset_stats()
+        content = (tmp_path / "app.ts").read_text()
+        anchor = "const a = 1;\n\nconst b"
+        result = validate_anchor(content, anchor, "typescript")
+        assert result.structural_match is False
+
+        new_content = structural_replace(content, anchor, "const a = 42;\n\nconst b", "typescript")
+        assert "const a = 42;" in new_content
+
+        stats = get_stats()
+        assert stats.fallbacks_to_text >= 1
+
+
 class TestExecutorInvalidation:
     def test_executor_sets_invalidated_files(self):
         from agent.nodes.executor import executor_node
