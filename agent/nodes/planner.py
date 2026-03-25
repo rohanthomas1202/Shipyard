@@ -1,58 +1,40 @@
-import json
-import os
 from agent.prompts.planner import PLANNER_SYSTEM, PLANNER_USER
-from agent.llm import call_llm
+from agent.steps import parse_plan_steps
 from agent.tracing import TraceLogger
+from agent.tools.file_ops import list_files
 
 tracer = TraceLogger()
 
-async def planner_node(state: dict) -> dict:
-    """Break the instruction into a concrete plan of steps."""
+
+async def planner_node(state: dict, config: dict) -> dict:
+    router = config["configurable"]["router"]
+    instruction = state["instruction"]
     working_dir = state["working_directory"]
-    instruction = state.get("instruction", "")
     context = state.get("context", {})
 
-    # Build context section
-    context_section = ""
-    if context.get("schema"):
-        context_section += f"Relevant schema:\n{context['schema']}\n"
+    context_parts = []
     if context.get("spec"):
-        context_section += f"Spec:\n{context['spec']}\n"
+        context_parts.append(f"Spec:\n{context['spec']}")
+    if context.get("schema"):
+        context_parts.append(f"Schema:\n{context['schema']}")
     if context.get("files"):
-        context_section += f"Relevant files: {', '.join(context['files'])}\n"
+        context_parts.append(f"Key files:\n{', '.join(context['files'])}")
+    context_section = "\n\n".join(context_parts) if context_parts else "No additional context."
 
-    # List top-level files
-    try:
-        entries = os.listdir(working_dir)
-        file_listing = "\n".join(sorted(entries)[:50])
-    except Exception:
-        file_listing = "(unable to list files)"
+    file_listing = list_files(working_dir) if working_dir else ""
 
     user_prompt = PLANNER_USER.format(
         working_directory=working_dir,
         instruction=instruction,
         context_section=context_section,
-        file_listing=file_listing,
+        file_listing=f"Files in project:\n{file_listing}" if file_listing else "",
     )
 
-    response = await call_llm(PLANNER_SYSTEM, user_prompt)
+    raw = await router.call("plan", PLANNER_SYSTEM, user_prompt)
+    steps = parse_plan_steps(raw)
 
-    try:
-        text = response.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1]
-            text = text.rsplit("```", 1)[0]
-        plan_data = json.loads(text)
-        steps = plan_data.get("steps", [])
-    except (json.JSONDecodeError, KeyError) as e:
-        tracer.log("planner", {"error": str(e), "raw_response": response[:500]})
-        # Fallback: treat the whole instruction as one step
-        steps = [instruction]
+    tracer.log("planner", {"steps": len(steps), "instruction": instruction[:100]})
 
-    tracer.log("planner", {
-        "instruction": instruction,
-        "num_steps": len(steps),
-        "steps": steps,
-    })
-
-    return {"plan": steps}
+    return {
+        "plan": [step.model_dump() for step in steps],
+    }

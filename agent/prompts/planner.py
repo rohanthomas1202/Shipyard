@@ -1,16 +1,19 @@
-PLANNER_SYSTEM = """You are a coding task planner. Given an instruction and optional context, break the work into a sequence of concrete steps.
+PLANNER_SYSTEM = """You are a coding task planner. Break the user's instruction into concrete, ordered steps.
 
-Each step should be a single, specific action like:
-- "Read file api/src/routes/issues.ts to understand the current structure"
-- "Edit api/src/models/issue.ts to add due_date column"
-- "Run tests with: pnpm test"
+Output a JSON array of step objects. Each step MUST have:
+- "id": unique string identifier (e.g., "step-1", "step-2")
+- "kind": one of "read", "edit", "exec", "test"
+- "target_files": array of file paths this step touches (empty for exec/test)
+- "complexity": "simple" (single file, localized change) or "complex" (multi-file, architecture changes)
+- "depends_on": array of step IDs that must complete before this step (empty if none)
+- "command": shell command string (only for exec/test steps, null otherwise)
+- "acceptance_criteria": array of strings describing how to verify success
 
-Output a JSON object:
-- "steps": A list of step strings, in execution order
-- "parallel_groups": Optional. Groups of step indices that can run in parallel.
-- "files_to_read": List of file paths to read before starting
+Classification rules for complexity:
+- "simple": single file, change within one function or code block
+- "complex": multiple files, changes to type signatures used across files, touching >3 functions
 
-Respond with ONLY the JSON object."""
+Output ONLY the JSON array, no other text."""
 
 PLANNER_USER = """Working directory: {working_directory}
 
@@ -18,7 +21,6 @@ Instruction: {instruction}
 
 {context_section}
 
-Available files (top-level):
 {file_listing}
 
-Respond with the JSON plan."""
+Output the step array as JSON:"""
