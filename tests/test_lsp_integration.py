@@ -197,3 +197,67 @@ async def test_raw_lsp_clean_file_no_errors(tmp_path):
             await asyncio.wait_for(client.stop(), timeout=5.0)
         except Exception:
             pass
+
+
+@pytest.mark.asyncio
+async def test_validator_with_lsp_catches_type_error(tmp_path):
+    """End-to-end: validator uses LSP to catch a type error introduced by an edit."""
+    from agent.tools.lsp_manager import LspManager
+    from agent.nodes.validator import validator_node
+
+    (tmp_path / "tsconfig.json").write_text('{"compilerOptions": {"strict": true}}')
+
+    # Original file is clean
+    original = 'const x: number = 42;\nconsole.log(x);\n'
+    # Edit introduces a type error
+    broken = 'const x: number = "not a number";\nconsole.log(x);\n'
+    (tmp_path / "index.ts").write_text(broken)
+
+    async with LspManager(str(tmp_path), {"typescript": True}) as mgr:
+        if mgr.server_status().get("typescript") != "running":
+            pytest.skip("typescript-language-server not running")
+
+        state = {
+            "edit_history": [{
+                "file": str(tmp_path / "index.ts"),
+                "snapshot": original,  # pre-edit content
+            }],
+        }
+        config = {"configurable": {"lsp_manager": mgr}}
+        result = await validator_node(state, config)
+
+        # Should detect the type error and rollback
+        assert result["error_state"] is not None
+        assert "LSP validation failed" in result["error_state"]
+        # File should be rolled back to original
+        assert (tmp_path / "index.ts").read_text() == original
+
+
+@pytest.mark.asyncio
+async def test_validator_with_lsp_passes_clean_edit(tmp_path):
+    """End-to-end: validator with LSP passes a clean edit."""
+    from agent.tools.lsp_manager import LspManager
+    from agent.nodes.validator import validator_node
+
+    (tmp_path / "tsconfig.json").write_text('{"compilerOptions": {"strict": true}}')
+
+    original = 'const x: number = 42;\nconsole.log(x);\n'
+    edited = 'const x: number = 99;\nconsole.log(x);\n'
+    (tmp_path / "index.ts").write_text(edited)
+
+    async with LspManager(str(tmp_path), {"typescript": True}) as mgr:
+        if mgr.server_status().get("typescript") != "running":
+            pytest.skip("typescript-language-server not running")
+
+        state = {
+            "edit_history": [{
+                "file": str(tmp_path / "index.ts"),
+                "snapshot": original,
+            }],
+        }
+        config = {"configurable": {"lsp_manager": mgr}}
+        result = await validator_node(state, config)
+
+        assert result["error_state"] is None
+        # File should NOT be rolled back
+        assert (tmp_path / "index.ts").read_text() == edited
