@@ -171,7 +171,8 @@ async def test_context_injection(multi_file_codebase):
 
 # ---------- Test 4: Error recovery (rollback) ----------
 
-def test_validator_rollback_on_bad_json(tmp_path):
+@pytest.mark.asyncio
+async def test_validator_rollback_on_bad_json(tmp_path):
     """Validator should rollback when syntax check fails."""
     json_file = tmp_path / "data.json"
     original = '{"name": "test"}'
@@ -189,7 +190,7 @@ def test_validator_rollback_on_bad_json(tmp_path):
         }],
     }
 
-    result = validator_node(state)
+    result = await validator_node(state)
 
     # Should detect syntax error and rollback
     assert result["error_state"] is not None
@@ -199,7 +200,8 @@ def test_validator_rollback_on_bad_json(tmp_path):
     assert json_file.read_text() == original
 
 
-def test_validator_passes_good_json(tmp_path):
+@pytest.mark.asyncio
+async def test_validator_passes_good_json(tmp_path):
     """Validator should pass valid JSON."""
     json_file = tmp_path / "data.json"
     json_file.write_text('{"name": "updated"}')
@@ -213,7 +215,7 @@ def test_validator_passes_good_json(tmp_path):
         }],
     }
 
-    result = validator_node(state)
+    result = await validator_node(state)
     assert result["error_state"] is None
 
 
