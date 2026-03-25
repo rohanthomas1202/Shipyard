@@ -163,12 +163,14 @@ const api = {
   getProjects: () => Promise<Project[]>,
   createProject: (name: string, path: string) => Promise<Project>,
   getProject: (id: string) => Promise<Project>,
+  updateProject: (id: string, updates: Partial<Project>) => Promise<Project>,
 
   // Instructions
   submitInstruction: (instruction: string, workingDirectory: string, context?: object, projectId?: string) => Promise<{ run_id: string, status: string }>,
   getStatus: (runId: string) => Promise<RunStatus>,
 
   // Edits
+  getEdits: (runId: string, status?: string) => Promise<Edit[]>,
   patchEdit: (runId: string, editId: string, action: 'approve' | 'reject', opId: string) => Promise<EditResponse>,
 
   // Git
@@ -232,6 +234,16 @@ Sub-component of FileTree sidebar:
 - Shows recent runs for current project
 - Status badges: green (completed), blue (running), yellow (waiting_for_human), red (failed)
 - Click sets `currentRun`
+
+### WebSocket Subscribe on Run Start
+
+When `currentRun` changes (new run started or run selected), the WebSocket client must send:
+```json
+{"action": "subscribe", "run_id": "<currentRun.id>"}
+```
+Without this, the client connects but never receives events (the backend filters by `subscribed_runs`).
+
+This is handled in `ProjectContext`: when `submitInstruction` returns a `run_id`, immediately send a subscribe message via `WebSocketContext.send()`.
 
 ### Vite Config
 
@@ -344,8 +356,9 @@ useEffect(() => {
 
 Toggle switch in agent panel:
 - Visual: track with sliding thumb (CSS transition)
-- Sends `{"action": "update_mode", "mode": "autonomous"}` via WebSocket
+- Calls `PUT /projects/{id}` with `{"autonomy_mode": "autonomous" | "supervised"}` via REST API (not WebSocket — mode is durable project state)
 - Label updates: "Supervised" ↔ "Autonomous"
+- Updates ProjectContext after successful save
 
 ### SettingsModal
 
@@ -372,11 +385,18 @@ interface Project {
   id: string; name: string; path: string;
   github_repo: string | null; autonomy_mode: string;
   default_model: string;
+  test_command: string | null;
+  build_command: string | null;
+  lint_command: string | null;
+  created_at: string; updated_at: string;
+  // github_pat intentionally omitted — never sent to frontend
 }
 
 interface Run {
   id: string; project_id: string; instruction: string;
   status: 'running' | 'completed' | 'failed' | 'error' | 'waiting_for_human';
+  plan: object[]; branch: string | null;
+  created_at: string; completed_at: string | null;
 }
 
 interface WSEvent {
@@ -431,4 +451,73 @@ FastAPI serves `web/dist/` as static files. Single process, single port.
 ### Procfile (Railway)
 ```
 web: cd web && npm run build && cd .. && uvicorn server.main:app --host 0.0.0.0 --port $PORT
+```
+
+---
+
+## Required Backend Changes
+
+These backend changes are prerequisites for the frontend. Implement at the start of 2b-1.
+
+### 1. `PUT /projects/{project_id}` endpoint
+
+Add to `server/main.py`:
+```python
+class UpdateProjectRequest(BaseModel):
+    name: str | None = None
+    path: str | None = None
+    github_repo: str | None = None
+    github_pat: str | None = None
+    default_model: str | None = None
+    autonomy_mode: str | None = None
+    test_command: str | None = None
+    build_command: str | None = None
+    lint_command: str | None = None
+
+@app.put("/projects/{project_id}")
+async def update_project(project_id: str, req: UpdateProjectRequest):
+    store = app.state.store
+    project = await store.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    for field, value in req.model_dump(exclude_none=True).items():
+        setattr(project, field, value)
+    updated = await store.update_project(project)
+    return updated.model_dump(exclude={"github_pat"})
+```
+
+### 2. `GET /runs/{run_id}/edits` endpoint
+
+Add to `server/main.py`:
+```python
+@app.get("/runs/{run_id}/edits")
+async def get_edits(run_id: str, status: str | None = None):
+    store = app.state.store
+    edits = await store.get_edits(run_id, status=status)
+    return [e.model_dump() for e in edits]
+```
+
+### 3. `update_mode` via REST (not WebSocket)
+
+Autonomy mode changes use `PUT /projects/{id}` with `{"autonomy_mode": "autonomous"}` — NOT a WebSocket action. The `AutonomyToggle` component calls the REST API, not WebSocket. This is cleaner because mode is project-level durable state, not a real-time stream concern.
+
+Remove `update_mode` from the WebSocket protocol. The backend does not need a handler for it.
+
+### 4. Exclude `github_pat` from project responses
+
+Update `GET /projects` and `GET /projects/{id}` to use `model_dump(exclude={"github_pat"})`:
+```python
+@app.get("/projects")
+async def list_projects():
+    store = app.state.store
+    projects = await store.list_projects()
+    return [p.model_dump(exclude={"github_pat"}) for p in projects]
+
+@app.get("/projects/{project_id}")
+async def get_project(project_id: str):
+    store = app.state.store
+    project = await store.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project.model_dump(exclude={"github_pat"})
 ```
