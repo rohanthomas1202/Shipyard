@@ -17,9 +17,19 @@ interface ProjectContextValue {
 
 const ProjectContext = createContext<ProjectContextValue | null>(null)
 
-export function ProjectProvider({ children }: { children: ReactNode }) {
+interface ProjectProviderProps {
+  children: ReactNode
+  onProjectChange?: (projectId: string | null) => void
+}
+
+export function ProjectProvider({ children, onProjectChange }: ProjectProviderProps) {
   const [projects, setProjects] = useState<Project[]>([])
-  const [currentProject, setCurrentProject] = useState<Project | null>(null)
+  const [currentProject, _setCurrentProject] = useState<Project | null>(null)
+
+  const setCurrentProject = useCallback((project: Project | null) => {
+    _setCurrentProject(project)
+    onProjectChange?.(project?.id ?? null)
+  }, [onProjectChange])
   const [runs] = useState<Run[]>([])
   const [currentRun, setCurrentRun] = useState<Run | null>(null)
   const [loading, setLoading] = useState(true)

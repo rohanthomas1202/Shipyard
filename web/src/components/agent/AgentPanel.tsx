@@ -7,7 +7,7 @@ import { AutonomyToggle } from './AutonomyToggle'
 
 export function AgentPanel() {
   const { status } = useWebSocketContext()
-  const { currentRun } = useProjectContext()
+  const { currentRun, currentProject } = useProjectContext()
 
   const isWorking = currentRun?.status === 'running'
 
@@ -136,15 +136,33 @@ export function AgentPanel() {
         <div className="relative flex h-2 w-2">
           <span
             className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-            style={{ background: isWorking ? 'var(--color-warning)' : 'var(--color-primary)' }}
+            style={{
+              background: !currentProject ? 'var(--color-muted)'
+                : status === 'disconnected' ? 'var(--color-warning)'
+                : isWorking ? 'var(--color-warning)'
+                : 'var(--color-primary)',
+            }}
           />
           <span
             className="relative inline-flex rounded-full h-2 w-2"
-            style={{ background: isWorking ? 'var(--color-warning)' : 'var(--color-primary)' }}
+            style={{
+              background: !currentProject ? 'var(--color-muted)'
+                : status === 'disconnected' ? 'var(--color-warning)'
+                : isWorking ? 'var(--color-warning)'
+                : 'var(--color-primary)',
+            }}
           />
         </div>
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          {status === 'disconnected' ? 'Disconnected' : isWorking ? 'Agent Working' : 'Agent Idle'}
+          {!currentProject
+            ? 'No project selected'
+            : status === 'disconnected'
+            ? 'Disconnected — reconnecting...'
+            : status === 'connecting'
+            ? 'Connecting...'
+            : isWorking
+            ? 'Agent Working'
+            : 'Agent Idle'}
         </span>
       </div>
     </>
