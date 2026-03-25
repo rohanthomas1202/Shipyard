@@ -209,6 +209,39 @@ class TestEndToEndIntegration:
         stats = get_stats()
         assert stats.structural_matches >= 1
 
+class TestCoordinatorRefactorRouting:
+    def test_refactor_steps_go_to_sequential(self):
+        from agent.nodes.coordinator import coordinator_node
+        state = {
+            "plan": [
+                {"id": "step-1", "kind": "edit", "target_files": ["web/a.ts"], "complexity": "simple"},
+                {"id": "step-2", "kind": "refactor", "pattern": "old($A)", "refactor_replacement": "new($A)", "language": "typescript", "scope": "web/", "complexity": "complex"},
+                {"id": "step-3", "kind": "edit", "target_files": ["api/b.py"], "complexity": "simple"},
+            ],
+        }
+        result = coordinator_node(state)
+        assert 1 in result["sequential_first"]
+        for batch in result.get("parallel_batches", []):
+            assert 1 not in batch
+
+    def test_dict_steps_handled(self):
+        from agent.nodes.coordinator import coordinator_node
+        state = {
+            "plan": [
+                {"id": "step-1", "kind": "edit", "target_files": ["web/a.ts"], "complexity": "simple"},
+                {"id": "step-2", "kind": "edit", "target_files": ["api/b.py"], "complexity": "simple"},
+            ],
+        }
+        result = coordinator_node(state)
+        assert "is_parallel" in result
+
+    def test_legacy_string_steps_still_work(self):
+        from agent.nodes.coordinator import coordinator_node
+        state = {"plan": ["Edit web/a.ts", "Edit api/b.py"]}
+        result = coordinator_node(state)
+        assert "is_parallel" in result
+
+
     def test_full_flow_fallback_to_text(self, tmp_path):
         from agent.tools.ast_ops import detect_languages, validate_anchor, structural_replace, reset_stats, get_stats
         import subprocess

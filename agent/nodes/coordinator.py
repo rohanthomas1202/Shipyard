@@ -2,22 +2,41 @@ from agent.tracing import TraceLogger
 
 tracer = TraceLogger()
 
+
+def _step_to_text(step) -> str:
+    """Extract text representation from a step (dict or string)."""
+    if isinstance(step, dict):
+        files = step.get("target_files", [])
+        if files:
+            return files[0].lower()
+        return step.get("id", "").lower()
+    return str(step).lower()
+
+
 def coordinator_node(state: dict) -> dict:
     """Decide whether to fan out to parallel subgraphs or run sequentially.
-    Stub — full implementation in Task 6."""
+    Refactor steps are always placed in sequential_first (never parallelized)."""
     plan = state.get("plan", [])
 
     if len(plan) < 2:
         return {"is_parallel": False, "parallel_batches": [], "sequential_first": []}
 
-    dir_groups: dict[str, list[int]] = {}
+    refactor_indices: list[int] = []
+    other_indices: list[int] = []
     for i, step in enumerate(plan):
-        step_lower = step.lower()
-        if "api/" in step_lower:
+        if isinstance(step, dict) and step.get("kind") == "refactor":
+            refactor_indices.append(i)
+        else:
+            other_indices.append(i)
+
+    dir_groups: dict[str, list[int]] = {}
+    for i in other_indices:
+        step_text = _step_to_text(plan[i])
+        if "api/" in step_text:
             dir_groups.setdefault("api", []).append(i)
-        elif "web/" in step_lower:
+        elif "web/" in step_text:
             dir_groups.setdefault("web", []).append(i)
-        elif "shared/" in step_lower:
+        elif "shared/" in step_text:
             dir_groups.setdefault("shared", []).append(i)
         else:
             dir_groups.setdefault("other", []).append(i)
@@ -29,16 +48,18 @@ def coordinator_node(state: dict) -> dict:
         if group_steps:
             parallel_batch.append(group_steps)
 
+    sequential_first = refactor_indices + sequential + other
     is_parallel = len(parallel_batch) > 1
 
     tracer.log("coordinator", {
         "is_parallel": is_parallel,
-        "sequential": sequential + other,
+        "sequential": sequential_first,
         "parallel_batch": parallel_batch,
+        "refactor_steps": refactor_indices,
     })
 
     return {
         "is_parallel": is_parallel,
         "parallel_batches": parallel_batch,
-        "sequential_first": sequential + other,
+        "sequential_first": sequential_first,
     }
