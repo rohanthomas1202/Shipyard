@@ -57,3 +57,35 @@ def test_parse_plan_steps_fallback_on_invalid_json():
     assert len(steps) == 1
     assert steps[0].kind == "exec"
     assert steps[0].complexity == "complex"
+
+
+def test_plan_step_accepts_refactor_kind():
+    from agent.steps import PlanStep
+    step = PlanStep(
+        id="refactor-1",
+        kind="refactor",
+        complexity="complex",
+        pattern="oldFunc($ARG)",
+        refactor_replacement="newFunc($ARG)",
+        language="typescript",
+        scope="web/src/",
+    )
+    assert step.kind == "refactor"
+    assert step.pattern == "oldFunc($ARG)"
+
+
+def test_parse_plan_steps_with_refactor():
+    from agent.steps import parse_plan_steps
+    import json
+    raw = json.dumps([{
+        "id": "refactor-1",
+        "kind": "refactor",
+        "complexity": "complex",
+        "pattern": "oldFunc($ARG)",
+        "refactor_replacement": "newFunc($ARG)",
+        "language": "typescript",
+        "scope": "web/src/",
+    }])
+    steps = parse_plan_steps(raw)
+    assert len(steps) == 1
+    assert steps[0].kind == "refactor"

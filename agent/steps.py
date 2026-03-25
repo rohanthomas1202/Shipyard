@@ -6,17 +6,21 @@ from typing import Literal
 
 class PlanStep(BaseModel):
     id: str
-    kind: Literal["read", "edit", "exec", "test", "git"]
+    kind: Literal["read", "edit", "exec", "test", "git", "refactor"]
     target_files: list[str] = []
     command: str | None = None
     acceptance_criteria: list[str] = []
     complexity: Literal["simple", "complex"]
     depends_on: list[str] = []
+    pattern: str | None = None
+    refactor_replacement: str | None = None
+    language: str | None = None
+    scope: str | None = None
 
     @field_validator("kind")
     @classmethod
     def validate_kind(cls, v: str) -> str:
-        allowed = {"read", "edit", "exec", "test", "git"}
+        allowed = {"read", "edit", "exec", "test", "git", "refactor"}
         if v not in allowed:
             raise ValueError(f"kind must be one of {allowed}, got '{v}'")
         return v
