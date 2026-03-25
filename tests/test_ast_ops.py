@@ -177,3 +177,21 @@ class TestCacheOperations:
         stats = get_stats()
         assert stats.structural_matches == 0
         assert stats.fallbacks_to_text == 0
+
+
+class TestReceiveNodeIntegration:
+    def test_receive_node_populates_ast_available(self, tmp_path):
+        from agent.nodes.receive import receive_instruction_node
+        (tmp_path / "app.ts").write_text("const x = 1;")
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+
+        state = {
+            "instruction": "edit app.ts",
+            "working_directory": str(tmp_path),
+            "context": {},
+            "ast_available": {},
+        }
+        result = receive_instruction_node(state)
+        assert "ast_available" in result
+        assert result["ast_available"].get("typescript") is True
