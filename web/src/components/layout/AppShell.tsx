@@ -2,8 +2,12 @@ import { MeshBackground } from './MeshBackground'
 import { WorkspaceHome } from '../home/WorkspaceHome'
 import { AgentPanel } from '../agent/AgentPanel'
 import { FileTree } from '../explorer/FileTree'
+import { DiffViewer } from '../editor/DiffViewer'
+import { useProjectContext } from '../../context/ProjectContext'
 
 export function AppShell() {
+  const { currentRun } = useProjectContext()
+
   return (
     <>
       <MeshBackground />
@@ -19,7 +23,7 @@ export function AppShell() {
 
           {/* Center: Main Canvas */}
           <main className="flex flex-col h-full relative">
-            <WorkspaceHome />
+            {currentRun ? <DiffViewer /> : <WorkspaceHome />}
           </main>
 
           {/* Right: Agent Panel */}
