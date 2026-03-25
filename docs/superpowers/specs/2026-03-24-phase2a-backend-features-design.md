@@ -14,13 +14,18 @@ Phase 2a adds three backend capabilities to the Shipyard agent: real-time WebSoc
 
 These changes are prerequisites for all three sub-phases:
 
-**`store/models.py` — Add status validation to EditRecord:**
+**`store/models.py` — Updates:**
 ```python
 from typing import Literal
 EDIT_STATUSES = Literal["proposed", "approved", "rejected", "applied", "committed"]
 
 class EditRecord(BaseModel):
     status: EDIT_STATUSES = "proposed"
+    last_op_id: str | None = None  # idempotency tracking
+
+class Event(BaseModel):
+    seq: int = 0  # per-run monotonic sequence number, assigned by EventBus
+    # ... existing fields unchanged
 ```
 
 **`store/protocol.py` — Add `get_edit` method:**
@@ -39,16 +44,17 @@ async def get_edit(self, edit_id: str) -> EditRecord | None:
 **`agent/state.py` — Add Phase 2a fields:**
 ```python
 autonomy_mode: str          # "supervised" | "autonomous"
-pending_approvals: list[str] # edit IDs waiting for approval
 branch: str                  # current git branch
 ```
 
-**`agent/tools/shell.py` — Add async variant:**
+Note: `pending_approvals` is NOT stored in AgentState. It is always derived from the store by querying edits with `status == "proposed"` for the current run. This avoids split-brain between graph state and durable state.
+
+**`agent/tools/shell.py` — Add async variant (argv form):**
 ```python
-async def run_command_async(command: str, cwd: str = ".", timeout: int = 60) -> dict:
-    """Non-blocking subprocess execution using asyncio."""
-    proc = await asyncio.create_subprocess_shell(
-        command, cwd=cwd,
+async def run_command_async(argv: list[str], cwd: str = ".", timeout: int = 60) -> dict:
+    """Non-blocking subprocess execution using asyncio. Uses argv list form (no shell=True)."""
+    proc = await asyncio.create_subprocess_exec(
+        *argv, cwd=cwd,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
     try:
@@ -59,7 +65,7 @@ async def run_command_async(command: str, cwd: str = ".", timeout: int = 60) -> 
         return {"stdout": "", "stderr": "Command timed out", "exit_code": -1}
 ```
 
-GitManager uses `run_command_async` (not the synchronous `run_command`) to avoid blocking the event loop during git operations like push.
+GitManager uses `run_command_async` with argv list form (e.g., `["git", "commit", "-m", message]`) to avoid shell injection and event loop blocking.
 
 ---
 
@@ -116,6 +122,7 @@ Buffers P1 events (primarily LLM token stream) and flushes every 50ms. This feel
 {
   "id": "evt_abc123",
   "run_id": "run_456",
+  "seq": 42,
   "type": "stream",
   "node": "editor",
   "model": "o3",
@@ -123,6 +130,8 @@ Buffers P1 events (primarily LLM token stream) and flushes every 50ms. This feel
   "data": { "token": "const router = ", "done": false }
 }
 ```
+
+`seq` is a per-run monotonic sequence number (integer, starts at 1). Assigned by `EventBus.emit()` using an in-memory counter per run_id. Persisted events store `seq`; transient `stream` events also carry `seq` for ordering but are not persisted. The replay cursor uses `seq`, not event ID or timestamp.
 
 ### WebSocket Endpoint
 
@@ -136,17 +145,18 @@ Buffers P1 events (primarily LLM token stream) and flushes every 50ms. This feel
 **Client → Server messages:**
 ```json
 { "action": "subscribe", "channels": ["diff", "approval"], "panel": "diff-viewer" }
-{ "action": "approve", "run_id": "run_456", "edit_id": "edit_abc" }
-{ "action": "reject", "run_id": "run_456", "edit_id": "edit_abc" }
+{ "action": "approve", "run_id": "run_456", "edit_id": "edit_abc", "op_id": "op_edit_abc_approve" }
+{ "action": "reject", "run_id": "run_456", "edit_id": "edit_abc", "op_id": "op_edit_abc_reject" }
 { "action": "stop", "run_id": "run_456" }
 { "action": "update_mode", "mode": "autonomous" }
-{ "action": "reconnect", "last_event_id": "evt_xxx" }
+{ "action": "reconnect", "run_id": "run_456", "last_seq": 42 }
 ```
 
 ### Reconnect with Replay
 
-1. Client reconnects, sends `{"action": "reconnect", "last_event_id": "evt_xxx"}`
-2. Server sends a **run snapshot** first:
+1. Client reconnects, sends `{"action": "reconnect", "run_id": "run_456", "last_seq": 42}`
+2. Server builds `pending_approvals` from store (edits where `status == "proposed"` for this run)
+3. Server sends a **run snapshot**:
 ```json
 {
   "type": "snapshot",
@@ -160,8 +170,9 @@ Buffers P1 events (primarily LLM token stream) and flushes every 50ms. This feel
   "status": "running"
 }
 ```
-3. Server replays all persisted events after `last_event_id`
-4. Client reconstructs panel state from snapshot + replayed events
+4. Server replays all persisted events with `seq > 42`
+5. Client reconstructs panel state from snapshot + replayed events
+6. **Missed transient stream tokens** are not replayed — the client shows current node status from the snapshot and picks up the live stream from the current position. This is acceptable because token streams are ephemeral display content, not durable state.
 
 ### Heartbeat
 
@@ -197,8 +208,8 @@ class EventBus:
     async def emit(self, event: Event):
         """Emit event. Persist if durable, route by priority, send via callback."""
 
-    async def replay(self, run_id: str, after_id: str | None) -> list[Event]:
-        """Replay persisted events for reconnection."""
+    async def replay(self, run_id: str, after_seq: int = 0) -> list[Event]:
+        """Replay persisted events with seq > after_seq."""
 
     def get_snapshot(self, run_id: str, state: dict) -> dict:
         """Build a run snapshot from current graph state."""
@@ -285,28 +296,36 @@ proposed → approved → applied → committed
 
 ### Idempotency Rules
 
-- Every action has an idempotency key: `{edit_id}_{action}_{timestamp}`
-- Duplicate approvals on already-approved edits are no-ops
-- Transitions only from valid predecessor states
-- REST is authoritative, WebSocket is advisory — both write to same store
+- Every action has a stable operation ID: `op_{edit_id}_{action}` (e.g., `op_edit_abc_approve`). No timestamp — the same logical operation always produces the same key.
+- Duplicate requests with the same `op_id` are deterministic no-ops: return the current edit state without re-processing.
+- Transitions only from valid predecessor states. Invalid transitions return an error, not a silent no-op.
+- REST is authoritative, WebSocket is advisory — both delegate to `ApprovalManager` which writes to the same store.
 
-**Idempotency storage:** Add `last_idempotency_key TEXT` column to the `edits` table. Before processing an approval/reject, check if `last_idempotency_key` matches the incoming key — if so, return the current state without re-processing. Update the key on every successful transition.
+**Idempotency storage:** Add `last_op_id TEXT` column to the `edits` table. Check flow:
+1. Fetch edit by ID
+2. If `last_op_id == incoming op_id` → return current state (no-op)
+3. If transition is invalid → return error
+4. Apply transition, set `last_op_id = incoming op_id`, persist
 
 ### LangGraph Integration
 
 **Supervised mode:**
-1. Editor creates `EditRecord` with `proposed` status
-2. Emits `approval` event (P0) via event bus
+1. Editor creates `EditRecord` with `proposed` status via `ApprovalManager.propose_edit()`
+2. `approval` event emitted (P0) via event bus
 3. Graph state set to `waiting_for_human`
 4. LangGraph checkpoints graph state
-5. User approves → server resumes from checkpoint
-6. Edit applied, status → `applied`
+5. User approves → `ApprovalManager.approve()` transitions to `approved`
+6. Server calls `ApprovalManager.apply_edit()` which writes the edit to the file system and transitions to `applied`
+7. Server resumes graph from checkpoint
+
+`approve()` and `apply_edit()` are **separate operations**. `approve()` only changes status to `approved`. `apply_edit()` performs the file write and changes status to `applied`. This separation allows the system to handle failures during file application without corrupting approval state.
 
 **Autonomous mode:**
-1. Editor creates edit → auto-approves immediately
-2. Edit applied to file
-3. `diff` event emitted for post-review
-4. Graph continues without pause
+1. Editor creates edit via `ApprovalManager.propose_edit()`
+2. `ApprovalManager.approve()` called immediately (auto-approve)
+3. `ApprovalManager.apply_edit()` writes to file, status → `applied`
+4. `diff` event emitted for post-review
+5. Graph continues without pause
 
 ### Mode Toggle Mid-Run
 
@@ -326,9 +345,9 @@ proposed → approved → applied → committed
 |---|---|
 | `agent/nodes/editor.py` | Integrate approval gates |
 | `agent/state.py` | Add `autonomy_mode`, `pending_approvals`, `branch` fields |
-| `store/models.py` | Add `Literal` validation to `EditRecord.status`, add `last_idempotency_key` field |
+| `store/models.py` | Add `Literal` validation to `EditRecord.status`, add `last_op_id` field |
 | `store/protocol.py` | Add `get_edit(edit_id)` method |
-| `store/sqlite.py` | Implement `get_edit`, add `last_idempotency_key` column |
+| `store/sqlite.py` | Implement `get_edit`, add `last_op_id` column |
 | `server/main.py` | Add `PATCH /runs/:id/edits/:edit_id` |
 | `server/websocket.py` | Handle approve/reject client actions |
 
@@ -341,31 +360,41 @@ class ApprovalManager:
         self.event_bus = event_bus
 
     async def propose_edit(self, run_id: str, edit: EditRecord) -> EditRecord:
-        """Create a proposed edit. Emits approval event in supervised mode."""
+        """Create edit with proposed status. Emits approval event in supervised mode."""
 
-    async def approve(self, edit_id: str, idempotency_key: str) -> EditRecord:
-        """Transition proposed → approved → applied. Idempotent."""
+    async def approve(self, edit_id: str, op_id: str) -> EditRecord:
+        """Transition proposed → approved only. Idempotent via op_id."""
 
-    async def reject(self, edit_id: str, idempotency_key: str) -> EditRecord:
-        """Transition proposed → rejected. Idempotent."""
+    async def apply_edit(self, edit_id: str) -> EditRecord:
+        """Transition approved → applied. Writes the edit to the file system.
+        Called by server after approval, not by the user directly."""
+
+    async def reject(self, edit_id: str, op_id: str) -> EditRecord:
+        """Transition proposed → rejected. Idempotent via op_id."""
 
     async def mark_committed(self, edit_ids: list[str]) -> None:
         """Transition applied → committed after git commit."""
 
     async def auto_approve_pending(self, run_id: str) -> list[EditRecord]:
-        """Auto-approve all proposed edits (for autonomous mode switch)."""
+        """Auto-approve all proposed edits (for autonomous mode switch).
+        Does NOT auto-apply — caller must call apply_edit() for each."""
 
     def is_valid_transition(self, current: str, target: str) -> bool:
         """Check if state transition is allowed."""
+
+    async def get_pending(self, run_id: str) -> list[EditRecord]:
+        """Get all edits with status == 'proposed' for a run. Source of truth for pending_approvals."""
 ```
 
 ### REST Endpoint
 
 ```
 PATCH /runs/:id/edits/:edit_id
-Body: { "action": "approve" | "reject", "idempotency_key": "..." }
+Body: { "action": "approve" | "reject", "op_id": "op_edit_abc_approve" }
 Response: { "edit_id": "...", "status": "approved" | "rejected" }
 ```
+
+Both the REST endpoint and the WebSocket `approve`/`reject` handler delegate to `ApprovalManager.approve()` / `ApprovalManager.reject()`. No business logic in endpoint handlers.
 
 ---
 
@@ -378,11 +407,31 @@ GitManager wraps `run_command()` from `agent/tools/shell.py` for local git opera
 ### Smart Branching
 
 ```python
-async def ensure_branch(self, task_slug: str) -> str:
+async def ensure_branch(self, task_slug: str, run_id: str) -> str:
+    """Branch naming includes short run_id suffix to avoid collisions."""
     branch = await self.get_current_branch()
     if branch in ("main", "master"):
-        return await self.create_branch(f"shipyard/{task_slug}")
+        short_id = run_id[:8]
+        new_branch = f"shipyard/{task_slug}-{short_id}"
+        return await self.create_branch(new_branch)
     return branch  # stay on current feature branch
+```
+
+**Edge case handling:**
+- **Dirty working tree:** `ensure_branch` checks `git status --porcelain`. If dirty, stash changes before branching, pop after checkout.
+- **Detached HEAD:** Refuse to operate. Return error asking user to checkout a branch first.
+- **Branch already exists:** Append `-2`, `-3` etc. suffix until a unique name is found.
+- **Not a git repo:** Return clear error. Do not `git init` automatically.
+
+### Git Operation Lock
+
+GitManager holds a per-instance `asyncio.Lock` (`self._lock`). All mutating operations (`stage_files`, `commit`, `push`, `create_branch`) acquire the lock before executing. This prevents concurrent graph steps or WebSocket actions from corrupting git state.
+
+```python
+async def commit(self, message: str) -> str:
+    async with self._lock:
+        await self._run(["git", "commit", "-m", message])
+        ...
 ```
 
 ### Commit Flow
@@ -390,7 +439,7 @@ async def ensure_branch(self, task_slug: str) -> str:
 1. All edits in `applied` status → stage their file paths
 2. Generate commit message via router (`"summarize"` task type → GPT-4o)
 3. In supervised mode: emit approval event for commit, user can edit message
-4. Run `git commit -m "<message>"`
+4. Run `["git", "commit", "-m", message]` (argv form, no shell)
 5. Update edit statuses to `committed`
 6. Log to `git_operations` table
 
@@ -529,3 +578,69 @@ Each sub-phase is independently testable:
 - **2a-3 (Git):** Unit test GitManager against temp git repos (real git commands). Mock httpx for GitHubClient. Integration test git_ops node with mock router + temp repo.
 
 All tests use the existing `SQLiteSessionStore` with `tmp_path` fixtures — no mocking the store.
+
+---
+
+## State Ownership
+
+| State | Source of Truth | Notes |
+|---|---|---|
+| LangGraph execution state | In-memory LangGraph graph + checkpoints | Ephemeral. Checkpointed at approval gates for resume. |
+| Run/edit/event/project data | SQLite via `SessionStore` | Durable. Survives restarts. |
+| WebSocket connections & subscriptions | In-memory `ConnectionManager` | Ephemeral. Rebuilt on reconnect. |
+| Pending approvals | Derived from store (`edits WHERE status = 'proposed' AND run_id = ?`) | Never cached in `AgentState`. Always query store. |
+| Autonomy mode | `AgentState.autonomy_mode` + `projects.autonomy_mode` in store | Graph state is current-run truth. Store is default for new runs. |
+| Event sequence counters | In-memory per-run counter in `EventBus` | Reset on server restart. Persisted events retain their `seq` for replay. On restart, initialize counter from `MAX(seq) + 1` for active runs. |
+
+---
+
+## Migrations
+
+Phase 2a requires these schema changes to the existing SQLite database:
+
+```sql
+-- Add seq column to events table (2a-1)
+ALTER TABLE events ADD COLUMN seq INTEGER DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_events_run_seq ON events(run_id, seq);
+
+-- Add last_op_id to edits table (2a-2)
+ALTER TABLE edits ADD COLUMN last_op_id TEXT;
+
+-- Add indexes for common queries (2a-2, 2a-3)
+CREATE INDEX IF NOT EXISTS idx_edits_run_status ON edits(run_id, status);
+CREATE INDEX IF NOT EXISTS idx_git_ops_run ON git_operations(run_id);
+```
+
+Run these in `SQLiteSessionStore.initialize()` using `ALTER TABLE ... ADD COLUMN` with `IF NOT EXISTS`-style error handling (catch `OperationalError` for "duplicate column name" and ignore).
+
+---
+
+## Observability
+
+All `EventBus.emit()` calls and `TraceLogger.log()` calls must include these structured fields where available:
+
+| Field | Required In | Purpose |
+|---|---|---|
+| `project_id` | All events, all traces | Correlate across runs |
+| `run_id` | All events, all traces | Correlate within a run |
+| `edit_id` | Approval events, edit traces | Track edit lifecycle |
+| `seq` | All events | Ordering and replay cursor |
+| `node` | All events | Which graph node emitted |
+| `model` | LLM-related events | Which model was used |
+
+No new logging framework. Use the existing `TraceLogger` and the `Event` model. The `seq` and `project_id` fields are the main additions.
+
+---
+
+## Transport / Service Boundary
+
+**Design rule:** REST endpoints and WebSocket handlers must NOT contain business logic. Both delegate to the same shared service objects:
+
+| Service | Used By |
+|---|---|
+| `ApprovalManager` | REST `PATCH /edits/:id`, WebSocket `approve`/`reject` action |
+| `GitManager` | REST `/git/commit`, `/git/push`, `git_ops` node |
+| `GitHubClient` | REST `/git/pr`, `/git/merge`, `git_ops` node |
+| `EventBus` | All nodes (emit), WebSocket (send), REST (not directly) |
+
+The server initializes these in `lifespan` and stores them on `app.state`. Endpoint handlers extract the service from `request.app.state` and call its methods. This ensures consistent behavior regardless of whether the action came from REST, WebSocket, or the agent graph.
