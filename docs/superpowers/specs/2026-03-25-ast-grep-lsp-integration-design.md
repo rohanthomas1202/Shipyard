@@ -1,7 +1,7 @@
 # ast-grep + LSP Integration Design
 
 **Date:** 2026-03-25
-**Status:** Approved (pending review)
+**Status:** Approved
 **Approach:** Layered Integration (Hybrid)
 
 ## Overview
