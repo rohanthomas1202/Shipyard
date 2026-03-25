@@ -269,3 +269,61 @@ class TestReceiveNodeIntegration:
         result = receive_instruction_node(state)
         assert "ast_available" in result
         assert result["ast_available"].get("typescript") is True
+
+
+class TestApplyRule:
+    """Test codebase-wide structural refactoring via ast-grep rules."""
+
+    def test_dry_run_finds_matches(self, tmp_path):
+        from agent.tools.ast_ops import apply_rule
+        (tmp_path / "a.ts").write_text("const x = oldFunc(1);\n")
+        (tmp_path / "b.ts").write_text("const y = oldFunc(2);\nconst z = oldFunc(3);\n")
+        rule = {"pattern": "oldFunc($ARG)", "fix": "newFunc($ARG)", "language": "typescript"}
+        results = apply_rule(rule, str(tmp_path), dry_run=True)
+        assert len(results) == 2
+        total_matches = sum(r.match_count for r in results)
+        assert total_matches == 3
+        assert (tmp_path / "a.ts").read_text() == "const x = oldFunc(1);\n"
+
+    def test_apply_modifies_files(self, tmp_path):
+        from agent.tools.ast_ops import apply_rule
+        (tmp_path / "a.ts").write_text("const x = oldFunc(1);\n")
+        rule = {"pattern": "oldFunc($ARG)", "fix": "newFunc($ARG)", "language": "typescript"}
+        results = apply_rule(rule, str(tmp_path), dry_run=False)
+        assert len(results) == 1
+        assert results[0].match_count == 1
+        assert "newFunc(1)" in (tmp_path / "a.ts").read_text()
+
+    def test_apply_returns_old_and_new_content(self, tmp_path):
+        from agent.tools.ast_ops import apply_rule
+        original = "const x = oldFunc(1);\n"
+        (tmp_path / "a.ts").write_text(original)
+        rule = {"pattern": "oldFunc($ARG)", "fix": "newFunc($ARG)", "language": "typescript"}
+        results = apply_rule(rule, str(tmp_path), dry_run=False)
+        assert results[0].old_content == original
+        assert "newFunc(1)" in results[0].new_content
+
+    def test_no_matches_returns_empty(self, tmp_path):
+        from agent.tools.ast_ops import apply_rule
+        (tmp_path / "a.ts").write_text("const x = 1;\n")
+        rule = {"pattern": "nonExistent($ARG)", "fix": "replacement($ARG)", "language": "typescript"}
+        results = apply_rule(rule, str(tmp_path), dry_run=True)
+        assert len(results) == 0
+
+    def test_respects_scope_exclusions(self, tmp_path):
+        from agent.tools.ast_ops import apply_rule
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "a.ts").write_text("const x = oldFunc(1);\n")
+        (tmp_path / "node_modules").mkdir()
+        (tmp_path / "node_modules" / "b.ts").write_text("const y = oldFunc(2);\n")
+        rule = {"pattern": "oldFunc($ARG)", "fix": "newFunc($ARG)", "language": "typescript"}
+        results = apply_rule(rule, str(tmp_path), dry_run=True)
+        assert len(results) == 1
+        assert "src" in results[0].file_path
+
+    def test_unsupported_language_returns_empty(self, tmp_path):
+        from agent.tools.ast_ops import apply_rule
+        (tmp_path / "a.xyz").write_text("content")
+        rule = {"pattern": "x", "fix": "y", "language": "nonexistent_xyz"}
+        results = apply_rule(rule, str(tmp_path), dry_run=True)
+        assert len(results) == 0

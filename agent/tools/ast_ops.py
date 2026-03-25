@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess as _subprocess
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -36,6 +37,15 @@ class MatchStats:
     unsupported_language_skips: int = 0
     cache_hits: int = 0
     cache_misses: int = 0
+
+
+@dataclass
+class RefactorResult:
+    """Result of applying a refactor rule to a single file."""
+    file_path: str
+    old_content: str
+    new_content: str
+    match_count: int
 
 
 # Module-level stats, reset per run
@@ -284,3 +294,83 @@ def _probe_grammar(language: str) -> bool:
         return True
     except BaseException:
         return False
+
+
+_SCOPE_EXCLUSIONS = {"node_modules", ".git", "__pycache__", "dist", "build", ".venv", "target"}
+
+
+def apply_rule(rule: dict, scope: str, dry_run: bool = True) -> list[RefactorResult]:
+    """Apply an ast-grep structural rule across files in a directory scope."""
+    if not AST_GREP_AVAILABLE:
+        return []
+
+    pattern = rule.get("pattern", "")
+    fix = rule.get("fix", "")
+    language = rule.get("language", "")
+
+    if not pattern or not language:
+        return []
+
+    if not _probe_grammar(language):
+        return []
+
+    lang_exts = {ext for ext, lang in _EXT_TO_LANGUAGE.items() if lang == language}
+    if not lang_exts:
+        return []
+
+    results: list[RefactorResult] = []
+    for dirpath, dirnames, filenames in os.walk(scope):
+        dirnames[:] = [d for d in dirnames if d not in _SCOPE_EXCLUSIONS]
+        for filename in filenames:
+            _, ext = os.path.splitext(filename)
+            if ext.lower() not in lang_exts:
+                continue
+
+            file_path = os.path.join(dirpath, filename)
+            try:
+                with open(file_path, "r") as f:
+                    content = f.read()
+            except (OSError, UnicodeDecodeError):
+                continue
+
+            try:
+                root = SgRoot(content, language)
+            except BaseException:
+                continue
+
+            tree_root = root.root()
+            match_list = list(tree_root.find_all({"rule": {"pattern": pattern}}))
+
+            if not match_list:
+                continue
+
+            new_content = content
+            if fix:
+                # Expand metavariables ($VAR) from each match and apply in reverse order
+                metavar_names = re.findall(r"\$([A-Z_]+)", fix)
+                edits = []
+                for match in match_list:
+                    expanded = fix
+                    for var in metavar_names:
+                        bound = match.get_match(var)
+                        if bound:
+                            expanded = expanded.replace("$" + var, bound.text())
+                    r = match.range()
+                    edits.append((r.start.index, r.end.index, expanded))
+
+                edits.sort(key=lambda e: e[0], reverse=True)
+                for start, end, replaced in edits:
+                    new_content = new_content[:start] + replaced + new_content[end:]
+
+            results.append(RefactorResult(
+                file_path=file_path,
+                old_content=content,
+                new_content=new_content,
+                match_count=len(match_list),
+            ))
+
+            if not dry_run and new_content != content:
+                with open(file_path, "w") as f:
+                    f.write(new_content)
+
+    return results
