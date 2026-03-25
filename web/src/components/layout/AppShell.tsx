@@ -4,6 +4,7 @@ import { WorkspaceHome } from '../home/WorkspaceHome'
 import { AgentPanel } from '../agent/AgentPanel'
 import { FileTree } from '../explorer/FileTree'
 import { DiffViewer } from '../editor/DiffViewer'
+import { RunProgress } from '../home/RunProgress'
 import { SettingsModal } from '../settings/SettingsModal'
 import { ProjectPicker } from '../explorer/ProjectPicker'
 import { useProjectContext } from '../../context/ProjectContext'
@@ -86,13 +87,15 @@ export function AppShell() {
 
           {/* Center: Main Canvas */}
           <main className="flex flex-col h-full relative">
-            {currentRun ? (
-              <DiffViewer />
-            ) : (
+            {!currentRun ? (
               <WorkspaceHome
                 onOpenSettings={() => setSettingsOpen(true)}
                 onOpenProjectPicker={() => setProjectPickerOpen(true)}
               />
+            ) : currentRun.status === 'waiting_for_human' ? (
+              <DiffViewer />
+            ) : (
+              <RunProgress />
             )}
           </main>
 
