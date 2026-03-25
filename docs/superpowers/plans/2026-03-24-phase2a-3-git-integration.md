@@ -1774,3 +1774,224 @@ All existing tests plus the new ones should pass:
 - `tests/test_graph.py` — graph wiring tests including git routing
 - `tests/test_git_endpoints.py` — REST endpoint tests
 - `tests/test_store.py` — store tests including index verification
+
+---
+
+## Addendum: Required Corrections
+
+The agentic worker MUST apply these corrections when implementing the tasks above.
+
+### Fix 1: `_run()` must NOT prepend "git" — callers include it (BLOCKING)
+
+The plan defines `_run()` as `["git"] + argv` but then tests call `_run(["git", "checkout", ...])`. This produces `git git checkout`.
+
+**Fix:** `_run()` passes argv directly to `run_command_async` without prepending anything:
+```python
+async def _run(self, argv: list[str]) -> dict:
+    """Run a command. Caller provides full argv, e.g. ["git", "branch", "--show-current"]."""
+    return await run_command_async(argv, cwd=self.cwd)
+```
+
+All call sites must include `"git"` as the first element:
+```python
+await self._run(["git", "branch", "--show-current"])
+await self._run(["git", "checkout", "-b", name])
+```
+
+Audit every `_run()` call in the plan and every test to ensure `"git"` appears exactly once.
+
+### Fix 2: Fix nested lock deadlock in `ensure_branch()` (BLOCKING)
+
+`ensure_branch()` acquires `self._lock`, then calls `self.create_branch()` which also acquires `self._lock`. asyncio.Lock is non-reentrant — this deadlocks.
+
+**Fix:** Extract `_create_branch_unlocked()` and call that from `ensure_branch()`:
+```python
+async def _create_branch_unlocked(self, name: str) -> str:
+    """Internal — create branch without acquiring lock. Caller must hold lock."""
+    result = await self._run(["git", "checkout", "-b", name])
+    if result["exit_code"] != 0:
+        raise RuntimeError(f"Failed to create branch: {result['stderr']}")
+    return name
+
+async def create_branch(self, name: str) -> str:
+    """Public API — acquires lock."""
+    async with self._lock:
+        return await self._create_branch_unlocked(name)
+
+async def ensure_branch(self, task_slug: str, run_id: str) -> str:
+    async with self._lock:
+        branch = await self._get_current_branch_unlocked()
+        if branch in ("main", "master"):
+            ...
+            return await self._create_branch_unlocked(branch_name)
+        return branch
+```
+
+Apply the same pattern to any other method called within a locked section (`get_current_branch`, `get_status`).
+
+### Fix 3: Use class-level lock registry keyed by working directory
+
+A per-instance lock provides no safety when multiple `GitManager` instances target the same repo.
+
+**Fix:**
+```python
+class GitManager:
+    _repo_locks: ClassVar[dict[str, asyncio.Lock]] = {}
+
+    def __init__(self, working_directory: str):
+        self.cwd = os.path.abspath(working_directory)
+        if self.cwd not in GitManager._repo_locks:
+            GitManager._repo_locks[self.cwd] = asyncio.Lock()
+        self._lock = GitManager._repo_locks[self.cwd]
+```
+
+### Fix 4: Improve stash handling in `ensure_branch()`
+
+Current stash logic is incomplete:
+- Does not include untracked files (`-u` flag missing)
+- Ignores stash pop failure
+- Does not verify whether a stash was actually created
+
+**Fix:**
+```python
+# Check if dirty
+status = await self._run(["git", "status", "--porcelain"])
+is_dirty = bool(status["stdout"].strip())
+
+if is_dirty:
+    stash_result = await self._run(["git", "stash", "push", "-u", "-m", "shipyard-auto-stash"])
+    if stash_result["exit_code"] != 0:
+        raise RuntimeError(f"Failed to stash: {stash_result['stderr']}")
+
+# ... create branch / checkout ...
+
+if is_dirty:
+    pop_result = await self._run(["git", "stash", "pop"])
+    if pop_result["exit_code"] != 0:
+        raise RuntimeError(
+            f"Stash pop failed after branch creation. Branch '{branch_name}' exists. "
+            f"Manual intervention needed: {pop_result['stderr']}"
+        )
+```
+
+### Fix 5: Fix `push()` to always resolve current branch
+
+```python
+async def push(self, branch: str | None = None) -> None:
+    async with self._lock:
+        if branch is None:
+            branch = (await self._run(["git", "branch", "--show-current"]))["stdout"].strip()
+        result = await self._run(["git", "push", "--set-upstream", "origin", branch])
+        if result["exit_code"] != 0:
+            raise RuntimeError(f"Push failed: {result['stderr']}")
+```
+
+### Fix 6: Decide on commit approval — DEFER for V1
+
+The spec mentions commit approval in supervised mode, but this adds significant complexity to the git_ops flow.
+
+**V1 decision:** Commit approval is **deferred**. In V1, `git_ops_node` always commits and pushes without an approval gate. The edit-level approval (2a-2) is the primary safety mechanism. Commit approval can be added in a future phase.
+
+Document this explicitly in the git_ops_node implementation.
+
+### Fix 7: Stage from store-backed applied edits, not edit_history
+
+```python
+# In git_ops_node, replace:
+edited_files = list(set(entry.get("file", "") for entry in edit_history if entry.get("file")))
+
+# With:
+store = config["configurable"]["store"]
+run_id = config["configurable"].get("run_id", "")
+applied_edits = await store.get_edits(run_id, status="applied")
+edited_files = list(set(e.file_path for e in applied_edits))
+
+# Fallback to edit_history only if no approval system / no applied edits:
+if not edited_files:
+    edited_files = list(set(entry.get("file", "") for entry in edit_history if entry.get("file")))
+```
+
+### Fix 8: Standardize run_id sourcing
+
+Do not source run_id from `state["context"]`. Use consistent pattern across all nodes:
+
+```python
+# Primary: from config
+run_id = config["configurable"].get("run_id", "")
+# Fallback: from state (if set by receive node)
+if not run_id:
+    run_id = state.get("run_id", "unknown")
+```
+
+Same for `project_id`. Apply to git_ops_node and all REST endpoints.
+
+### Fix 9: Replace fake graph assertion with real test
+
+Replace:
+```python
+assert "git_ops" in node_names or True  # always passes
+```
+
+With:
+```python
+# Test that classify_step routes git kind correctly
+from agent.graph import classify_step
+state = {"plan": [{"kind": "git", "id": "g1", "complexity": "simple"}], "current_step": 0}
+assert classify_step(state) == "git_ops"
+```
+
+### Fix 10: Narrow push failure handling
+
+Replace:
+```python
+except RuntimeError:
+    ops_log.append({"type": "push", "status": "skipped"})
+```
+
+With:
+```python
+except RuntimeError as e:
+    err_msg = str(e).lower()
+    if "no remote" in err_msg or "no upstream" in err_msg or "does not appear to be a git repo" in err_msg:
+        ops_log.append({"type": "push", "status": "skipped", "reason": "no remote configured"})
+    else:
+        ops_log.append({"type": "push", "status": "failed", "error": str(e)})
+        # Don't raise — PR creation still possible if push succeeded via other means
+```
+
+### Fix 11: Prefer project config over run context for GitHub credentials
+
+```python
+# In git_ops_node and REST endpoints:
+store = config["configurable"]["store"]
+project = await store.get_project(project_id)
+github_repo = project.github_repo if project else None
+github_pat = project.github_pat if project else None
+
+# Only fall back to run context if project config not available:
+if not github_repo:
+    github_repo = state.get("context", {}).get("github_repo")
+```
+
+### Fix 12: Handle reviewer assignment as best-effort in GitHubClient
+
+```python
+async def create_pr(self, branch, title, body, draft=False, reviewers=None):
+    # ... create PR ...
+    resp.raise_for_status()
+    pr_data = resp.json()
+
+    # Reviewer assignment is best-effort
+    if reviewers:
+        try:
+            reviewer_resp = await self._client.post(...)
+            reviewer_resp.raise_for_status()
+        except httpx.HTTPStatusError:
+            pass  # reviewer assignment failed — non-fatal
+
+    return pr_data
+```
+
+### Fix 13: Verify GitOperation model and store support exist
+
+Before implementation, confirm that `store/models.py` has `GitOperation` and `store/sqlite.py` has `log_git_op()`. These were created in Phase 1 — the worker should read these files first to verify field names match what git_ops_node expects.
