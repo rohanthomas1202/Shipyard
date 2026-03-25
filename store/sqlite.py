@@ -22,11 +22,13 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 
 CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY, run_id TEXT REFERENCES runs(id),
-    type TEXT NOT NULL, node TEXT, model TEXT, data TEXT,
+    id TEXT PRIMARY KEY, project_id TEXT, run_id TEXT REFERENCES runs(id),
+    type TEXT NOT NULL, seq INTEGER DEFAULT 0,
+    node TEXT, model TEXT, data TEXT,
     timestamp REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_replay ON events(run_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_events_run_seq ON events(run_id, seq);
 
 CREATE TABLE IF NOT EXISTS edits (
     id TEXT PRIMARY KEY, run_id TEXT REFERENCES runs(id),
@@ -181,36 +183,36 @@ class SQLiteSessionStore:
 
     async def append_event(self, event: Event) -> None:
         await self._db.execute(
-            """INSERT INTO events (id, run_id, type, node, model, data, timestamp)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO events (id, project_id, run_id, type, seq, node, model, data, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                event.id, event.run_id, event.type, event.node, event.model,
+                event.id, event.project_id, event.run_id, event.type, event.seq,
+                event.node, event.model,
                 json.dumps(event.data), event.timestamp,
             ),
         )
         await self._db.commit()
 
-    async def replay_events(self, run_id: str, after_id: str | None = None) -> list[Event]:
-        if after_id is None:
-            async with self._db.execute(
-                "SELECT * FROM events WHERE run_id = ? ORDER BY rowid ASC",
-                (run_id,),
-            ) as cursor:
-                rows = await cursor.fetchall()
-        else:
-            async with self._db.execute(
-                """SELECT * FROM events WHERE run_id = ?
-                   AND rowid > (SELECT rowid FROM events WHERE id = ?)
-                   ORDER BY rowid ASC""",
-                (run_id, after_id),
-            ) as cursor:
-                rows = await cursor.fetchall()
+    async def replay_events(self, run_id: str, after_seq: int = 0) -> list[Event]:
+        async with self._db.execute(
+            "SELECT * FROM events WHERE run_id = ? AND seq > ? ORDER BY seq ASC",
+            (run_id, after_seq),
+        ) as cursor:
+            rows = await cursor.fetchall()
         result = []
         for row in rows:
             data = dict(row)
             data["data"] = json.loads(data["data"]) if data["data"] else {}
             result.append(Event(**data))
         return result
+
+    async def get_max_seq(self, run_id: str) -> int:
+        async with self._db.execute(
+            "SELECT COALESCE(MAX(seq), 0) FROM events WHERE run_id = ?",
+            (run_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row[0]
 
     # --- Edits ---
 

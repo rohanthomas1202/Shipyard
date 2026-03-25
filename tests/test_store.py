@@ -58,9 +58,9 @@ async def test_update_run_status(store):
 
 @pytest.mark.asyncio
 async def test_append_and_replay_events(store):
-    e1 = Event(run_id="r1", type="status", node="planner", data={"step": 1})
-    e2 = Event(run_id="r1", type="diff", node="editor", data={"file": "a.ts"})
-    e3 = Event(run_id="r1", type="status", node="validator", data={"step": 2})
+    e1 = Event(project_id="p1", run_id="r1", type="status", node="planner", seq=1, data={"step": 1})
+    e2 = Event(project_id="p1", run_id="r1", type="diff", node="editor", seq=2, data={"file": "a.ts"})
+    e3 = Event(project_id="p1", run_id="r1", type="status", node="validator", seq=3, data={"step": 2})
     await store.append_event(e1)
     await store.append_event(e2)
     await store.append_event(e3)
@@ -72,11 +72,11 @@ async def test_append_and_replay_events(store):
 
 @pytest.mark.asyncio
 async def test_replay_events_after_cursor(store):
-    e1 = Event(run_id="r1", type="status", data={"a": 1})
-    e2 = Event(run_id="r1", type="diff", data={"b": 2})
+    e1 = Event(project_id="p1", run_id="r1", type="status", seq=1, data={"a": 1})
+    e2 = Event(project_id="p1", run_id="r1", type="diff", seq=2, data={"b": 2})
     await store.append_event(e1)
     await store.append_event(e2)
-    events = await store.replay_events("r1", after_id=e1.id)
+    events = await store.replay_events("r1", after_seq=1)
     assert len(events) == 1
     assert events[0].id == e2.id
 

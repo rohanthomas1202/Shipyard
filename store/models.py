@@ -44,8 +44,10 @@ class Run(BaseModel):
 
 class Event(BaseModel):
     id: str = Field(default_factory=_new_id)
+    project_id: str
     run_id: str
     type: str
+    seq: int = 0
     node: str | None = None
     model: str | None = None
     data: dict[str, Any] = Field(default_factory=dict)
