@@ -2172,3 +2172,148 @@ No new pip dependencies are needed. `FastAPI` already includes WebSocket support
 4. `feat: add ConnectionManager for WebSocket state and message routing`
 5. `feat: add WebSocket endpoint with project validation and reconnect replay`
 6. `test: add integration tests for full WebSocket event bus pipeline`
+
+---
+
+## Addendum: Required Corrections
+
+The agentic worker MUST apply these corrections when implementing the tasks above.
+
+### Fix 1: Add `project_id` to Event model (Task 1)
+
+The Event model must include `project_id` so the event bus can route events to the correct WebSocket connections without a separate parameter.
+
+**In Task 1, update the Event model to:**
+```python
+class Event(BaseModel):
+    id: str = Field(default_factory=_new_id)
+    project_id: str          # NEW — required for routing
+    run_id: str
+    type: str
+    seq: int = 0
+    node: str | None = None
+    model: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)
+    timestamp: float = Field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
+```
+
+Update the SQLite schema and insert/select logic to persist `project_id`. All test code that creates Event objects must pass `project_id`.
+
+### Fix 2: Wire EventBus → ConnectionManager callback in lifespan (Task 5)
+
+The lifespan in the plan creates both objects but never connects them. Add this to the lifespan after creating both:
+
+```python
+# In lifespan, after creating event_bus and conn_manager:
+async def send_callback(event: Event) -> None:
+    await conn_manager.send_to_subscribed(event)
+
+event_bus.set_send_callback(send_callback)
+event_bus.start_batcher()
+```
+
+### Fix 3: Send snapshot on reconnect (Task 4 ConnectionManager)
+
+The reconnect handler in `handle_client_message` must send a snapshot BEFORE replaying events:
+
+```python
+elif action == "reconnect":
+    run_id = data.get("run_id")
+    last_seq = data.get("last_seq", 0)
+    if run_id:
+        state.subscribed_runs.add(run_id)
+
+        # Send snapshot FIRST
+        snapshot = await self.event_bus.get_snapshot(run_id)
+        await ws.send_json({"type": "snapshot", **snapshot})
+
+        # Then replay persisted events
+        events = await self.event_bus.replay(run_id, after_seq=last_seq)
+        for event in events:
+            await ws.send_json(_event_payload(event))
+```
+
+Update reconnect tests to assert the snapshot message arrives before replayed events.
+
+### Fix 4: Make `get_snapshot()` async and store-backed (Task 3)
+
+Replace the synchronous `get_snapshot(run_id, state)` with an async, store-backed version that works after server restart:
+
+```python
+async def get_snapshot(self, run_id: str) -> dict:
+    """Build a snapshot from durable store state (works after restart)."""
+    last_seq = await self.store.get_max_seq(run_id)
+    run = await self.store.get_run(run_id)
+    return {
+        "run_id": run_id,
+        "status": run.status if run else "unknown",
+        "last_seq": last_seq,
+    }
+```
+
+Remove the `state: dict` parameter — the snapshot must not depend on in-memory graph state.
+
+### Fix 5: Per-run P2 queue (Task 3)
+
+The P2 queue must be per-run to avoid mixing events from concurrent runs:
+
+```python
+# In EventBus.__init__:
+self._p2_queue: dict[str, list[Event]] = {}   # run_id → events
+
+# In emit() for P2:
+self._p2_queue.setdefault(event.run_id, []).append(event)
+
+# Add flush method:
+async def flush_node_boundary(self, run_id: str) -> None:
+    """Flush P2 events for a specific run (called at node boundaries)."""
+    events = self._p2_queue.pop(run_id, [])
+    if self._send_callback is not None:
+        for event in events:
+            await self._send_callback(event)
+```
+
+Add a test proving P2 flush only flushes one run's queue.
+
+### Fix 6: Patch server/main.py instead of replacing (Task 5)
+
+Do NOT replace the entire `server/main.py`. Instead, make targeted edits:
+1. Add imports for `EventBus`, `ConnectionManager`, `WebSocket`, `WebSocketDisconnect`
+2. Update lifespan to create and wire EventBus + ConnectionManager + heartbeat task
+3. Add the WebSocket route function
+4. Add the heartbeat loop function
+
+All existing endpoints (`/health`, `/instruction`, `/status`, `/projects`) must remain untouched.
+
+### Fix 7: Make TokenBatcher.start() idempotent (Task 2)
+
+```python
+def start(self, on_flush):
+    if self._running:
+        return
+    self._on_flush = on_flush
+    self._running = True
+    self._task = asyncio.create_task(self._flush_loop())
+```
+
+### Fix 8: Catch flush callback errors (Task 2)
+
+```python
+async def _flush_loop(self) -> None:
+    while self._running:
+        await asyncio.sleep(self.flush_interval)
+        if self._buffer and self._on_flush is not None:
+            items = list(self._buffer)
+            self._buffer.clear()
+            try:
+                await self._on_flush(items)
+            except Exception:
+                logger.exception("TokenBatcher flush failed")
+```
+
+### Test updates required by these fixes
+
+- All Event creation in tests must include `project_id` parameter
+- Reconnect tests must assert snapshot message arrives before replayed events
+- `send_to_subscribed()` should read `event.project_id` instead of taking `project_id` as a separate argument — update tests and implementation
+- Add a test proving P2 `flush_node_boundary(run_id)` only flushes that run's queue
