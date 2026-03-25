@@ -1,8 +1,15 @@
+import { useState } from 'react'
 import { RunList } from './RunList'
+import { ProjectPicker } from './ProjectPicker'
 import { useProjectContext } from '../../context/ProjectContext'
 
-export function FileTree() {
+interface FileTreeProps {
+  onCollapse?: () => void
+}
+
+export function FileTree({ onCollapse }: FileTreeProps) {
   const { currentProject } = useProjectContext()
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
     <>
@@ -18,12 +25,24 @@ export function FileTree() {
           Explorer
         </h2>
         <div className="flex gap-1">
-          <button className="p-1 rounded transition-colors" style={{ color: 'var(--color-muted)' }}>
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="p-1 rounded transition-colors hover:bg-white/5"
+            style={{ color: 'var(--color-muted)' }}
+            title="Open project"
+          >
             <span className="material-symbols-outlined text-[16px]">create_new_folder</span>
           </button>
-          <button className="p-1 rounded transition-colors" style={{ color: 'var(--color-muted)' }}>
-            <span className="material-symbols-outlined text-[16px]">note_add</span>
-          </button>
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              className="p-1 rounded transition-colors hover:bg-white/5"
+              style={{ color: 'var(--color-muted)' }}
+              title="Collapse"
+            >
+              <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -53,32 +72,38 @@ export function FileTree() {
               Open a folder or repository to start working.
             </p>
             <button
-              className="flex items-center justify-center h-8 px-4 rounded-lg text-xs font-semibold w-full transition-colors"
+              onClick={() => setPickerOpen(true)}
+              className="flex items-center justify-center h-8 px-4 rounded-lg text-xs font-semibold w-full transition-colors hover:bg-white/5"
               style={{
                 background: 'var(--color-surface)',
                 border: '1px solid var(--color-border)',
                 color: 'var(--color-text)',
               }}
             >
-              Open Folder
-            </button>
-            <button
-              className="flex items-center justify-center h-8 px-4 rounded-lg text-xs font-semibold w-full mt-2 transition-colors"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              Clone Repository
+              Open Project
             </button>
           </div>
         ) : (
-          /* Active State — placeholder for now */
+          /* Active State */
           <div className="py-2">
-            <div className="px-4 py-1.5 flex items-center gap-2 text-sm cursor-pointer hover:bg-white/5">
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="w-full px-4 py-1.5 flex items-center gap-2 text-sm cursor-pointer hover:bg-white/5 text-left"
+            >
               <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--color-primary)' }}>
                 folder_open
               </span>
-              <span className="font-medium truncate" style={{ color: 'var(--color-text)' }}>
+              <span className="font-medium truncate flex-1" style={{ color: 'var(--color-text)' }}>
                 {currentProject.name}
               </span>
+              <span className="material-symbols-outlined text-[14px]" style={{ color: 'var(--color-muted)' }}>
+                swap_horiz
+              </span>
+            </button>
+            <div className="px-4 mt-1">
+              <p className="text-[10px] truncate" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-code)' }}>
+                {currentProject.path}
+              </p>
             </div>
           </div>
         )}
@@ -86,6 +111,8 @@ export function FileTree() {
         {/* Runs */}
         <RunList />
       </div>
+
+      <ProjectPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
     </>
   )
 }

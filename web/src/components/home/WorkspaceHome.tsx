@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useProjectContext } from '../../context/ProjectContext'
 
-export function WorkspaceHome() {
+interface WorkspaceHomeProps {
+  onOpenSettings?: () => void
+  onOpenProjectPicker?: () => void
+}
+
+export function WorkspaceHome({ onOpenSettings, onOpenProjectPicker }: WorkspaceHomeProps) {
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -141,20 +146,22 @@ export function WorkspaceHome() {
 
         {/* Quick Actions */}
         <div className="mt-8 flex gap-3 flex-wrap justify-center">
-          {[
-            { icon: 'add_box', label: 'Create new project' },
-            { icon: 'terminal', label: 'Open terminal' },
-            { icon: 'settings', label: 'Workspace settings' },
-          ].map(({ icon, label }) => (
-            <button
-              key={label}
-              className="px-4 py-2 rounded-full glass-panel text-xs font-medium transition-all flex items-center gap-2 hover:opacity-80"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              <span className="material-symbols-outlined text-[14px]">{icon}</span>
-              {label}
-            </button>
-          ))}
+          <button
+            onClick={onOpenProjectPicker}
+            className="px-4 py-2 rounded-full glass-panel text-xs font-medium transition-all flex items-center gap-2 hover:opacity-80"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            <span className="material-symbols-outlined text-[14px]">add_box</span>
+            Create new project
+          </button>
+          <button
+            onClick={onOpenSettings}
+            className="px-4 py-2 rounded-full glass-panel text-xs font-medium transition-all flex items-center gap-2 hover:opacity-80"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            <span className="material-symbols-outlined text-[14px]">settings</span>
+            Workspace settings
+          </button>
         </div>
       </div>
     </div>

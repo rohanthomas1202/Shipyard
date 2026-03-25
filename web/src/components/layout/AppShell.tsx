@@ -5,12 +5,14 @@ import { AgentPanel } from '../agent/AgentPanel'
 import { FileTree } from '../explorer/FileTree'
 import { DiffViewer } from '../editor/DiffViewer'
 import { SettingsModal } from '../settings/SettingsModal'
+import { ProjectPicker } from '../explorer/ProjectPicker'
 import { useProjectContext } from '../../context/ProjectContext'
 import { useHotkeys } from '../../hooks/useHotkeys'
 
 export function AppShell() {
   const { currentRun } = useProjectContext()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false)
 
   const [leftCollapsed, setLeftCollapsed] = useState(() => {
     return localStorage.getItem('shipyard-left-collapsed') === 'true'
@@ -45,6 +47,7 @@ export function AppShell() {
     <>
       <MeshBackground />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ProjectPicker open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} />
       <div className="h-screen w-screen p-4 box-border">
         <div
           className="grid h-full w-full gap-4"
@@ -77,30 +80,20 @@ export function AppShell() {
               </div>
             ) : (
               /* Full explorer */
-              <div className="flex flex-col h-full overflow-hidden">
-                <div className="flex items-center justify-between px-3 pt-3 pb-1 flex-shrink-0">
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
-                    Explorer
-                  </span>
-                  <button
-                    onClick={() => setLeftCollapsed(true)}
-                    className="p-0.5 rounded hover:opacity-80 transition-opacity"
-                    title="Collapse explorer"
-                    style={{ color: 'var(--color-muted)' }}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-                  </button>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <FileTree />
-                </div>
-              </div>
+              <FileTree onCollapse={() => setLeftCollapsed(true)} />
             )}
           </aside>
 
           {/* Center: Main Canvas */}
           <main className="flex flex-col h-full relative">
-            {currentRun ? <DiffViewer /> : <WorkspaceHome />}
+            {currentRun ? (
+              <DiffViewer />
+            ) : (
+              <WorkspaceHome
+                onOpenSettings={() => setSettingsOpen(true)}
+                onOpenProjectPicker={() => setProjectPickerOpen(true)}
+              />
+            )}
           </main>
 
           {/* Right: Agent Panel */}
