@@ -121,11 +121,18 @@ class EventBus:
         """Build snapshot from durable store state. Works after restart."""
         last_seq = await self.store.get_max_seq(run_id)
         run = await self.store.get_run(run_id)
+        pending = await self.store.get_edits(run_id, status="proposed") if run else []
         return {
             "type": "snapshot",
             "run_id": run_id,
             "status": run.status if run else "unknown",
             "last_seq": last_seq,
+            "active_node": None,
+            "current_step": 0,
+            "total_steps": 0,
+            "pending_approvals": [e.id for e in pending],
+            "current_branch": run.branch if run else None,
+            "autonomy_mode": "supervised",
         }
 
     async def shutdown(self) -> None:

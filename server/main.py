@@ -88,9 +88,25 @@ class CreateProjectRequest(BaseModel):
     path: str
 
 
+class UpdateProjectRequest(BaseModel):
+    name: str | None = None
+    path: str | None = None
+    github_repo: str | None = None
+    github_pat: str | None = None
+    default_model: str | None = None
+    autonomy_mode: str | None = None
+    test_command: str | None = None
+    build_command: str | None = None
+    lint_command: str | None = None
+
+
 class EditActionRequest(BaseModel):
     action: TypingLiteral["approve", "reject"]
     op_id: str
+
+
+def project_response(project: Project) -> dict:
+    return project.model_dump(exclude={"github_pat"})
 
 
 async def _resume_run(run_id: str) -> None:
@@ -224,7 +240,7 @@ async def continue_run(run_id: str, req: InstructionRequest):
 async def list_projects():
     store: SQLiteSessionStore = app.state.store
     projects = await store.list_projects()
-    return [p.model_dump() for p in projects]
+    return [project_response(p) for p in projects]
 
 
 @app.post("/projects", status_code=201)
@@ -232,7 +248,7 @@ async def create_project(req: CreateProjectRequest):
     store: SQLiteSessionStore = app.state.store
     project = Project(name=req.name, path=req.path)
     created = await store.create_project(project)
-    return created.model_dump()
+    return project_response(created)
 
 
 @app.get("/projects/{project_id}")
@@ -241,7 +257,19 @@ async def get_project(project_id: str):
     project = await store.get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    return project.model_dump()
+    return project_response(project)
+
+
+@app.put("/projects/{project_id}")
+async def update_project(project_id: str, req: UpdateProjectRequest):
+    store: SQLiteSessionStore = app.state.store
+    project = await store.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    for field, value in req.model_dump(exclude_none=True).items():
+        setattr(project, field, value)
+    updated = await store.update_project(project)
+    return project_response(updated)
 
 
 @app.patch("/runs/{run_id}/edits/{edit_id}")
@@ -270,6 +298,13 @@ async def patch_edit(run_id: str, edit_id: str, req: EditActionRequest):
         raise HTTPException(status_code=500, detail=f"Failed to apply edit: {e}")
 
     return {"edit_id": edit_id, "run_id": run_id, "status": result.status}
+
+
+@app.get("/runs/{run_id}/edits")
+async def get_run_edits(run_id: str, status: str | None = None):
+    store: SQLiteSessionStore = app.state.store
+    edits = await store.get_edits(run_id, status=status)
+    return [e.model_dump() for e in edits]
 
 
 class GitCommitRequest(BaseModel):
