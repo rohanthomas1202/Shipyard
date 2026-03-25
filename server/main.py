@@ -447,3 +447,12 @@ async def websocket_endpoint(websocket: WebSocket, project_id: str):
     except Exception:
         logger.exception("WebSocket error for project %s", project_id)
         await conn_manager.disconnect(websocket)
+
+
+# --- Production static file serving ---
+# Must be AFTER all API routes. Serves the built React frontend.
+from fastapi.staticfiles import StaticFiles
+
+_frontend_dir = os.path.join(os.path.dirname(__file__), "..", "web", "dist")
+if os.path.isdir(_frontend_dir):
+    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
