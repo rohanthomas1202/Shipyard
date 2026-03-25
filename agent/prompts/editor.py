@@ -20,7 +20,7 @@ Respond with ONLY the JSON object, no other text."""
 EDITOR_USER = """File: {file_path}
 
 Content:
-{file_content}
+{numbered_content}
 
 Instruction: {edit_instruction}
 

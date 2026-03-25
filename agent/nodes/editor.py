@@ -1,83 +1,82 @@
 import json
-import os
 from agent.prompts.editor import EDITOR_SYSTEM, EDITOR_USER
-from agent.tools.file_ops import edit_file, read_file
-from agent.llm import call_llm
+from agent.tools.file_ops import read_file, edit_file
 from agent.tracing import TraceLogger
 
 tracer = TraceLogger()
 
-async def editor_node(state: dict) -> dict:
-    """Perform an anchor-based surgical edit on a file."""
-    plan = state["plan"]
-    step = state["current_step"]
-    instruction = plan[step] if step < len(plan) else state["instruction"]
-    working_dir = state["working_directory"]
 
-    file_buffer = state["file_buffer"]
+async def editor_node(state: dict, config: dict) -> dict:
+    router = config["configurable"]["router"]
+    file_buffer = state.get("file_buffer", {})
+    plan = state.get("plan", [])
+    current_step = state.get("current_step", 0)
+
     if not file_buffer:
-        return {**state, "error_state": "No files in buffer. Run reader first."}
+        return {"error_state": "No files in buffer to edit"}
 
     file_path = list(file_buffer.keys())[0]
-    file_content = file_buffer[file_path]
+    content = file_buffer[file_path]
 
+    # Determine complexity from typed step
+    complexity = "simple"
+    if current_step < len(plan):
+        step = plan[current_step]
+        if isinstance(step, dict):
+            complexity = step.get("complexity", "simple")
+
+    task_type = "edit_complex" if complexity == "complex" else "edit_simple"
+
+    # Number the lines for the LLM
+    lines = content.split("\n")
+    numbered = "\n".join(f"{i+1}: {line}" for i, line in enumerate(lines))
+
+    # Build instruction from step
+    step_text = ""
+    if current_step < len(plan):
+        step = plan[current_step]
+        step_text = step if isinstance(step, str) else step.get("id", "edit")
+
+    context = state.get("context", {})
     context_section = ""
-    if state.get("context"):
-        ctx = state["context"]
-        if ctx.get("schema"):
-            context_section += f"\nRelevant schema:\n{ctx['schema']}\n"
-        if ctx.get("spec"):
-            context_section += f"\nSpec:\n{ctx['spec']}\n"
+    if context.get("spec"):
+        context_section = f"Spec: {context['spec']}"
 
-    numbered_content = "\n".join(
-        f"{i+1}: {line}" for i, line in enumerate(file_content.split("\n"))
-    )
     user_prompt = EDITOR_USER.format(
         file_path=file_path,
-        file_content=numbered_content,
-        edit_instruction=instruction,
+        numbered_content=numbered,
+        edit_instruction=step_text,
         context_section=context_section,
     )
 
-    response = await call_llm(EDITOR_SYSTEM, user_prompt)
+    raw = await router.call(task_type, EDITOR_SYSTEM, user_prompt)
 
+    # Parse JSON response
     try:
-        text = response.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1]
-            text = text.rsplit("```", 1)[0]
-        edit_data = json.loads(text)
-        anchor = edit_data["anchor"]
-        replacement = edit_data["replacement"]
+        data = json.loads(raw)
+        anchor = data["anchor"]
+        replacement = data["replacement"]
     except (json.JSONDecodeError, KeyError) as e:
-        return {
-            "error_state": f"Failed to parse editor response: {e}\nResponse: {response[:500]}",
-            "edit_history": state["edit_history"],
-        }
+        return {"error_state": f"Editor output parse error: {e}"}
 
+    # Apply edit
     result = edit_file(file_path, anchor, replacement)
-
-    if not result["success"]:
-        tracer.log("editor", {"file": file_path, "anchor": anchor[:100], "result": "failed", "error": result["error"]})
+    if result.get("error"):
+        tracer.log("editor", {"file": file_path, "error": result["error"]})
         return {
             "error_state": result["error"],
-            "edit_history": state["edit_history"],
+            "edit_history": state.get("edit_history", []) + [
+                {"file": file_path, "error": result["error"]}
+            ],
         }
 
-    edit_entry = {
-        "file": file_path,
-        "anchor": anchor,
-        "replacement": replacement,
-        "snapshot": result["snapshot"],
-    }
-    new_history = state["edit_history"] + [edit_entry]
-    new_content = open(file_path).read()
-    new_buffer = {**file_buffer, file_path: new_content}
+    tracer.log("editor", {"file": file_path, "anchor": anchor[:50], "model": task_type})
 
-    tracer.log("editor", {"file": file_path, "anchor": anchor[:100], "result": "success"})
-
+    updated_content = read_file(file_path)
     return {
+        "file_buffer": {**file_buffer, file_path: updated_content},
+        "edit_history": state.get("edit_history", []) + [
+            {"file": file_path, "old": anchor, "new": replacement, "snapshot": result.get("snapshot")}
+        ],
         "error_state": None,
-        "edit_history": new_history,
-        "file_buffer": new_buffer,
     }

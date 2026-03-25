@@ -1,9 +1,16 @@
 import json
 import os
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from agent.nodes.editor import editor_node
 from agent.state import AgentState
+
+
+def make_config_with_mock_router(return_value):
+    mock_router = MagicMock()
+    mock_router.call = AsyncMock(return_value=return_value)
+    return {"configurable": {"router": mock_router}}
+
 
 @pytest.fixture
 def sample_state(tmp_codebase):
@@ -25,6 +32,7 @@ def sample_state(tmp_codebase):
         "has_conflicts": False,
     }
 
+
 @pytest.mark.asyncio
 async def test_editor_node_successful_edit(sample_state, tmp_codebase):
     ts_path = os.path.join(tmp_codebase, "sample.ts")
@@ -33,15 +41,15 @@ async def test_editor_node_successful_edit(sample_state, tmp_codebase):
         "replacement": '  description: string;\n  due_date: string;\n  status: "open" | "closed";',
     })
 
-    with patch("agent.nodes.editor.call_llm", new_callable=AsyncMock) as mock_llm:
-        mock_llm.return_value = mock_response
-        result = await editor_node(sample_state)
+    config = make_config_with_mock_router(mock_response)
+    result = await editor_node(sample_state, config=config)
 
     assert result["error_state"] is None
     assert len(result["edit_history"]) == 1
     assert result["edit_history"][0]["file"] == ts_path
     content = open(ts_path).read()
     assert "due_date: string;" in content
+
 
 @pytest.mark.asyncio
 async def test_editor_node_anchor_not_found(sample_state):
@@ -50,9 +58,8 @@ async def test_editor_node_anchor_not_found(sample_state):
         "replacement": "whatever",
     })
 
-    with patch("agent.nodes.editor.call_llm", new_callable=AsyncMock) as mock_llm:
-        mock_llm.return_value = mock_response
-        result = await editor_node(sample_state)
+    config = make_config_with_mock_router(mock_response)
+    result = await editor_node(sample_state, config=config)
 
     assert result["error_state"] is not None
     assert "not found" in result["error_state"].lower()
