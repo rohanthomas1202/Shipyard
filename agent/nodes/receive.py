@@ -7,4 +7,4 @@ def receive_instruction_node(state: dict) -> dict:
         "instruction": state.get("instruction", ""),
         "has_context": bool(state.get("context")),
     })
-    return {"current_step": 0, "error_state": None}
+    return {"current_step": 0, "error_state": None, "model_usage": {}}

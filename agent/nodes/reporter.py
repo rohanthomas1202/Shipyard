@@ -22,6 +22,7 @@ def reporter_node(state: dict) -> dict:
         "files_edited": list(set(e["file"] for e in edit_history)),
         "error": error_state,
         "status": status,
+        "model_usage": state.get("model_usage", {}),
     }
     tracer.log("reporter", summary)
     tracer.save()
