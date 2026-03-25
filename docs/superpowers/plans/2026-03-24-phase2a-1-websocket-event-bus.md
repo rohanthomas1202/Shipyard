@@ -2320,11 +2320,45 @@ async def _flush_loop(self) -> None:
                 logger.exception("TokenBatcher flush failed")
 ```
 
+### Fix 12: `send_to_subscribed` must read `project_id` from the Event, not take it as a param
+
+The plan body defines `send_to_subscribed(self, event, project_id)` but the callback wiring in Fix 2 calls `send_to_subscribed(event)` with no `project_id`.
+
+**Fix:** Since Fix 1 adds `project_id` to the Event model, `send_to_subscribed` should read it from the event:
+
+```python
+async def send_to_subscribed(self, event: Event) -> None:
+    """Send an event to all clients subscribed to that event's run_id."""
+    project_id = event.project_id
+    states = self._connections.get(project_id, [])
+    payload = {
+        "type": event.type,
+        "run_id": event.run_id,
+        "seq": event.seq,
+        "timestamp": event.timestamp,
+        "data": event.data,
+        "node": event.node,
+        "model": event.model,   # Fix 10
+    }
+    dead = []
+    for state in states:
+        if event.run_id in state.subscribed_runs:
+            try:
+                await state.ws.send_json(payload)
+                state.last_seq[event.run_id] = event.seq
+            except Exception:
+                dead.append(state)
+    for state in dead:
+        await self.disconnect(state.ws)
+```
+
+Update ALL test calls from `send_to_subscribed(event, project_id="proj1")` to `send_to_subscribed(event)` — the project_id is on the event object.
+
 ### Test updates required by these fixes
 
 - All Event creation in tests must include `project_id` parameter
 - Reconnect tests must assert snapshot message arrives before replayed events
-- `send_to_subscribed()` should read `event.project_id` instead of taking `project_id` as a separate argument — update tests and implementation
+- All `send_to_subscribed(event, project_id=...)` calls → `send_to_subscribed(event)`
 - Add a test proving P2 `flush_node_boundary(run_id)` only flushes that run's queue
 
 ### Fix 9: ~~`get_snapshot` must include `type: "snapshot"`~~ — SUPERSEDED BY Fix 4
