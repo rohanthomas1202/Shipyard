@@ -2024,3 +2024,68 @@ return {
 - Push-no-remote test must assert status code 400 (not a loose `in (200, 400, 422)`)
 - Merge response test must assert exactly `{"merged", "sha"}` keys
 - PR response test must assert exactly `{"number", "html_url"}` keys
+
+### Fix 17: git_ops_node must call mark_committed after successful commit (BLOCKING)
+
+After a successful git commit, edits in "applied" status must transition to "committed". Without this, the approval lifecycle is incomplete — edits stay "applied" forever and the frontend never sees the "committed" state.
+
+**Fix:** Wire `approval_manager` into git_ops_node via config, and call `mark_committed` after a successful commit:
+
+```python
+# In git_ops_node, after successful commit (after the sha = await gm.commit(...) block):
+approval_manager = config["configurable"].get("approval_manager")
+if approval_manager:
+    # Note: get_edits(run_id, status=) uses the optional status filter
+    # added in 2a-2 Task 2 (see plan 2a-2 line ~275). If the store
+    # does not yet support the status param, filter in Python:
+    all_edits = await store.get_edits(run_id)
+    applied_edits = [e for e in all_edits if e.status == "applied"]
+    applied_ids = [e.id for e in applied_edits]
+    if applied_ids:
+        await approval_manager.mark_committed(run_id, applied_ids)
+        ops_log.append({"type": "mark_committed", "edit_ids": applied_ids, "status": "ok"})
+```
+
+This requires:
+- The server passes `approval_manager` in config when invoking the graph (same pattern as `store` and `router`)
+- `mark_committed(run_id, edit_ids)` uses the signature from 2a-2 Fix 11
+
+The fallback path (`approval_manager` not in config) preserves backward compatibility — git_ops works without the approval system.
+
+Update `server/main.py` graph invocation to include `approval_manager` in config:
+```python
+config = {"configurable": {
+    "store": store,
+    "router": router,
+    "approval_manager": app.state.approval_manager,
+}}
+```
+
+Add test to `tests/test_git_ops_node.py`:
+```python
+@pytest.mark.asyncio
+async def test_git_ops_marks_edits_as_committed(git_repo_for_node):
+    """After commit, applied edits should be transitioned to committed."""
+    from agent.nodes.git_ops import git_ops_node
+
+    mock_router = AsyncMock()
+    mock_router.call = AsyncMock(return_value="feat: changes")
+    mock_store = AsyncMock()
+    mock_store.log_git_op = AsyncMock()
+    mock_store.get_edits = AsyncMock(return_value=[
+        MagicMock(id="edit1", file_path="README.md", status="applied"),
+    ])
+
+    mock_approval = AsyncMock()
+    mock_approval.mark_committed = AsyncMock()
+
+    state = _make_state(git_repo_for_node)
+    config = _make_config(store=mock_store, router=mock_router)
+    config["configurable"]["approval_manager"] = mock_approval
+
+    await git_ops_node(state, config)
+
+    mock_approval.mark_committed.assert_called_once()
+    call_args = mock_approval.mark_committed.call_args
+    assert "edit1" in call_args[0][1]  # edit_ids list
+```

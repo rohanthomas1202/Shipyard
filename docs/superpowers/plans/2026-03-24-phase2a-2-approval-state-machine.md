@@ -1955,3 +1955,123 @@ else:
 ```
 
 Valid run statuses are frozen to: `running`, `completed`, `failed`, `error`, `waiting_for_human`.
+
+### Fix 14: Resolve `project_id` in ApprovalManager via store lookup (BLOCKING)
+
+The addendum Fix 1 requires `project_id` on every emitted Event, but ApprovalManager methods only receive `edit_id` and `op_id`. Fix 11's `mark_committed` has a placeholder `project_id=...,  # from run or config` that is a **syntax error**.
+
+**Fix:** Look up `project_id` from the Run via store. ApprovalManager already has `self.store` and always has access to `run_id` (from the edit or from the method parameter).
+
+In `_transition()`, after fetching the edit:
+```python
+edit = await self.store.get_edit(edit_id)
+if edit is None:
+    raise ValueError(f"Edit {edit_id} not found")
+
+# Resolve project_id from the run
+run = await self.store.get_run(edit.run_id)
+project_id = run.project_id if run else ""
+```
+
+Then use `project_id` in the Event emission:
+```python
+await self.event_bus.emit(Event(
+    project_id=project_id,
+    run_id=edit.run_id,
+    type="approval",
+    data={"event": event_type, "edit_id": edit_id, "status": target},
+))
+```
+
+Apply the same pattern to `propose_edit` (has `run_id` param — look up Run) and `mark_committed` (has `run_id` param — look up Run). This replaces the `project_id=...` placeholder in Fix 11.
+
+### Fix 15: PATCH endpoint must approve + apply + resume the graph (BLOCKING)
+
+The PATCH endpoint only calls `approval_manager.approve()`. The contract requires that on approve, the backend approves the edit, applies it to the filesystem, and resumes the paused graph. Without this, the supervised flow is non-functional — the user clicks approve and nothing happens.
+
+**Fix:** The PATCH handler orchestrates the full chain on approve:
+
+```python
+@app.patch("/runs/{run_id}/edits/{edit_id}")
+async def patch_edit(run_id: str, edit_id: str, req: EditActionRequest):
+    approval_manager: ApprovalManager = app.state.approval_manager
+    store: SQLiteSessionStore = app.state.store
+
+    # Ownership check (Fix 6)
+    edit = await store.get_edit(edit_id)
+    if edit is None or edit.run_id != run_id:
+        raise HTTPException(status_code=404, detail="Edit not found for this run")
+
+    try:
+        if req.action == "approve":
+            result = await approval_manager.approve(edit_id, req.op_id)
+            result = await approval_manager.apply_edit(edit_id)
+            asyncio.create_task(_resume_run(run_id))
+        else:
+            result = await approval_manager.reject(edit_id, req.op_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Edit not found")
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except OSError as e:
+        # apply_edit file write failed — edit stays "approved", can be retried
+        raise HTTPException(status_code=500, detail=f"Failed to apply edit to filesystem: {e}")
+
+    return {"edit_id": edit_id, "run_id": run_id, "status": result.status}
+```
+
+Add `_resume_run` helper to `server/main.py` (reuses the same graph invocation pattern as `POST /instruction/{run_id}`):
+
+```python
+async def _resume_run(run_id: str) -> None:
+    """Resume a paused graph after edit approval."""
+    if run_id not in runs:
+        return
+    run_data = runs[run_id]
+    if run_data.get("status") != "waiting_for_human":
+        return
+
+    store = app.state.store
+    router = app.state.router
+    runs[run_id]["status"] = "running"
+
+    try:
+        graph = app.state.graph
+        state = run_data.get("result", {})
+        if isinstance(state, str):
+            state = {}
+        state["error_state"] = None
+        state["waiting_for_human"] = False
+        config = {"configurable": {"store": store, "router": router}}
+        result = await graph.ainvoke(state, config=config)
+        if result.get("waiting_for_human"):
+            runs[run_id] = {"status": "waiting_for_human", "result": result}
+        elif result.get("error_state") is None:
+            runs[run_id] = {"status": "completed", "result": result}
+        else:
+            runs[run_id] = {"status": "failed", "result": result}
+    except Exception as e:
+        runs[run_id] = {"status": "error", "result": str(e)}
+```
+
+On reject, no resume happens — the graph stays paused. The user can submit a new instruction via `POST /instruction/{run_id}` to continue.
+
+Add tests to `tests/test_approval_rest.py`:
+```python
+@pytest.mark.asyncio
+async def test_patch_approve_applies_edit(client, store, approval_manager, tmp_path):
+    """PATCH approve should also apply the edit to the filesystem."""
+    # Create a temp file
+    f = tmp_path / "test.py"
+    f.write_text("old content")
+    edit = EditRecord(run_id="r1", file_path=str(f), old_content="old content", new_content="new content")
+    created = await approval_manager.propose_edit("r1", edit)
+    op_id = f"op_{created.id}_approve"
+    resp = await client.patch(
+        f"/runs/r1/edits/{created.id}",
+        json={"action": "approve", "op_id": op_id},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "applied"
+    assert f.read_text() == "new content"
+```

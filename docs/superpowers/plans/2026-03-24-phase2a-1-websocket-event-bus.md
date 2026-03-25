@@ -2223,9 +2223,9 @@ elif action == "reconnect":
     if run_id:
         state.subscribed_runs.add(run_id)
 
-        # Send snapshot FIRST
+        # Send snapshot FIRST (get_snapshot already includes "type": "snapshot")
         snapshot = await self.event_bus.get_snapshot(run_id)
-        await ws.send_json({"type": "snapshot", **snapshot})
+        await ws.send_json(snapshot)
 
         # Then replay persisted events
         events = await self.event_bus.replay(run_id, after_seq=last_seq)
@@ -2235,16 +2235,23 @@ elif action == "reconnect":
 
 Update reconnect tests to assert the snapshot message arrives before replayed events.
 
-### Fix 4: Make `get_snapshot()` async and store-backed (Task 3)
+### Fix 4: Make `get_snapshot()` async and store-backed (Task 3) — REPLACES Fix 9
 
-Replace the synchronous `get_snapshot(run_id, state)` with an async, store-backed version that works after server restart:
+> **Note:** This fix supersedes Fix 9 below. Fix 9 is kept for reference but must NOT be implemented — its sync/in-memory approach conflicts with this fix. This is the canonical `get_snapshot` implementation.
+
+Replace the synchronous `get_snapshot(run_id, state)` with an async, store-backed version that works after server restart and includes the contract-required `type: "snapshot"` field:
 
 ```python
 async def get_snapshot(self, run_id: str) -> dict:
-    """Build a snapshot from durable store state (works after restart)."""
+    """Build a snapshot from durable store state (works after restart).
+
+    Returns the contract-minimum snapshot shape:
+    {type, run_id, status, last_seq}
+    """
     last_seq = await self.store.get_max_seq(run_id)
     run = await self.store.get_run(run_id)
     return {
+        "type": "snapshot",
         "run_id": run_id,
         "status": run.status if run else "unknown",
         "last_seq": last_seq,
@@ -2252,6 +2259,8 @@ async def get_snapshot(self, run_id: str) -> dict:
 ```
 
 Remove the `state: dict` parameter — the snapshot must not depend on in-memory graph state.
+
+Update all tests that call `get_snapshot` to use `await` and the single-arg signature. Assert `snap["type"] == "snapshot"`.
 
 ### Fix 5: Per-run P2 queue (Task 3)
 
@@ -2318,28 +2327,9 @@ async def _flush_loop(self) -> None:
 - `send_to_subscribed()` should read `event.project_id` instead of taking `project_id` as a separate argument — update tests and implementation
 - Add a test proving P2 `flush_node_boundary(run_id)` only flushes that run's queue
 
-### Fix 9: `get_snapshot` must include `type: "snapshot"` in returned dict
+### Fix 9: ~~`get_snapshot` must include `type: "snapshot"`~~ — SUPERSEDED BY Fix 4
 
-The snapshot dict must include `"type": "snapshot"` so the client can identify it. Also add `total_steps` and `autonomy_mode`:
-
-```python
-def get_snapshot(self, run_id: str, state: dict) -> dict:
-    last_seq = self._seq_counters.get(run_id, 1) - 1
-    if last_seq < 0:
-        last_seq = 0
-    return {
-        "type": "snapshot",
-        "run_id": run_id,
-        "status": state.get("status", "unknown"),
-        "last_seq": last_seq,
-        "current_step": state.get("current_step", 0),
-        "total_steps": len(state.get("plan", [])),
-        "plan": state.get("plan", []),
-        "autonomy_mode": state.get("autonomy_mode", "supervised"),
-    }
-```
-
-Update `test_get_snapshot` to assert `snap["type"] == "snapshot"`.
+> **DO NOT IMPLEMENT THIS FIX.** Fix 4 above is the canonical `get_snapshot` implementation. It is async, store-backed, and includes `"type": "snapshot"`. This sync/in-memory version conflicts with Fix 4 and must be skipped.
 
 ### Fix 10: Server message envelope must include `model` field
 
