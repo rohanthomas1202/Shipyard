@@ -31,3 +31,15 @@ def test_agent_state_has_required_fields():
     assert state["sequential_first"] == []
     assert state["has_conflicts"] is False
     assert state["model_usage"] == {}
+
+
+def test_agent_state_has_autonomy_mode():
+    from agent.state import AgentState
+    state: AgentState = {
+        "messages": [], "instruction": "test", "working_directory": "/tmp",
+        "context": {}, "plan": [], "current_step": 0, "file_buffer": {},
+        "edit_history": [], "error_state": None, "is_parallel": False,
+        "parallel_batches": [], "sequential_first": [], "has_conflicts": False,
+        "model_usage": {}, "autonomy_mode": "supervised",
+    }
+    assert state["autonomy_mode"] == "supervised"

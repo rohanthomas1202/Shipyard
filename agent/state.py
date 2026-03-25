@@ -17,3 +17,4 @@ class AgentState(TypedDict):
     sequential_first: list[int]
     has_conflicts: bool
     model_usage: dict[str, int]
+    autonomy_mode: str  # "supervised" | "autonomous"
