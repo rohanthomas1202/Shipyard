@@ -41,16 +41,36 @@ def advance_step(state: dict) -> dict:
 
 
 def classify_step(state: dict) -> str:
+    """Route to the correct node based on PlanStep.kind."""
     plan = state.get("plan", [])
-    step = state.get("current_step", 0)
-    if step >= len(plan):
+    idx = state.get("current_step", 0)
+
+    if idx >= len(plan):
         return "reporter"
 
-    step_text = plan[step].lower()
-    if any(kw in step_text for kw in ["run ", "execute", "test", "build", "install"]):
-        return "executor"
-    if any(kw in step_text for kw in ["read ", "understand", "examine", "check "]):
-        return "reader_only"
+    step = plan[idx]
+
+    # Typed step (dict with "kind" field)
+    if isinstance(step, dict) and "kind" in step:
+        kind = step["kind"]
+        if kind in ("exec", "test"):
+            return "executor"
+        if kind == "read":
+            return "reader_only"
+        if kind == "edit":
+            return "reader_then_edit"
+        if kind == "git":
+            return "reporter"  # git_ops deferred to Phase 2
+        return "reader_then_edit"
+
+    # Fallback: legacy string-based step (backward compat)
+    if isinstance(step, str):
+        step_lower = step.lower()
+        if any(kw in step_lower for kw in ["run", "execute", "test", "build", "install"]):
+            return "executor"
+        if any(kw in step_lower for kw in ["read", "understand", "examine", "check"]):
+            return "reader_only"
+
     return "reader_then_edit"
 
 
