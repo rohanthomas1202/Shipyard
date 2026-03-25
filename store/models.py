@@ -68,6 +68,7 @@ class EditRecord(BaseModel):
     status: EDIT_STATUSES = "proposed"
     approved_at: datetime | None = None
     last_op_id: str | None = None
+    batch_id: str | None = None  # Groups refactor edits for batch approval/rollback
 
 
 class Conversation(BaseModel):
