@@ -1,7 +1,7 @@
 """Pydantic models for persistence layer."""
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
-from typing import Any
+from typing import Any, Literal
 import uuid
 
 
@@ -54,6 +54,9 @@ class Event(BaseModel):
     timestamp: float = Field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
 
 
+EDIT_STATUSES = Literal["proposed", "approved", "rejected", "applied", "committed"]
+
+
 class EditRecord(BaseModel):
     id: str = Field(default_factory=_new_id)
     run_id: str
@@ -62,8 +65,9 @@ class EditRecord(BaseModel):
     anchor: str | None = None
     old_content: str | None = None
     new_content: str | None = None
-    status: str = "proposed"
+    status: EDIT_STATUSES = "proposed"
     approved_at: datetime | None = None
+    last_op_id: str | None = None
 
 
 class Conversation(BaseModel):

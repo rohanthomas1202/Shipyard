@@ -34,8 +34,10 @@ CREATE TABLE IF NOT EXISTS edits (
     id TEXT PRIMARY KEY, run_id TEXT REFERENCES runs(id),
     file_path TEXT NOT NULL, step INTEGER DEFAULT 0,
     anchor TEXT, old_content TEXT, new_content TEXT,
-    status TEXT DEFAULT 'proposed', approved_at TIMESTAMP
+    status TEXT DEFAULT 'proposed', approved_at TIMESTAMP,
+    last_op_id TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_edits_run_status ON edits(run_id, status);
 
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY, project_id TEXT REFERENCES projects(id),
@@ -220,27 +222,44 @@ class SQLiteSessionStore:
         await self._db.execute(
             """INSERT INTO edits
                (id, run_id, file_path, step, anchor, old_content, new_content,
-                status, approved_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                status, approved_at, last_op_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 edit.id, edit.run_id, edit.file_path, edit.step,
                 edit.anchor, edit.old_content, edit.new_content, edit.status,
                 edit.approved_at.isoformat() if edit.approved_at else None,
+                edit.last_op_id,
             ),
         )
         await self._db.commit()
         return edit
 
-    async def get_edits(self, run_id: str) -> list[EditRecord]:
+    async def get_edit(self, edit_id: str) -> EditRecord | None:
         async with self._db.execute(
-            "SELECT * FROM edits WHERE run_id = ?", (run_id,)
+            "SELECT * FROM edits WHERE id = ?", (edit_id,)
         ) as cursor:
-            rows = await cursor.fetchall()
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return EditRecord(**dict(row))
+
+    async def get_edits(self, run_id: str, status: str | None = None) -> list[EditRecord]:
+        if status is not None:
+            async with self._db.execute(
+                "SELECT * FROM edits WHERE run_id = ? AND status = ?", (run_id, status)
+            ) as cursor:
+                rows = await cursor.fetchall()
+        else:
+            async with self._db.execute(
+                "SELECT * FROM edits WHERE run_id = ?", (run_id,)
+            ) as cursor:
+                rows = await cursor.fetchall()
         return [EditRecord(**dict(row)) for row in rows]
 
-    async def update_edit_status(self, edit_id: str, status: str) -> None:
+    async def update_edit_status(self, edit_id: str, status: str, last_op_id: str | None = None) -> None:
         await self._db.execute(
-            "UPDATE edits SET status = ? WHERE id = ?", (status, edit_id)
+            "UPDATE edits SET status = ?, last_op_id = ? WHERE id = ?",
+            (status, last_op_id, edit_id)
         )
         await self._db.commit()
 
