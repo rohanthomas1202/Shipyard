@@ -41,6 +41,7 @@ class ConnectionManager:
         self._stop_callback: Callable[[str], Awaitable[None]] | None = None
         self._approve_callback: Callable[[str, str, str], Awaitable[None]] | None = None
         self._reject_callback: Callable[[str, str, str], Awaitable[None]] | None = None
+        self._approval_manager = None
 
     def set_stop_callback(self, callback: Callable[[str], Awaitable[None]]) -> None:
         self._stop_callback = callback
@@ -50,6 +51,9 @@ class ConnectionManager:
 
     def set_reject_callback(self, callback: Callable[[str, str, str], Awaitable[None]]) -> None:
         self._reject_callback = callback
+
+    def set_approval_manager(self, manager) -> None:
+        self._approval_manager = manager
 
     async def connect(self, ws: Any, project_id: str) -> WebSocketState:
         state = WebSocketState(ws=ws, project_id=project_id)
@@ -115,18 +119,32 @@ class ConnectionManager:
                         break
 
         elif action == "approve":
-            run_id = data.get("run_id")
             edit_id = data.get("edit_id", "")
             op_id = data.get("op_id", "")
-            if self._approve_callback and run_id and edit_id and op_id:
-                await self._approve_callback(run_id, edit_id, op_id)
+            if self._approval_manager and edit_id and op_id:
+                try:
+                    result = await self._approval_manager.approve(edit_id, op_id)
+                    await ws.send_json({"type": "approval", "data": {"event": "edit.approved", "edit_id": edit_id, "status": result.status}})
+                except Exception as e:
+                    await ws.send_json({"type": "error", "data": {"message": str(e)}})
+            elif self._approve_callback:
+                run_id = data.get("run_id")
+                if run_id and edit_id and op_id:
+                    await self._approve_callback(run_id, edit_id, op_id)
 
         elif action == "reject":
-            run_id = data.get("run_id")
             edit_id = data.get("edit_id", "")
             op_id = data.get("op_id", "")
-            if self._reject_callback and run_id and edit_id and op_id:
-                await self._reject_callback(run_id, edit_id, op_id)
+            if self._approval_manager and edit_id and op_id:
+                try:
+                    result = await self._approval_manager.reject(edit_id, op_id)
+                    await ws.send_json({"type": "approval", "data": {"event": "edit.rejected", "edit_id": edit_id, "status": result.status}})
+                except Exception as e:
+                    await ws.send_json({"type": "error", "data": {"message": str(e)}})
+            elif self._reject_callback:
+                run_id = data.get("run_id")
+                if run_id and edit_id and op_id:
+                    await self._reject_callback(run_id, edit_id, op_id)
 
         elif action == "stop":
             run_id = data.get("run_id")
