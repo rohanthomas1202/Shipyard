@@ -5,9 +5,9 @@
 Shipyard V2 transforms the current API-only autonomous coding agent into a full-featured, visually stunning IDE-like application with a Frosted Glassmorphic UI, multi-model OpenAI routing, real-time streaming, Git/GitHub integration, and configurable autonomy.
 
 **Key decisions:**
-- Switch from Anthropic Claude to OpenAI (o3 / GPT-4o / GPT-4o-mini)
-- Aggressive context strategy — send as much context as fits model windows (200K for o3, 128K for GPT-4o), no artificial budgeting
-- Multi-model routing with classify + auto-escalate
+- Switch from Anthropic Claude to OpenAI via a model-capability registry and policy-based router. Initial defaults use o3 / GPT-4o / GPT-4o-mini, but model selection is configuration-driven and swappable as OpenAI's recommended defaults evolve
+- Deterministic context assembly — fill available window using ranked working set, deduplicated file content, execution evidence, and dependency-aware summaries. Prefer relevance-ranked saturation over naive maximal inclusion
+- Policy-based multi-model routing with typed step execution + auto-escalate
 - Web UI: Frosted Glassmorphic IDE (macOS-inspired, Linear/Vercel aesthetic)
 - Configurable autonomy: autonomous vs. supervised, toggleable mid-run
 - Full Git lifecycle: branch, commit, push, PR, review loop, merge
@@ -83,63 +83,159 @@ Two separate apps connected by WebSockets + REST:
 
 ## 2. Multi-Model Router
 
-Replaces the current single-model `agent/llm.py` with an intelligent routing layer.
+Replaces the current single-model `agent/llm.py` with a policy-based routing layer backed by a model capability registry.
 
-### Routing Rules
+### Model Capability Registry
 
-| Agent Node | Default Model | Escalation | Reasoning |
+Models are not hardcoded into the architecture. Instead, a configuration-driven registry maps model IDs to capabilities, allowing seamless swaps as OpenAI's recommended defaults evolve.
+
+```python
+# agent/models.py — model registry (config-driven, not hardcoded)
+MODEL_REGISTRY = {
+    "o3": {
+        "id": "o3",
+        "context_window": 200_000,
+        "max_output": 100_000,
+        "tier": "reasoning",       # reasoning | general | fast
+        "timeout": 120,
+        "capabilities": ["planning", "complex_edit", "conflict_resolution"],
+    },
+    "gpt-4o": {
+        "id": "gpt-4o",
+        "context_window": 128_000,
+        "max_output": 16_384,
+        "tier": "general",
+        "timeout": 60,
+        "capabilities": ["edit", "read", "summarize", "merge"],
+    },
+    "gpt-4o-mini": {
+        "id": "gpt-4o-mini",
+        "context_window": 128_000,
+        "max_output": 16_384,
+        "tier": "fast",
+        "timeout": 30,
+        "capabilities": ["classify", "validate", "syntax_check"],
+    },
+}
+```
+
+When OpenAI releases new models (e.g., gpt-5.4), update the registry — no code changes needed in nodes.
+
+### Routing Policy
+
+Routing is policy-based: each task type maps to a model tier, not a specific model name. The router resolves the tier to the best available model from the registry.
+
+| Task Type | Tier | Default Resolution | Escalation |
 |---|---|---|---|
-| `planner` | o3 | — | Planning is highest-leverage; bad plans waste everything downstream |
-| `coordinator` | o3 | — | Parallel task decomposition needs strong reasoning |
-| `editor` (complex) | o3 | — | Multi-file refactors, architecture changes |
-| `editor` (simple) | GPT-4o | o3 on validation fail | Single-file, localized edits |
-| `reader` | GPT-4o | — | File comprehension, summarization |
-| `validator` | GPT-4o-mini | GPT-4o on failure | Syntax checks are mechanical |
-| `classifier` | — (no LLM) | GPT-4o-mini if keyword match fails | Step routing via keyword matching (fast, deterministic), with LLM fallback for ambiguous steps |
-| `merger` | GPT-4o | o3 on conflict | Merge parallel branch outputs; uses LLM only when conflicts detected |
-| `reporter` | GPT-4o | — | Summarization |
-| `test_runner` | — (no LLM) | — | Runs shell commands |
-| `parse_results` | GPT-4o | o3 on complex failures | Analyze test output |
-| `git_ops` | — (no LLM) | — | Git/GitHub API calls |
+| `plan` | reasoning | o3 | — |
+| `coordinate` | reasoning | o3 | — |
+| `edit_complex` | reasoning | o3 | — |
+| `edit_simple` | general | GPT-4o | reasoning tier on validation fail |
+| `read` | general | GPT-4o | — |
+| `validate` | fast | GPT-4o-mini | general tier on failure |
+| `classify` | — (no LLM) | keyword match | fast tier if ambiguous |
+| `merge` | general | GPT-4o | reasoning tier on conflict |
+| `summarize` | general | GPT-4o | — |
+| `parse_results` | general | GPT-4o | reasoning tier on complex failures |
 
-### Design Decisions
+### Deterministic Context Assembly
 
-- **Aggressive context** — send as much file content as fits the model's context window (200K for o3, 128K for GPT-4o). When total context exceeds the window, prioritize: current file being edited > files referenced in the plan > surrounding files. No artificial truncation.
-- Each model call records `model_used` in the trace for observability.
-- The router is a standalone module (`agent/router.py`). No node knows which model it's talking to.
-- **Escalation logic:** When a node fails validation or produces low-confidence output, the router retries with the next-tier model. Max one escalation per node invocation.
+Instead of "send as much as fits," context is assembled through a ranked pipeline:
+
+```
+┌─────────────────────────────────────────────┐
+│         Context Assembly Pipeline            │
+│                                              │
+│  1. Task context (always included)           │
+│     - current instruction, active step       │
+│     - current branch, working directory      │
+│                                              │
+│  2. Working set (highest priority)           │
+│     - file being edited (full content)       │
+│     - active error/stack trace               │
+│     - open diffs pending approval            │
+│                                              │
+│  3. Reference set (fill remaining window)    │
+│     - files in plan's target_files           │
+│     - imports / call graph neighbors         │
+│     - type definitions used by edited code   │
+│                                              │
+│  4. Execution evidence                       │
+│     - latest test failures                   │
+│     - lint output, build errors              │
+│                                              │
+│  5. Conversation memory (evict first)        │
+│     - minimum needed to continue reasoning   │
+│                                              │
+│  Rules:                                      │
+│  - Dedupe identical file chunks              │
+│  - Never resend unchanged payloads on retry  │
+│  - Pin current file + error trace            │
+│  - Evict conversation memory first           │
+│  - Cap at model's context_window from        │
+│    registry (not hardcoded)                  │
+└─────────────────────────────────────────────┘
+```
+
+### Typed Plan Steps
+
+The planner outputs structured step objects. This replaces keyword-based classification with schema-driven execution.
+
+```python
+class PlanStep(BaseModel):
+    id: str
+    kind: Literal["read", "edit", "exec", "test", "git"]
+    target_files: list[str] = []
+    command: str | None = None              # for exec/test steps
+    acceptance_criteria: list[str] = []
+    complexity: Literal["simple", "complex"]
+    depends_on: list[str] = []              # step IDs for ordering
+```
+
+The classifier becomes a lightweight resolver only when a step is malformed or missing fields — not the primary routing mechanism.
+
+### Dynamic Complexity Promotion
+
+The planner assigns initial complexity, but runtime triggers can promote "simple" to "complex":
+
+- Multiple files actually touched during edit
+- Changed public/exported API signature
+- First validation attempt failed
+- Retry count > 0
+
+Promotion is automatic and logged in the trace.
 
 ### Failure Definitions
 
 | Failure Type | Trigger | Behavior |
 |---|---|---|
-| Malformed output | LLM returns unparseable JSON or missing fields | Retry same model once, then escalate |
-| Validation error | Syntax check fails on edited code | Rollback edit, escalate model, retry with error context |
-| Timeout | o3: 120s, GPT-4o: 60s, GPT-4o-mini: 30s | Retry same model once, then escalate |
+| Malformed output | LLM returns unparseable JSON or missing fields | Retry same model once, then escalate tier |
+| Syntax validation fail | Syntax check fails on edited code | Rollback edit, escalate tier, retry with error context |
+| Type validation fail | Type checker reports errors | Include diagnostic output, escalate tier, retry |
+| Test failure | Tests fail after edit | Route through `parse_results` → repair loop (up to 3 retries) |
+| Nondeterministic test fail | Test fails intermittently | Quarantine and surface to human — do not retry |
+| Timeout | Per model's `timeout` from registry | Retry same model once, then escalate tier |
 | API error (429/500) | OpenAI rate limit or server error | Exponential backoff (1s, 2s, 4s), max 3 retries |
 | Terminal failure | Final escalation tier also fails | Emit `error` event, set run status to `waiting_for_human`, pause for user intervention |
-
-### Edit Complexity Classification
-
-The `planner` node classifies each step's complexity when generating the plan. Classification criteria:
-- **Simple:** Single file, localized change (add/remove/modify within one function or block)
-- **Complex:** Multi-file changes, architectural modifications, changes that affect type signatures used across files, refactors touching >3 functions
-
-The classification is stored as `complexity: "simple" | "complex"` in each plan step. The `editor` node reads this to select its model via the router.
 
 ### Module: `agent/router.py`
 
 ```python
 class ModelRouter:
-    """Routes LLM calls to the optimal OpenAI model based on task type."""
+    """Policy-based router with model capability registry."""
+
+    def __init__(self, registry: dict, policy: dict):
+        self.registry = registry   # model ID → capabilities
+        self.policy = policy       # task type → tier
 
     async def call(
         self,
-        task_type: str,       # "plan", "edit_simple", "edit_complex", "classify", etc.
+        task_type: str,
         messages: list,
+        context: ContextAssembly,
         structured_output: type | None = None,
     ) -> LLMResponse:
-        """Route to appropriate model, auto-escalate on failure."""
+        """Resolve tier → model, assemble context, call, auto-escalate on failure."""
 
     async def escalate(
         self,
@@ -147,7 +243,10 @@ class ModelRouter:
         messages: list,
         prior_failure: str,
     ) -> LLMResponse:
-        """Retry with a more powerful model after failure."""
+        """Retry with next-higher tier model after failure."""
+
+    def resolve_model(self, task_type: str) -> ModelConfig:
+        """Look up tier for task, resolve to best available model."""
 ```
 
 ---
@@ -442,7 +541,7 @@ receive ──→ planner (o3)
 | `classifier` | Same | Routes steps via keyword matching (same as V1). Falls back to GPT-4o-mini LLM call only for ambiguous steps |
 | `reader` | Enhanced | Reads full files always — no truncation |
 | `editor` | Enhanced | Sends full file + surrounding context. Smart model selection |
-| `validator` | Enhanced | Escalation on failure. Rollback + retry with stronger model |
+| `validator` | Enhanced | Multi-layer validation pipeline (syntax → lint → typecheck → test). Escalation on failure. Rollback + retry with stronger model |
 | `executor` | Same | Runs shell commands |
 | `test_runner` | **New** | Runs project tests, captures output |
 | `parse_results` | **New** | Analyzes test output, identifies which edits caused failures |
@@ -450,12 +549,87 @@ receive ──→ planner (o3)
 | `reporter` | Enhanced | Richer summary, includes model usage stats, git operations |
 | `merger` | Enhanced | Fully wired conflict detection for parallel agent outputs |
 
+### Validation Pipeline
+
+Validation is a multi-layer pipeline, not just syntax checking. Each layer runs in order; failure at any layer triggers the appropriate escalation.
+
+| Layer | Tool | Trigger | Failure Behavior |
+|---|---|---|---|
+| 1. Syntax | Language-specific parser (ts-node, python -c) | Every edit | Same-model retry once, then escalate tier |
+| 2. Lint/Format | Project's configured lint command | Every edit | Include diagnostic, retry with lint output |
+| 3. Typecheck | `tsc --noEmit`, `mypy`, etc. | Edits touching type signatures | Include full diagnostic, escalate tier |
+| 4. Targeted test | Project's test command (scoped to affected files) | After all step edits approved | Route through `parse_results` → repair loop |
+| 5. Full build | Project's build command | End of run (optional) | Surface to human if fails |
+
+Layers 1-2 run automatically. Layers 3-5 run only if the project has configured the relevant commands in Project Settings.
+
+### Merge Conflict Semantics
+
+Three-tier merge check for parallel branch outputs:
+
+| Tier | Check | Resolution |
+|---|---|---|
+| 1. File overlap | Same file edited by multiple branches | Proceed to tier 2 |
+| 2. Range/symbol overlap | Same function or code range edited | GPT-4o semantic merge, escalate to o3 if needed |
+| 3. Interface overlap | Changed exported signatures that affect other branches | Downstream validation required — re-run validation on merged result |
+
+Rules:
+- Disjoint edits in same file → auto-merge (no LLM needed)
+- Overlapping edits → semantic merge with LLM
+- Changed exported signatures → trigger downstream re-validation before accepting merge
+- Merge result always re-runs relevant tests before proceeding to git_ops
+- Unresolvable conflicts → pause for human
+
 ### Key Improvements
 
-- **Test feedback loop** — agent runs tests after edits. If they fail, it reads the error, identifies the cause, and fixes (up to 3 retries).
-- **Aggressive context** — every node gets as much context as fits the model window. Planner sees full files, editor gets full surrounding code. When context exceeds window, prioritize by relevance.
-- **Approval gates** — in supervised mode, the graph uses LangGraph checkpointing to pause execution. The `editor` and `git_ops` nodes save a checkpoint, emit an `approval` event via WebSocket, and return a `waiting_for_human` status. When the user approves/rejects via WebSocket, the server resumes the graph from the checkpoint with the user's decision injected into state.
-- **Parallel execution** — coordinator fans out independent steps via LangGraph `Send` API. Merger node reconverges outputs.
+- **Test feedback loop** — agent runs tests after edits. If they fail, it reads the error, identifies the cause, and fixes (up to 3 retries). Nondeterministic failures are quarantined and surfaced to human.
+- **Deterministic context assembly** — ranked pipeline fills model window by relevance. Dedupes file content, evicts conversation memory first, never resends unchanged payloads on retry.
+- **Approval state machine** — edits follow a strict state machine with idempotent transitions (see Run Safety section below).
+- **Parallel execution** — coordinator fans out independent steps via LangGraph `Send` API. Merger node reconverges outputs with 3-tier conflict semantics.
+
+### Run Safety & Idempotency
+
+Edit approval is a persisted state machine, not a fire-and-forget WebSocket message.
+
+**Edit states:**
+```
+proposed → approved → applied → committed
+    ↓
+  rejected
+```
+
+**Rules:**
+- Every approval/reject action has an idempotency key (edit ID + action + timestamp)
+- Resume only advances from allowed predecessor states
+- Edit application is atomic — all file writes in a step succeed or all roll back
+- WebSocket actions are advisory (low-latency UX), REST is authoritative (durable state)
+- Duplicate approvals are no-ops (idempotent)
+- If UI disconnects after approval but before resume, the server still has the durable state and will resume when reconnected
+
+**Mode toggle during run:**
+- Switching to autonomous mid-run auto-approves all pending `proposed` edits and skips future approval gates
+- Switching to supervised mid-run pauses at the next edit boundary — does not retroactively require approval for already-applied edits
+
+### Reconnect UI Recovery
+
+On WebSocket reconnect, the server sends a compact **run snapshot** before replaying durable events:
+
+```json
+{
+  "type": "snapshot",
+  "run_id": "run_456",
+  "active_node": "editor",
+  "current_step": 3,
+  "total_steps": 7,
+  "pending_approvals": ["edit_abc", "edit_def"],
+  "latest_diffs": [...],
+  "current_branch": "shipyard/refactor-auth",
+  "autonomy_mode": "supervised",
+  "status": "running"
+}
+```
+
+This allows the frontend to reconstruct panel state deterministically without needing the full token stream history.
 
 ### Store Injection
 
@@ -576,6 +750,21 @@ Stored in the `projects` table and editable via the Project Settings modal.
 - `ws://localhost:8000/ws/:project_id` — persistent connection per project
 - Handles: event streaming, user actions (approve/reject/stop/subscribe), heartbeat
 
+### REST vs WebSocket Responsibilities
+
+| Concern | WebSocket | REST |
+|---|---|---|
+| Event streaming | Primary delivery | — |
+| Approve/reject edits | Low-latency advisory | Authoritative durable write |
+| Stop run | Immediate signal | — |
+| Subscribe to channels | Panel registration | — |
+| Read run state | — | Source of truth |
+| Create/resume runs | — | Only via REST |
+| Git operations | — | Only via REST |
+| Reconnect recovery | Snapshot + replay | Full state read |
+
+**Principle:** WebSocket is for real-time UX. REST is the source of truth for all durable state. On any conflict, REST wins.
+
 ---
 
 ## 10. File Structure (V2)
@@ -586,7 +775,9 @@ Shipyard/
 │   ├── __init__.py
 │   ├── state.py                    # Enhanced AgentState
 │   ├── graph.py                    # LangGraph graph with new nodes
-│   ├── router.py                   # NEW: Multi-model router (o3/4o/4o-mini)
+│   ├── router.py                   # NEW: Policy-based model router
+│   ├── models.py                   # NEW: Model capability registry
+│   ├── context.py                  # NEW: Deterministic context assembly pipeline
 │   ├── events.py                   # NEW: Event bus + priority queue
 │   ├── tracing.py                  # JSON trace logger
 │   ├── nodes/
@@ -703,12 +894,84 @@ Shipyard/
 
 ---
 
-## 11. Summary of What Changes
+## 11. Local Trust & Security
+
+Shipyard V2 is single-user and local-first, but it holds repository mutation privileges and credentials. These guardrails apply even without multi-user auth.
+
+### Credential Handling
+
+- GitHub PAT stored in SQLite, accessible only on localhost
+- All events and traces redact secrets (PAT, API keys) before persistence
+- `.env` file excluded from git (already in `.gitignore`)
+- Future: integrate with macOS Keychain / OS credential store
+
+### Execution Safety
+
+- Shell execution (`executor`, `test_runner`) restricted to project's working directory
+- Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`) require explicit allowlist in Project Settings
+- All git/network mutations logged in `git_operations` audit table
+- No remote code execution — agent only modifies local files
+
+### Trust Assumptions
+
+This is a local development tool. The trust boundary is:
+- The user trusts the agent to modify files within the configured project directory
+- The user trusts the agent to push to the configured GitHub repository
+- The user reviews diffs before approval (in supervised mode)
+- The agent does NOT have access to files outside the project directory
+
+---
+
+## 12. PR Review Polling
+
+Since webhooks are out of scope for V2, polling is the mechanism for PR review comments.
+
+### Polling Behavior
+
+- **Interval:** 30 seconds while a PR is open and Shipyard is running
+- **Conditional requests:** Use `If-None-Match` / ETag headers to avoid rate limit waste
+- **Comment cursoring:** Track `since` timestamp per PR to only fetch new comments
+- **Deduplication:** Comments are deduplicated by GitHub comment ID before surfacing to UI
+- **Rate limit awareness:** Back off to 60s interval if approaching GitHub API rate limit (check `X-RateLimit-Remaining` header)
+
+---
+
+## 13. Implementation Phases
+
+### Phase 1: Core Migration
+
+- OpenAI migration + model registry + router abstraction
+- SQLite store with Protocol interface
+- Basic run/event persistence
+- Supervised diff review via REST
+- No parallelism, no PR review loop
+
+### Phase 2: Web IDE + Streaming
+
+- Vite + React frontend shell (all 4 screens)
+- WebSocket streaming with priority channels
+- Approval checkpoints with state machine
+- Git commit/push/PR create
+- Validation pipeline (syntax + lint + typecheck)
+- Test feedback loop
+
+### Phase 3: Advanced Features
+
+- Parallel branch execution via LangGraph Send
+- Merger with 3-tier conflict resolution
+- PR review polling + comment response loop
+- Autonomy mode switching mid-run
+- Dynamic complexity promotion
+- Reconnect snapshots
+
+---
+
+## 14. Summary of What Changes
 
 | Area | V1 (Current) | V2 (New) |
 |---|---|---|
-| **LLM** | Anthropic Claude only | OpenAI multi-model (o3, GPT-4o, GPT-4o-mini) |
-| **Token budget** | Conservative, truncates files | Aggressive — full model window, prioritized when exceeding limits |
+| **LLM** | Anthropic Claude only | OpenAI via policy-based router + model registry (o3, GPT-4o, GPT-4o-mini initial defaults) |
+| **Context strategy** | Conservative, truncates files | Deterministic assembly pipeline — ranked, deduplicated, relevance-saturated |
 | **Interface** | REST API only | Web UI + WebSocket + REST |
 | **UI** | None | Frosted Glassmorphic IDE (4 screens) |
 | **Streaming** | None | Token-level streaming with priority channels |
