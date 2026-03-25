@@ -31,6 +31,7 @@ class ApprovalManager:
     def __init__(self, store: SessionStore, event_bus: EventBus):
         self.store = store
         self.event_bus = event_bus
+        self._batch_registry: dict[str, str] = {}  # batch_id → run_id
 
     def is_valid_transition(self, current: str, target: str) -> bool:
         return target in _TRANSITIONS.get(current, [])
@@ -172,3 +173,56 @@ class ApprovalManager:
     async def get_pending(self, run_id: str) -> list[EditRecord]:
         """Get all edits with status == 'proposed' for a run."""
         return await self.store.get_edits(run_id, status="proposed")
+
+    async def propose_batch(self, run_id: str, records: list[EditRecord], batch_id: str) -> list[EditRecord]:
+        """Propose a batch of edits for approval. All share the same batch_id."""
+        self._batch_registry[batch_id] = run_id
+        created = []
+        for record in records:
+            record.status = "proposed"
+            record.run_id = run_id
+            record.batch_id = batch_id
+            result = await self.store.create_edit(record)
+            created.append(result)
+        if created:
+            project_id = await self._resolve_project_id(run_id)
+            await self.event_bus.emit(Event(
+                project_id=project_id,
+                run_id=run_id,
+                type="approval",
+                data={
+                    "event": "batch.proposed",
+                    "batch_id": batch_id,
+                    "edit_ids": [r.id for r in created],
+                    "file_count": len(created),
+                },
+            ))
+        return created
+
+    async def approve_batch(self, batch_id: str, op_id: str) -> list[EditRecord]:
+        """Approve all proposed edits in a batch."""
+        approved = []
+        all_edits = await self._get_batch_edits(batch_id)
+        for edit in all_edits:
+            if edit.status == "proposed":
+                result = await self.approve(edit.id, f"{op_id}_{edit.id}")
+                approved.append(result)
+        return approved
+
+    async def reject_batch(self, batch_id: str, op_id: str) -> list[EditRecord]:
+        """Reject all proposed edits in a batch."""
+        rejected = []
+        all_edits = await self._get_batch_edits(batch_id)
+        for edit in all_edits:
+            if edit.status == "proposed":
+                result = await self.reject(edit.id, f"{op_id}_{edit.id}")
+                rejected.append(result)
+        return rejected
+
+    async def _get_batch_edits(self, batch_id: str) -> list[EditRecord]:
+        """Get all edits in a batch. Uses in-memory registry to find the run_id."""
+        run_id = self._batch_registry.get(batch_id)
+        if not run_id:
+            return []
+        all_edits = await self.store.get_edits(run_id)
+        return [e for e in all_edits if e.batch_id == batch_id]

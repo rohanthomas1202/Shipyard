@@ -450,3 +450,46 @@ class TestGetPending:
         pending = await manager.get_pending(run.id)
         assert len(pending) == 3
         assert all(e.status == "proposed" for e in pending)
+
+
+# ---------------------------------------------------------------------------
+# batch propose/approve/reject
+# ---------------------------------------------------------------------------
+
+class TestBatchApproval:
+    """Test batch propose/approve/reject for refactor operations."""
+
+    @pytest.mark.asyncio
+    async def test_propose_batch(self, manager, project_and_run):
+        _, run = project_and_run
+        records = [
+            EditRecord(run_id=run.id, file_path="/tmp/a.ts", old_content="old1", new_content="new1"),
+            EditRecord(run_id=run.id, file_path="/tmp/b.ts", old_content="old2", new_content="new2"),
+        ]
+        result = await manager.propose_batch(run.id, records, "batch-1")
+        assert len(result) == 2
+        assert all(r.status == "proposed" for r in result)
+        assert all(r.batch_id == "batch-1" for r in result)
+
+    @pytest.mark.asyncio
+    async def test_approve_batch(self, manager, project_and_run):
+        _, run = project_and_run
+        records = [
+            EditRecord(run_id=run.id, file_path="/tmp/a.ts", old_content="old1", new_content="new1"),
+            EditRecord(run_id=run.id, file_path="/tmp/b.ts", old_content="old2", new_content="new2"),
+        ]
+        await manager.propose_batch(run.id, records, "batch-2")
+        approved = await manager.approve_batch("batch-2", "op-approve-1")
+        assert len(approved) == 2
+        assert all(r.status == "approved" for r in approved)
+
+    @pytest.mark.asyncio
+    async def test_reject_batch(self, manager, project_and_run):
+        _, run = project_and_run
+        records = [
+            EditRecord(run_id=run.id, file_path="/tmp/a.ts", old_content="old1", new_content="new1"),
+        ]
+        await manager.propose_batch(run.id, records, "batch-3")
+        rejected = await manager.reject_batch("batch-3", "op-reject-1")
+        assert len(rejected) == 1
+        assert rejected[0].status == "rejected"

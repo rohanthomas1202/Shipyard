@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS edits (
     file_path TEXT NOT NULL, step INTEGER DEFAULT 0,
     anchor TEXT, old_content TEXT, new_content TEXT,
     status TEXT DEFAULT 'proposed', approved_at TIMESTAMP,
-    last_op_id TEXT
+    last_op_id TEXT, batch_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_edits_run_status ON edits(run_id, status);
 
@@ -223,13 +223,13 @@ class SQLiteSessionStore:
         await self._db.execute(
             """INSERT INTO edits
                (id, run_id, file_path, step, anchor, old_content, new_content,
-                status, approved_at, last_op_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                status, approved_at, last_op_id, batch_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 edit.id, edit.run_id, edit.file_path, edit.step,
                 edit.anchor, edit.old_content, edit.new_content, edit.status,
                 edit.approved_at.isoformat() if edit.approved_at else None,
-                edit.last_op_id,
+                edit.last_op_id, edit.batch_id,
             ),
         )
         await self._db.commit()
