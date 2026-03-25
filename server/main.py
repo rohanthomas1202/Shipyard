@@ -11,7 +11,9 @@ from agent.router import ModelRouter
 from agent.events import EventBus
 from agent.approval import ApprovalManager, InvalidTransitionError
 from store.sqlite import SQLiteSessionStore
-from store.models import Project, Run
+from agent.git import GitManager
+from agent.github import GitHubClient
+from store.models import Project, Run, GitOperation
 from server.websocket import ConnectionManager
 
 
@@ -268,6 +270,127 @@ async def patch_edit(run_id: str, edit_id: str, req: EditActionRequest):
         raise HTTPException(status_code=500, detail=f"Failed to apply edit: {e}")
 
     return {"edit_id": edit_id, "run_id": run_id, "status": result.status}
+
+
+class GitCommitRequest(BaseModel):
+    message: str | None = None
+
+
+class GitPRRequest(BaseModel):
+    title: str | None = None
+    body: str | None = None
+    draft: bool = False
+
+
+class GitMergeRequest(BaseModel):
+    pr_number: int
+    method: str = "squash"
+
+
+def _get_run_result(run_id: str) -> dict:
+    if run_id not in runs:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return runs[run_id].get("result", {})
+
+
+def config_get_project_id(result: dict) -> str:
+    """Extract project_id from run result context."""
+    if isinstance(result, dict):
+        ctx = result.get("context", {})
+        return ctx.get("project_id", "")
+    return ""
+
+
+@app.post("/runs/{run_id}/git/commit")
+async def git_commit(run_id: str, req: GitCommitRequest):
+    store = app.state.store
+    result = _get_run_result(run_id)
+    working_dir = result.get("working_directory", "")
+    if not working_dir:
+        raise HTTPException(status_code=400, detail="No working directory")
+
+    gm = GitManager(working_dir)
+    message = req.message or f"feat: edits from Shipyard run {run_id[:8]}"
+
+    # Stage applied edits
+    applied = await store.get_edits(run_id, status="applied")
+    files = list(set(e.file_path for e in applied))
+    if not files:
+        raise HTTPException(status_code=400, detail="No applied edits to commit")
+
+    try:
+        await gm.stage_files(files)
+        sha = await gm.commit(message)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await store.log_git_op(GitOperation(run_id=run_id, type="commit", commit_sha=sha, status="ok"))
+    return {"sha": sha, "message": message}
+
+
+@app.post("/runs/{run_id}/git/push")
+async def git_push(run_id: str):
+    result = _get_run_result(run_id)
+    working_dir = result.get("working_directory", "")
+    if not working_dir:
+        raise HTTPException(status_code=400, detail="No working directory")
+
+    gm = GitManager(working_dir)
+    try:
+        branch = await gm.get_current_branch()
+        await gm.push(branch)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"branch": branch, "status": "pushed"}
+
+
+@app.post("/runs/{run_id}/git/pr")
+async def git_create_pr(run_id: str, req: GitPRRequest):
+    store = app.state.store
+    result = _get_run_result(run_id)
+
+    # Get GitHub config from project
+    project_id = config_get_project_id(result)
+    project = await store.get_project(project_id) if project_id else None
+    if not project or not project.github_repo or not project.github_pat:
+        raise HTTPException(status_code=400, detail="GitHub not configured for this project")
+
+    working_dir = result.get("working_directory", "")
+    gm = GitManager(working_dir)
+    branch = await gm.get_current_branch()
+
+    title = req.title or f"Shipyard: {result.get('instruction', 'edits')[:60]}"
+    body = req.body or f"Automated PR from Shipyard run {run_id}"
+
+    gh = GitHubClient(repo=project.github_repo, token=project.github_pat)
+    try:
+        pr_data = await gh.create_pr(branch=branch, title=title, body=body, draft=req.draft)
+    finally:
+        await gh.close()
+
+    await store.log_git_op(GitOperation(run_id=run_id, type="pr_create", branch=branch, pr_url=pr_data["html_url"], pr_number=pr_data["number"], status="ok"))
+    return pr_data
+
+
+@app.post("/runs/{run_id}/git/merge")
+async def git_merge_pr(run_id: str, req: GitMergeRequest):
+    store = app.state.store
+    result = _get_run_result(run_id)
+
+    project_id = config_get_project_id(result)
+    project = await store.get_project(project_id) if project_id else None
+    if not project or not project.github_repo or not project.github_pat:
+        raise HTTPException(status_code=400, detail="GitHub not configured")
+
+    gh = GitHubClient(repo=project.github_repo, token=project.github_pat)
+    try:
+        merge_data = await gh.merge_pr(req.pr_number, method=req.method)
+    finally:
+        await gh.close()
+
+    await store.log_git_op(GitOperation(run_id=run_id, type="pr_merge", pr_number=req.pr_number, status="ok"))
+    return merge_data
 
 
 @app.websocket("/ws/{project_id}")
