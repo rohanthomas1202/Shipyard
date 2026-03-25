@@ -708,7 +708,7 @@ Shipyard/
 | Area | V1 (Current) | V2 (New) |
 |---|---|---|
 | **LLM** | Anthropic Claude only | OpenAI multi-model (o3, GPT-4o, GPT-4o-mini) |
-| **Token budget** | Conservative, truncates files | Unlimited, full context everywhere |
+| **Token budget** | Conservative, truncates files | Aggressive — full model window, prioritized when exceeding limits |
 | **Interface** | REST API only | Web UI + WebSocket + REST |
 | **UI** | None | Frosted Glassmorphic IDE (4 screens) |
 | **Streaming** | None | Token-level streaming with priority channels |
