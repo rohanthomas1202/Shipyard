@@ -125,7 +125,14 @@ async def _resume_run(run_id: str) -> None:
         state["error_state"] = None
         state["waiting_for_human"] = False
         state["invalidated_files"] = []
-        config = {"configurable": {"store": store, "router": router}}
+        config = {
+            "configurable": {
+                "store": store,
+                "router": router,
+                "approval_manager": app.state.approval_manager,
+                "run_id": run_id,
+            }
+        }
         result = await graph.ainvoke(state, config=config)
         if result.get("waiting_for_human"):
             runs[run_id] = {"status": "waiting_for_human", "result": result}
@@ -184,7 +191,14 @@ async def submit_instruction(req: InstructionRequest):
                 "ast_available": {},
                 "invalidated_files": [],
             }
-            config = {"configurable": {"store": store, "router": router}}
+            config = {
+                "configurable": {
+                    "store": store,
+                    "router": router,
+                    "approval_manager": app.state.approval_manager,
+                    "run_id": run_id,
+                }
+            }
             result = await graph.ainvoke(initial_state, config=config)
             if result.get("waiting_for_human"):
                 runs[run_id] = {"status": "waiting_for_human", "result": result}
@@ -224,7 +238,14 @@ async def continue_run(run_id: str, req: InstructionRequest):
             state["instruction"] = req.instruction
             state["context"] = req.context
             state["error_state"] = None
-            config = {"configurable": {"store": store, "router": router}}
+            config = {
+                "configurable": {
+                    "store": store,
+                    "router": router,
+                    "approval_manager": app.state.approval_manager,
+                    "run_id": run_id,
+                }
+            }
             result = await graph.ainvoke(state, config=config)
             if result.get("waiting_for_human"):
                 runs[run_id] = {"status": "waiting_for_human", "result": result}
@@ -301,6 +322,31 @@ async def patch_edit(run_id: str, edit_id: str, req: EditActionRequest):
         raise HTTPException(status_code=500, detail=f"Failed to apply edit: {e}")
 
     return {"edit_id": edit_id, "run_id": run_id, "status": result.status}
+
+
+class BatchActionRequest(BaseModel):
+    action: str
+
+
+@app.patch("/runs/{run_id}/batches/{batch_id}")
+async def patch_batch(run_id: str, batch_id: str, req: BatchActionRequest):
+    approval_manager: ApprovalManager = app.state.approval_manager
+
+    try:
+        if req.action == "approve":
+            op_id = f"op_batch_{batch_id}_approve"
+            result = await approval_manager.approve_batch(batch_id, op_id)
+            asyncio.create_task(_resume_run(run_id))
+            return {"batch_id": batch_id, "action": "approved", "edit_count": len(result)}
+        elif req.action == "reject":
+            op_id = f"op_batch_{batch_id}_reject"
+            result = await approval_manager.reject_batch(batch_id, op_id)
+            asyncio.create_task(_resume_run(run_id))
+            return {"batch_id": batch_id, "action": "rejected", "edit_count": len(result)}
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {req.action}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/runs/{run_id}/edits")
