@@ -1,4 +1,4 @@
-import type { Project, Run, RunStatus, Edit, EditResponse } from '../types'
+import type { Project, RunStatus, Edit, EditResponse } from '../types'
 
 class ApiError extends Error {
   status: number
