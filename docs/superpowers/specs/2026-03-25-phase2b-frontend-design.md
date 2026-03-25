@@ -6,8 +6,6 @@ Phase 2b builds the web frontend for Shipyard — a Frosted Glassmorphic IDE tha
 
 **Builds on:** Phase 2a (WebSocket event bus, approval state machine, Git integration — 216 backend tests passing)
 
-**Commit rule:** Never include `Co-Authored-By` lines in commit messages.
-
 ---
 
 ## Decisions
@@ -32,7 +30,6 @@ web/
 ├── index.html
 ├── package.json
 ├── vite.config.ts
-├── tailwind.config.ts
 ├── tsconfig.json
 ├── public/
 ├── src/
@@ -65,20 +62,28 @@ web/
 
 ### Design System (`glass.css`)
 
-CSS custom properties and utility classes extracted from the user's HTML mockups:
+Tailwind v4 uses CSS-based configuration via `@theme` (no `tailwind.config.ts`). Design tokens and utility classes extracted from the user's HTML mockups:
 
 ```css
-:root {
+@import "tailwindcss";
+
+@theme {
   --color-primary: #6366F1;
   --color-background: #0F111A;
   --color-surface: rgba(30, 33, 43, 0.6);
   --color-border: rgba(255, 255, 255, 0.08);
   --color-text: #F8FAFC;
   --color-muted: #94A3B8;
+  --color-error: #EF4444;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
   --font-ui: 'Plus Jakarta Sans', sans-serif;
   --font-code: 'JetBrains Mono', monospace;
   --radius-panel: 16px;
   --radius-element: 8px;
+}
+
+:root {
   --blur-heavy: blur(24px);
 }
 
@@ -130,7 +135,7 @@ interface WebSocketContextValue {
 Key design:
 - Streaming tokens stored in `useRef` + local component state, NOT in Context (avoids re-rendering entire tree per token)
 - `snapshot` stored in Context state (changes infrequently)
-- `last_seq` tracked per run for reconnect cursor
+- `last_seq` tracked in a `useRef<Map<string, number>>` keyed by `run_id`, updated on every received event's `seq` field. Used as the cursor for reconnect replay.
 - `subscribe` returns unsubscribe function for `useEffect` cleanup
 
 #### `ProjectContext`
@@ -159,6 +164,9 @@ Thin fetch wrapper for all REST endpoints:
 
 ```typescript
 const api = {
+  // Health
+  healthCheck: () => Promise<{ status: string }>,
+
   // Projects
   getProjects: () => Promise<Project[]>,
   createProject: (name: string, path: string) => Promise<Project>,
@@ -167,6 +175,7 @@ const api = {
 
   // Instructions
   submitInstruction: (instruction: string, workingDirectory: string, context?: object, projectId?: string) => Promise<{ run_id: string, status: string }>,
+  resumeRun: (runId: string, instruction: string, workingDirectory: string) => Promise<{ run_id: string, status: string }>,
   getStatus: (runId: string) => Promise<RunStatus>,
 
   // Edits
@@ -181,7 +190,11 @@ const api = {
 }
 ```
 
+`resumeRun` maps to `POST /instruction/{run_id}` — used to continue a paused run after approval.
+
 Base URL: empty string (same origin in prod, proxied in dev).
+
+All methods throw on non-2xx responses. The caller is responsible for catching errors — see Error Handling section below.
 
 ### Components (2b-1)
 
@@ -224,8 +237,9 @@ Right sidebar (basic for 2b-1):
 
 Left sidebar:
 - **Empty state:** folder icon, "No project selected", Open Folder / Clone Repository buttons
-- **Active state:** nested tree of files from working directory (fetched or derived from run context)
-- Modified files shown with yellow dot indicator
+- **Active state:** flat tree of files the agent has touched, built from WebSocket `file` events (see FileTree Data Source section). On reconnect, derived from `GET /runs/{id}/edits` file paths.
+- Modified files (action: `write`) shown with yellow dot indicator
+- Read-only files (action: `read`) shown without indicator
 - Runs section below tree: list of recent runs with status badges
 
 #### RunList
@@ -241,9 +255,11 @@ When `currentRun` changes (new run started or run selected), the WebSocket clien
 ```json
 {"action": "subscribe", "run_id": "<currentRun.id>"}
 ```
-Without this, the client connects but never receives events (the backend filters by `subscribed_runs`).
+The backend `ConnectionManager` adds the `run_id` to `subscribed_runs` and filters events by `event.run_id in subscribed_runs`. Without this subscribe message, the client connects but never receives events for the run.
 
-This is handled in `ProjectContext`: when `submitInstruction` returns a `run_id`, immediately send a subscribe message via `WebSocketContext.send()`.
+Note: the backend does NOT filter by channel/event type — all event types for the subscribed run are delivered. Filtering by type is done client-side in `WebSocketContext.subscribe()`.
+
+This is handled in `ProjectContext`: when `submitInstruction` returns a `run_id`, immediately send the subscribe message via `WebSocketContext.send()`.
 
 ### Vite Config
 
@@ -405,18 +421,129 @@ interface WSEvent {
   data: Record<string, any>; timestamp: number;
 }
 
+// Matches the snapshot sent by the 2a backend on reconnect
 interface RunSnapshot {
-  type: 'snapshot'; run_id: string; status: string;
+  type: 'snapshot';
+  run_id: string;
+  status: string;
+  active_node: string | null;
+  current_step: number;
+  total_steps: number;
+  pending_approvals: string[];   // edit IDs awaiting user action
+  current_branch: string | null;
+  autonomy_mode: 'supervised' | 'autonomous';
   last_seq: number;
 }
 
 interface Edit {
   id: string; run_id: string; file_path: string;
+  step: number;  // plan step index, used to group edits in DiffViewer
   status: 'proposed' | 'approved' | 'rejected' | 'applied' | 'committed';
   old_content: string | null; new_content: string | null;
   anchor: string | null;
 }
+
+// API error shape returned by all REST endpoints on failure
+interface ApiError {
+  detail: string;
+}
 ```
+
+---
+
+## Error Handling
+
+### API Errors
+
+All `api.ts` methods throw on non-2xx responses. A shared `handleApiError` utility extracts the `detail` field from FastAPI error responses and returns a user-friendly message.
+
+Components that trigger REST calls use a local `error` state:
+```typescript
+const [error, setError] = useState<string | null>(null)
+
+async function handleSubmit() {
+  setError(null)
+  try {
+    await api.submitInstruction(...)
+  } catch (e) {
+    setError(e instanceof Error ? e.message : 'Something went wrong')
+  }
+}
+```
+
+Errors display as an inline banner within the relevant panel (not a global toast), styled with `var(--color-error)` background at 15% opacity + red left border. Errors auto-dismiss after 8 seconds or on user click.
+
+### WebSocket Errors
+
+- **Connection lost:** status bar at bottom of AgentPanel shows "Disconnected — reconnecting..." with a pulsing yellow dot. Auto-reconnect handles recovery.
+- **Reconnect failed (after max backoff):** status bar shows "Connection lost" with a manual "Retry" button.
+- **Backend sends `error` event:** displayed inline in the AgentPanel stream as a red-tinted message block.
+
+### React Error Boundary
+
+A single `ErrorBoundary` wraps `AppShell` children. On crash, it renders a "Something went wrong" card with a "Reload" button. This prevents a component crash from taking down the entire app.
+
+---
+
+## Loading & Transition States
+
+| Action | Loading indicator | Location |
+|---|---|---|
+| Initial project list fetch | Skeleton placeholders in FileTree | Left sidebar |
+| Submit instruction | Send button shows spinner, textarea disabled | WorkspaceHome |
+| Waiting for first event after submit | TypingIndicator (3 dots) | AgentPanel center |
+| Edit approve/reject in-flight | Button shows spinner, disabled until response | DiffHeader |
+| Git commit/push/PR | Button shows spinner + "Committing..." text | CommitDialog / PRPanel |
+| Settings save | Save button shows spinner | SettingsModal |
+| WebSocket reconnecting | Yellow pulsing dot + "Reconnecting..." | AgentPanel status bar |
+
+All interactive buttons disable during their async operation to prevent double-submission.
+
+---
+
+## FileTree Data Source
+
+The FileTree component builds its tree from two sources:
+
+1. **WebSocket `file` events** (P2, batched): emitted by the agent when it reads or writes files. Each event contains `{ path: string, action: 'read' | 'write' }`. The FileTree accumulates these into a tree structure, marking written files with a yellow modified indicator.
+2. **Fallback on reconnect:** the RunSnapshot does not include a file list. On reconnect, the FileTree fetches edits via `GET /runs/{id}/edits` and derives the file list from `edit.file_path` values.
+
+The tree is flat (only files the agent has touched), not a full directory listing. This avoids needing a backend endpoint to enumerate the working directory.
+
+---
+
+## Keyboard Shortcuts
+
+Keyboard shortcuts for 2b-1 (minimal set):
+
+| Shortcut | Action | Scope |
+|---|---|---|
+| `Ctrl+Enter` / `Cmd+Enter` | Submit instruction | WorkspaceHome textarea focused |
+| `Escape` | Close settings modal | SettingsModal open |
+| `Ctrl+Shift+P` / `Cmd+Shift+P` | Focus instruction textarea | Global |
+
+Additional shortcuts for 2b-2:
+
+| Shortcut | Action | Scope |
+|---|---|---|
+| `Ctrl+Shift+A` / `Cmd+Shift+A` | Approve current edit | DiffViewer focused |
+| `Ctrl+Shift+R` / `Cmd+Shift+R` | Reject current edit | DiffViewer focused |
+| `ArrowUp` / `ArrowDown` | Navigate file tree | FileTree focused |
+| `Enter` | Select file / expand folder | FileTree focused |
+
+Shortcuts are handled via a `useHotkeys` hook (thin wrapper around `keydown` listener) — no dependency needed.
+
+---
+
+## Layout Responsiveness
+
+The 3-column grid uses collapsible sidebars for smaller viewports:
+
+- **Default (>1200px):** `grid-template-columns: 250px 1fr 300px`
+- **Medium (900-1200px):** Left sidebar collapses to icon-only rail (48px), right sidebar collapses. Toggle buttons in the header to expand.
+- **Small (<900px):** Single column. Sidebar and agent panel accessible via slide-over drawers.
+
+Panel collapse state is stored in `localStorage` so it persists across reloads.
 
 ---
 
@@ -433,17 +560,17 @@ interface Edit {
 
 ### Development
 ```bash
-# Terminal 1: backend
-cd /Users/rohanthomas/Shipyard && uvicorn server.main:app --reload --port 8000
+# Terminal 1: backend (from project root)
+uvicorn server.main:app --reload --port 8000
 
 # Terminal 2: frontend
-cd /Users/rohanthomas/Shipyard/web && npm run dev
+cd web && npm run dev
 ```
 
 ### Production
 ```bash
-cd /Users/rohanthomas/Shipyard/web && npm run build
-cd /Users/rohanthomas/Shipyard && uvicorn server.main:app --host 0.0.0.0 --port $PORT
+cd web && npm run build
+cd .. && uvicorn server.main:app --host 0.0.0.0 --port $PORT
 ```
 
 FastAPI serves `web/dist/` as static files. Single process, single port.
@@ -503,21 +630,38 @@ Autonomy mode changes use `PUT /projects/{id}` with `{"autonomy_mode": "autonomo
 
 Remove `update_mode` from the WebSocket protocol. The backend does not need a handler for it.
 
-### 4. Exclude `github_pat` from project responses
+### 4. Expand `get_snapshot` in EventBus
 
-Update `GET /projects` and `GET /projects/{id}` to use `model_dump(exclude={"github_pat"})`:
+The current `EventBus.get_snapshot()` returns only `{type, run_id, status, last_seq}`. The frontend `RunSnapshot` type expects additional fields. Expand the backend to include them:
+
 ```python
-@app.get("/projects")
-async def list_projects():
-    store = app.state.store
-    projects = await store.list_projects()
-    return [p.model_dump(exclude={"github_pat"}) for p in projects]
+async def get_snapshot(self, run_id: str) -> dict:
+    last_seq = await self.store.get_max_seq(run_id)
+    run = await self.store.get_run(run_id)
+    pending = await self.store.get_edits(run_id, status="proposed") if run else []
+    return {
+        "type": "snapshot",
+        "run_id": run_id,
+        "status": run.status if run else "unknown",
+        "last_seq": last_seq,
+        "active_node": None,        # populated when graph state is available
+        "current_step": 0,
+        "total_steps": 0,
+        "pending_approvals": [e.id for e in pending],
+        "current_branch": run.branch if run else None,
+        "autonomy_mode": "supervised",  # default; overridden if project loaded
+    }
+```
 
-@app.get("/projects/{project_id}")
-async def get_project(project_id: str):
-    store = app.state.store
-    project = await store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+The frontend must handle missing optional fields gracefully (default to `null` / `0` / `[]`) since not all fields may be available in every scenario.
+
+### 5. Exclude `github_pat` from project responses
+
+All project-returning endpoints (`GET /projects`, `GET /projects/{id}`, `PUT /projects/{id}`) must use `model_dump(exclude={"github_pat"})` to prevent the PAT from leaking to the frontend. Add a helper:
+
+```python
+def project_response(project: Project) -> dict:
     return project.model_dump(exclude={"github_pat"})
 ```
+
+Apply to `list_projects`, `get_project`, and `update_project` handlers.
