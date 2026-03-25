@@ -1762,3 +1762,180 @@ Expected new/modified test files:
 - `tests/test_editor_node.py` — 2 new tests (supervised/autonomous paths)
 
 Total: ~46 new tests across 6 files.
+
+---
+
+## Addendum: Required Corrections
+
+The agentic worker MUST apply these corrections when implementing the tasks above.
+
+### Fix 1: Use 2a-1 EventBus.emit(Event(...)) API — not (type, payload)
+
+The plan emits events like `await self.event_bus.emit("edit.proposed", {...})`. This is wrong — 2a-1's `EventBus.emit()` takes an `Event` object.
+
+**All event emissions must use:**
+```python
+await self.event_bus.emit(Event(
+    project_id=project_id,   # required — added in 2a-1 addendum
+    run_id=run_id,
+    type="approval",          # use P0 type for priority routing
+    data={
+        "event": "edit.proposed",
+        "edit_id": created.id,
+        "file_path": created.file_path,
+    },
+))
+```
+
+This applies to ALL emit calls in ApprovalManager: `propose_edit`, `approve`, `reject`, `apply_edit`, `mark_committed`.
+
+### Fix 2: Event types must match 2a-1 priority routing
+
+2a-1 routes priorities by `event.type`:
+- P0 (instant): `approval`, `error`, `stop`, `review`
+- P1 (batched): `stream`, `diff`, `git`
+- P2 (aggregated): everything else
+
+The plan uses types like `edit.proposed`, `edit.approved` — these fall into P2 and would NOT be sent immediately.
+
+**Fix:** All approval lifecycle events must use `type="approval"` with a domain subtype in `data["event"]`:
+```python
+type="approval"                    # P0 — sent immediately
+data={"event": "edit.proposed"}    # domain-specific subtype
+data={"event": "edit.approved"}
+data={"event": "edit.rejected"}
+data={"event": "edit.applied"}
+data={"event": "edit.committed"}
+```
+
+### Fix 3: Reuse existing EventBus from 2a-1 — do not create a new one
+
+The plan creates a new `EventBus()` in server wiring. This is wrong — 2a-1 already creates one in the lifespan.
+
+**Fix:** In server/main.py, do NOT instantiate a new EventBus. Instead:
+```python
+# In lifespan or wherever ApprovalManager is created:
+event_bus = app.state.event_bus       # reuse from 2a-1
+store = app.state.store               # reuse from 2a-1
+app.state.approval_manager = ApprovalManager(store=store, event_bus=event_bus)
+```
+
+### Fix 4: Define the supervised resume flow explicitly
+
+The plan leaves ambiguous: who resumes the graph after approval, and how `file_buffer` gets refreshed.
+
+**The V1 supervised flow must be:**
+1. `editor_node` calls `approval_manager.propose_edit()` — creates edit with `proposed` status
+2. `editor_node` returns `{"error_state": None, "waiting_for_human": True}` — graph checkpoints
+3. User approves via REST/WebSocket → server calls `approval_manager.approve(edit_id, op_id)`
+4. Server calls `approval_manager.apply_edit(edit_id)` — writes edit to filesystem
+5. Server resumes graph from checkpoint via `POST /instruction/{run_id}` or equivalent
+6. The resumed editor (or `advance` node) re-reads the file into `file_buffer` to pick up the applied edit
+
+The plan must include this flow in Task 7 (editor node integration) with explicit code for steps 4-6.
+
+### Fix 5: Require and validate run_id in editor integration
+
+The plan has a test comment: `# Note: run_id may need to come from config/state`. This is not acceptable.
+
+**Fix:** `run_id` must be present in config:
+```python
+run_id = config["configurable"].get("run_id", "")
+```
+
+The server must pass `run_id` in the config when invoking the graph. All editor tests must include `run_id` in their config fixtures.
+
+### Fix 6: Validate run_id ownership in REST endpoint
+
+The plan's `PATCH /runs/{run_id}/edits/{edit_id}` looks up the edit by `edit_id` but never checks that `edit.run_id == run_id`.
+
+**Fix:** Add ownership validation:
+```python
+edit = await store.get_edit(edit_id)
+if edit is None:
+    raise HTTPException(status_code=404, detail="Edit not found")
+if edit.run_id != run_id:
+    raise HTTPException(status_code=404, detail="Edit not found for this run")
+```
+
+### Fix 7: Merge WebSocket approval into existing ConnectionManager
+
+The plan adds a standalone `handle_client_message()` function in `server/websocket.py`. This conflicts with 2a-1's `ConnectionManager.handle_client_message()`.
+
+**Fix:** Extend the EXISTING `ConnectionManager.handle_client_message()` to handle `approve`, `reject`, and `update_mode` actions by delegating to ApprovalManager. Do not create a second handler.
+
+```python
+# In ConnectionManager.handle_client_message():
+elif action == "approve":
+    edit_id = data.get("edit_id")
+    op_id = data.get("op_id")
+    run_id = data.get("run_id")
+    result = await self.approval_manager.approve(edit_id, op_id)
+    await ws.send_json({"type": "approval", "data": {"event": "edit.approved", "edit_id": edit_id, "status": result.status}})
+
+elif action == "reject":
+    # similar pattern
+```
+
+ConnectionManager needs an `approval_manager` reference — pass it during construction or via a setter.
+
+### Fix 8: Align WebSocket message schema with 2a-1
+
+The plan uses `{"type": "approve", ...}` for client messages. 2a-1 uses `{"action": "approve", ...}`.
+
+**Fix:** All client→server messages use `action` as the key, matching 2a-1:
+```json
+{ "action": "approve", "run_id": "run_456", "edit_id": "edit_abc", "op_id": "op_edit_abc_approve" }
+{ "action": "reject", "run_id": "run_456", "edit_id": "edit_abc", "op_id": "op_edit_abc_reject" }
+{ "action": "update_mode", "mode": "autonomous" }
+```
+
+Update all WebSocket tests to use `action` not `type`.
+
+### Fix 9: Maintain `approved_at` or remove it
+
+The model has `approved_at: datetime | None = None` but no code ever sets it.
+
+**Fix:** Set `approved_at` when transitioning to `approved`:
+```python
+async def approve(self, edit_id: str, op_id: str) -> EditRecord:
+    # ... after validating transition ...
+    edit.status = "approved"
+    edit.approved_at = datetime.now(timezone.utc)
+    edit.last_op_id = op_id
+    await self.store.update_edit_status(edit.id, "approved", approved_at=edit.approved_at, last_op_id=op_id)
+```
+
+Update `update_edit_status` in store to accept and persist `approved_at`.
+
+### Fix 10: Document last_op_id as V1-only idempotency
+
+Add this note to ApprovalManager docstring or module docstring:
+```
+Idempotency note (V1): last_op_id provides last-operation-only idempotency.
+This is sufficient for single-writer / low-concurrency V1. It does NOT provide
+a full operation history or distinguish duplicate retries from racing actors.
+```
+
+### Fix 11: mark_committed() event must include run_id and only emit for actually transitioned edits
+
+```python
+async def mark_committed(self, run_id: str, edit_ids: list[str]) -> None:
+    transitioned = []
+    for edit_id in edit_ids:
+        edit = await self.store.get_edit(edit_id)
+        if edit and edit.status == "applied":
+            await self.store.update_edit_status(edit_id, "committed")
+            transitioned.append(edit_id)
+    if transitioned:
+        await self.event_bus.emit(Event(
+            project_id=...,  # from run or config
+            run_id=run_id,
+            type="approval",
+            data={"event": "edit.committed", "edit_ids": transitioned},
+        ))
+```
+
+### Fix 12: Remove `branch` from AgentState in this phase
+
+`branch` belongs in 2a-3 (Git Integration), not 2a-2. Adding it here is harmless but mixed-scope. The worker may skip adding `branch` in Task 3 and defer it to 2a-3.
