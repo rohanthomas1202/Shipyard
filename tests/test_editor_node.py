@@ -169,3 +169,38 @@ async def test_editor_node_autonomous_mode_applies_edit(
     # File SHOULD be modified in autonomous mode
     current_content = open(ts_path).read()
     assert "due_date: string;" in current_content
+
+
+@pytest.mark.asyncio
+async def test_editor_uses_structural_replace_when_available(tmp_codebase):
+    """Editor should use structural_replace for structurally valid anchors."""
+    ts_path = os.path.join(tmp_codebase, "sample.ts")
+    content = open(ts_path).read()
+
+    mock_response = json.dumps({
+        "anchor": '  description: string;\n  status: "open" | "closed";',
+        "replacement": '  description: string;\n  due_date: string;\n  status: "open" | "closed";',
+    })
+
+    config = make_config_with_mock_router(mock_response)
+    state = {
+        "messages": [],
+        "instruction": "Add due_date field",
+        "working_directory": tmp_codebase,
+        "context": {},
+        "plan": [{"id": "step-1", "kind": "edit", "target_files": [ts_path], "complexity": "simple", "depends_on": []}],
+        "current_step": 0,
+        "file_buffer": {ts_path: content},
+        "edit_history": [],
+        "error_state": None,
+        "is_parallel": False,
+        "parallel_batches": [],
+        "sequential_first": [],
+        "has_conflicts": False,
+        "ast_available": {"typescript": True},
+        "invalidated_files": [],
+    }
+
+    result = await editor_node(state, config=config)
+    assert result["error_state"] is None
+    assert "due_date" in result["file_buffer"][ts_path]
