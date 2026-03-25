@@ -16,3 +16,4 @@ class AgentState(TypedDict):
     parallel_batches: list[list[int]]
     sequential_first: list[int]
     has_conflicts: bool
+    model_usage: dict[str, int]

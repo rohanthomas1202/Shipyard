@@ -15,6 +15,7 @@ def test_agent_state_has_required_fields():
         parallel_batches=[],
         sequential_first=[],
         has_conflicts=False,
+        model_usage={},
     )
     assert state["instruction"] == "test instruction"
     assert state["working_directory"] == "/tmp/test"
@@ -29,3 +30,4 @@ def test_agent_state_has_required_fields():
     assert state["parallel_batches"] == []
     assert state["sequential_first"] == []
     assert state["has_conflicts"] is False
+    assert state["model_usage"] == {}
