@@ -124,6 +124,7 @@ async def _resume_run(run_id: str) -> None:
             state = {}
         state["error_state"] = None
         state["waiting_for_human"] = False
+        state["invalidated_files"] = []
         config = {"configurable": {"store": store, "router": router}}
         result = await graph.ainvoke(state, config=config)
         if result.get("waiting_for_human"):
@@ -180,6 +181,8 @@ async def submit_instruction(req: InstructionRequest):
                 "parallel_batches": [],
                 "sequential_first": [],
                 "has_conflicts": False,
+                "ast_available": {},
+                "invalidated_files": [],
             }
             config = {"configurable": {"store": store, "router": router}}
             result = await graph.ainvoke(initial_state, config=config)
