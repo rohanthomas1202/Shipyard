@@ -144,3 +144,60 @@ def _check_node_boundaries(node, start: int, end: int) -> AnchorResult:
             return AnchorResult(structural_match=False, node_type=child.kind())
 
     return AnchorResult(structural_match=False, node_type=node.kind())
+
+
+# --- structural_replace ---
+
+def structural_replace(content: str, anchor: str, replacement: str, language: str) -> str:
+    """Perform indentation-aware replacement using AST context.
+    Pure function — returns new file content without writing to disk."""
+    if not AST_GREP_AVAILABLE:
+        return content.replace(anchor, replacement, 1)
+
+    result = validate_anchor(content, anchor, language)
+
+    if not result.structural_match or result.unsupported_language:
+        return content.replace(anchor, replacement, 1)
+
+    return _apply_with_indentation(content, anchor, replacement)
+
+
+def _apply_with_indentation(content: str, anchor: str, replacement: str) -> str:
+    """Apply replacement preserving the original anchor's indentation context."""
+    start = content.find(anchor)
+    if start == -1:
+        return content.replace(anchor, replacement, 1)
+
+    line_start = content.rfind("\n", 0, start)
+    if line_start == -1:
+        original_indent = ""
+    else:
+        between = content[line_start + 1:start]
+        original_indent = between if between.isspace() else ""
+
+    if not replacement or "\n" not in replacement:
+        return content[:start] + replacement + content[start + len(anchor):]
+
+    rep_lines = replacement.split("\n")
+    if len(rep_lines) <= 1:
+        return content[:start] + replacement + content[start + len(anchor):]
+
+    subsequent = rep_lines[1:]
+    if subsequent:
+        non_empty = [l for l in subsequent if l.strip()]
+        if non_empty:
+            min_indent = min(len(l) - len(l.lstrip()) for l in non_empty)
+        else:
+            min_indent = 0
+
+        adjusted = [rep_lines[0]]
+        for line in subsequent:
+            if not line.strip():
+                adjusted.append("")
+            else:
+                stripped_indent = len(line) - len(line.lstrip())
+                extra = stripped_indent - min_indent
+                adjusted.append(original_indent + " " * extra + line.lstrip())
+        replacement = "\n".join(adjusted)
+
+    return content[:start] + replacement + content[start + len(anchor):]
