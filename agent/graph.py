@@ -9,6 +9,7 @@ from agent.nodes.validator import validator_node
 from agent.nodes.coordinator import coordinator_node
 from agent.nodes.merger import merger_node
 from agent.nodes.reporter import reporter_node
+from agent.nodes.git_ops import git_ops_node
 
 
 def _retry_count(state: dict) -> int:
@@ -60,7 +61,7 @@ def classify_step(state: dict) -> str:
         if kind == "edit":
             return "reader_then_edit"
         if kind == "git":
-            return "reporter"  # git_ops deferred to Phase 2
+            return "git_ops"
         return "reader_then_edit"
 
     # Fallback: legacy string-based step (backward compat)
@@ -95,8 +96,9 @@ def _build_graph_nodes(graph: StateGraph):
     graph.add_node("validator", validator_node)
     graph.add_node("merger", merger_node)
     graph.add_node("reporter", reporter_node)
+    graph.add_node("git_ops", git_ops_node)
     graph.add_node("advance", advance_step)
-    graph.add_node("classify", lambda s: {})
+    graph.add_node("classify", lambda _: {})
 
     graph.set_entry_point("receive")
 
@@ -108,6 +110,7 @@ def _build_graph_nodes(graph: StateGraph):
         "executor": "executor",
         "reader_only": "reader",
         "reader_then_edit": "reader",
+        "git_ops": "git_ops",
         "reporter": "reporter",
     })
 
@@ -131,6 +134,7 @@ def _build_graph_nodes(graph: StateGraph):
     })
 
     graph.add_edge("advance", "classify")
+    graph.add_edge("git_ops", "reporter")
     graph.add_edge("reporter", END)
 
 

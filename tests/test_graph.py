@@ -5,6 +5,12 @@ def test_graph_compiles():
     graph = build_graph()
     assert graph is not None
 
+def test_classify_step_routes_git_to_git_ops():
+    from agent.graph import classify_step
+    state = {"plan": [{"kind": "git", "id": "g1", "complexity": "simple"}], "current_step": 0}
+    assert classify_step(state) == "git_ops"
+
+
 def test_graph_has_expected_nodes():
     graph = build_graph()
     node_names = set(graph.get_graph().nodes.keys())
