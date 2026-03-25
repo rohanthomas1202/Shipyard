@@ -115,3 +115,50 @@ class GitManager:
                 ["git", "diff", "--cached", "--stat"],
                 "Failed to get diff"
             )
+
+    async def ensure_branch(self, task_slug: str, run_id: str) -> str:
+        """Smart branching: create shipyard/<slug>-<short_run_id> from main, stay on feature branch."""
+        async with self._lock:
+            branch = await self._get_current_branch_unlocked()
+
+            # Detached HEAD check
+            if not branch:
+                result = await self._run(["git", "symbolic-ref", "HEAD"])
+                if result["exit_code"] != 0:
+                    raise RuntimeError("Detached HEAD — checkout a branch first")
+
+            # If already on a feature branch, stay there
+            if branch not in ("main", "master"):
+                return branch
+
+            # Check for dirty working tree
+            status_result = await self._run(["git", "status", "--porcelain"])
+            is_dirty = bool(status_result["stdout"].strip())
+
+            if is_dirty:
+                stash_result = await self._run(["git", "stash", "push", "-u", "-m", "shipyard-auto-stash"])
+                if stash_result["exit_code"] != 0:
+                    raise RuntimeError(f"Failed to stash: {stash_result['stderr']}")
+
+            # Find a unique branch name
+            short_id = run_id[:8]
+            branch_name = f"shipyard/{task_slug}-{short_id}"
+            suffix = 1
+            while True:
+                check = await self._run(["git", "rev-parse", "--verify", branch_name])
+                if check["exit_code"] != 0:
+                    break  # branch doesn't exist
+                suffix += 1
+                branch_name = f"shipyard/{task_slug}-{short_id}-{suffix}"
+
+            await self._create_branch_unlocked(branch_name)
+
+            if is_dirty:
+                pop_result = await self._run(["git", "stash", "pop"])
+                if pop_result["exit_code"] != 0:
+                    raise RuntimeError(
+                        f"Stash pop failed after branch creation. Branch '{branch_name}' exists. "
+                        f"Manual intervention needed: {pop_result['stderr']}"
+                    )
+
+            return branch_name

@@ -89,3 +89,53 @@ async def test_not_a_git_repo(tmp_path):
     gm = GitManager(str(tmp_path))
     with pytest.raises(RuntimeError, match="not a git repo"):
         await gm.get_current_branch()
+
+
+@pytest.mark.asyncio
+async def test_ensure_branch_creates_from_main(git_repo):
+    gm = GitManager(git_repo)
+    branch = await gm.ensure_branch("refactor-auth", "run123abc")
+    assert branch.startswith("shipyard/refactor-auth-")
+    assert "run12345" in branch or branch.startswith("shipyard/refactor-auth-run123ab")
+    current = await gm.get_current_branch()
+    assert current == branch
+
+
+@pytest.mark.asyncio
+async def test_ensure_branch_stays_on_feature_branch(git_repo):
+    gm = GitManager(git_repo)
+    await gm.create_branch("feature/existing")
+    branch = await gm.ensure_branch("something", "run456")
+    assert branch == "feature/existing"
+
+
+@pytest.mark.asyncio
+async def test_ensure_branch_handles_dirty_tree(git_repo):
+    gm = GitManager(git_repo)
+    # Make dirty
+    with open(os.path.join(git_repo, "dirty.txt"), "w") as f:
+        f.write("dirty")
+    branch = await gm.ensure_branch("test-dirty", "run789abc")
+    assert branch.startswith("shipyard/test-dirty-")
+    # Dirty file should still be there
+    assert os.path.exists(os.path.join(git_repo, "dirty.txt"))
+
+
+@pytest.mark.asyncio
+async def test_ensure_branch_detached_head_raises(git_repo):
+    gm = GitManager(git_repo)
+    # Detach HEAD
+    await run_command_async(["git", "checkout", "--detach"], cwd=git_repo)
+    with pytest.raises(RuntimeError, match="[Dd]etached"):
+        await gm.ensure_branch("test", "run000")
+
+
+@pytest.mark.asyncio
+async def test_ensure_branch_existing_name_gets_suffix(git_repo):
+    gm = GitManager(git_repo)
+    # Create the branch first
+    await run_command_async(["git", "branch", "shipyard/test-run12345"], cwd=git_repo)
+    # ensure_branch should append -2, -3 etc
+    branch = await gm.ensure_branch("test", "run12345678")
+    assert branch != "shipyard/test-run12345"
+    assert branch.startswith("shipyard/test-")
