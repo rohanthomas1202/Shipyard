@@ -1,4 +1,19 @@
+import asyncio
 import subprocess
+
+async def run_command_async(argv: list[str], cwd: str = ".", timeout: int = 60) -> dict:
+    """Non-blocking subprocess execution using argv list form (no shell=True)."""
+    proc = await asyncio.create_subprocess_exec(
+        *argv, cwd=cwd,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return {"stdout": stdout.decode(), "stderr": stderr.decode(), "exit_code": proc.returncode}
+    except asyncio.TimeoutError:
+        proc.kill()
+        return {"stdout": "", "stderr": "Command timed out", "exit_code": -1}
+
 
 def run_command(command: str, cwd: str = ".", timeout: int = 60) -> dict:
     try:
