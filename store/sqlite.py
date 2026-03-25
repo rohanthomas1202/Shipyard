@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS git_operations (
     pr_url TEXT, pr_number INTEGER, status TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_git_ops_run ON git_operations(run_id);
 """
 
 

@@ -109,3 +109,18 @@ async def test_get_project_returns_none_for_missing(store):
 async def test_get_run_returns_none_for_missing(store):
     result = await store.get_run("nonexistent")
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_git_ops_run_index_exists(tmp_path):
+    from store.sqlite import SQLiteSessionStore
+    store = SQLiteSessionStore(str(tmp_path / "test.db"))
+    await store.initialize()
+    try:
+        async with store._db.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_git_ops_run'"
+        ) as cursor:
+            row = await cursor.fetchone()
+        assert row is not None
+    finally:
+        await store.close()
