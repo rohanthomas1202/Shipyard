@@ -10,6 +10,7 @@ from agent.nodes.coordinator import coordinator_node
 from agent.nodes.merger import merger_node
 from agent.nodes.reporter import reporter_node
 from agent.nodes.git_ops import git_ops_node
+from agent.nodes.refactor import refactor_node
 
 
 def _retry_count(state: dict) -> int:
@@ -62,6 +63,8 @@ def classify_step(state: dict) -> str:
             return "reader_then_edit"
         if kind == "git":
             return "git_ops"
+        if kind == "refactor":
+            return "refactor"
         return "reader_then_edit"
 
     # Fallback: legacy string-based step (backward compat)
@@ -80,7 +83,13 @@ def after_reader(state: dict) -> str:
     step = state.get("current_step", 0)
     if step >= len(plan):
         return "advance"
-    step_text = plan[step].lower()
+    step_entry = plan[step]
+    if isinstance(step_entry, dict):
+        kind = step_entry.get("kind", "edit")
+        if kind == "read":
+            return "advance"
+        return "editor"
+    step_text = step_entry.lower()
     if any(kw in step_text for kw in ["read ", "understand", "examine", "check "]):
         return "advance"
     return "editor"
@@ -97,6 +106,7 @@ def _build_graph_nodes(graph: StateGraph):
     graph.add_node("merger", merger_node)
     graph.add_node("reporter", reporter_node)
     graph.add_node("git_ops", git_ops_node)
+    graph.add_node("refactor", refactor_node)
     graph.add_node("advance", advance_step)
     graph.add_node("classify", lambda _: {})
 
@@ -111,6 +121,7 @@ def _build_graph_nodes(graph: StateGraph):
         "reader_only": "reader",
         "reader_then_edit": "reader",
         "git_ops": "git_ops",
+        "refactor": "refactor",
         "reporter": "reporter",
     })
 
@@ -135,6 +146,7 @@ def _build_graph_nodes(graph: StateGraph):
 
     graph.add_edge("advance", "classify")
     graph.add_edge("git_ops", "reporter")
+    graph.add_edge("refactor", "validator")
     graph.add_edge("reporter", END)
 
 

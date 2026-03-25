@@ -17,6 +17,16 @@ def test_graph_has_expected_nodes():
     expected = {"receive", "planner", "coordinator", "reader", "editor", "executor", "validator", "merger", "reporter", "advance", "classify"}
     assert expected.issubset(node_names)
 
+def test_classify_step_routes_refactor():
+    from agent.graph import classify_step
+    state = {
+        "plan": [{"kind": "refactor", "pattern": "old($A)", "refactor_replacement": "new($A)", "language": "typescript"}],
+        "current_step": 0,
+    }
+    result = classify_step(state)
+    assert result == "refactor"
+
+
 import os
 
 @pytest.mark.asyncio
