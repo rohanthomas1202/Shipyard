@@ -719,14 +719,20 @@ class LspConnection:
         self._waiters.pop(uri, None)
         self._doc_versions.pop(uri, None)
 
-    async def wait_for_diagnostics(self, file_path: str, timeout: float = 5.0) -> list[types.Diagnostic]:
-        """Wait for publishDiagnostics notification for a file."""
+    async def wait_for_diagnostics(self, file_path: str, timeout: float = 5.0) -> list[types.Diagnostic] | None:
+        """Wait for publishDiagnostics notification for a file.
+
+        Returns:
+            list[Diagnostic] — diagnostics received (may be empty [] for clean files)
+            None — timeout, no response received at all
+        """
         uri = _file_uri(file_path)
         waiter = self._waiters.get(uri)
         if waiter is None:
-            return []
+            return None
         try:
             await asyncio.wait_for(waiter.event.wait(), timeout=timeout)
+            return waiter.diagnostics  # may be [] for clean files — that's a valid response
         except asyncio.TimeoutError:
             tracer.log("lsp_connection", {
                 "language": self.language,
@@ -734,7 +740,7 @@ class LspConnection:
                 "timeout": timeout,
                 "status": "diagnostic_timeout",
             })
-        return waiter.diagnostics
+            return None  # sentinel: no response at all
 
     async def stop(self) -> None:
         """Shutdown and stop the server."""
@@ -801,18 +807,18 @@ class LspDiagnosticClient:
         else:
             await self.connection.change_document(file_path, content, version)
 
-        diagnostics = await self.connection.wait_for_diagnostics(file_path, timeout=timeout)
+        result = await self.connection.wait_for_diagnostics(file_path, timeout=timeout)
 
-        # First-timeout retry: if first call got no diagnostics, retry with 2x timeout
-        if self._first_call_just_happened:
-            self._first_call_just_happened = False  # always reset, regardless of outcome
-        if not diagnostics and not self.connection.is_degraded and timeout == self.timeout_first:
-            tracer.log("lsp_diagnostic", {"file": file_path, "status": "first_timeout_retry", "timeout": timeout * 2})
+        # First-timeout retry: only if we got NO RESPONSE (None), not empty diagnostics ([])
+        # Empty [] means server responded with "no errors" — that's valid, don't retry.
+        # None means timeout with no response — retry once with 2x timeout.
+        if result is None and not self.connection.is_degraded:
+            tracer.log("lsp_diagnostic", {"file": file_path, "status": "timeout_retry", "timeout": timeout * 2})
             version = self._next_version(file_path)
             await self.connection.change_document(file_path, content, version)
-            diagnostics = await self.connection.wait_for_diagnostics(file_path, timeout=timeout * 2)
+            result = await self.connection.wait_for_diagnostics(file_path, timeout=timeout * 2)
 
-        return diagnostics
+        return result if result is not None else []
 
     async def notify_rollback(self, file_path: str, restored_content: str) -> None:
         """Notify the server that a file was rolled back.
@@ -935,8 +941,9 @@ from agent.tracing import TraceLogger
 
 tracer = TraceLogger()
 
-# Track PIDs for atexit cleanup
-_active_pids: list[int] = []
+# Track active managers for atexit cleanup (instance-level PIDs, not module-level)
+import weakref
+_active_managers: weakref.WeakSet["LspManager"] = weakref.WeakSet()
 
 
 # Server registry — TypeScript only for Phase 3
@@ -954,13 +961,18 @@ REGISTRY: dict[str, dict[str, Any]] = {
 }
 
 
-def _cleanup_pids():
+def _cleanup_all_managers():
     """atexit handler: forcefully kill any lingering LSP server processes."""
-    for pid in _active_pids:
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except OSError:
-            pass
+    for mgr in list(_active_managers):
+        for pid in mgr._pids:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+
+
+# Register once at module load
+atexit.register(_cleanup_all_managers)
 
 
 def _discover_server(language: str, project_path: str = "") -> list[str] | None:
@@ -1013,6 +1025,7 @@ class LspManager:
         self._connections: dict[str, LspConnection] = {}
         self._clients: dict[str, LspDiagnosticClient] = {}
         self._status: dict[str, str] = {}  # language → "running" | "degraded" | "unavailable"
+        self._pids: list[int] = []  # instance-level PID tracking for atexit cleanup
 
     async def __aenter__(self) -> LspManager:
         """Start available LSP servers for detected languages."""
@@ -1024,8 +1037,8 @@ class LspManager:
             except Exception:
                 pass  # No languages detected — all LSP skipped
 
-        # Register atexit handler for orphan cleanup (S2 fix)
-        atexit.register(_cleanup_pids)
+        # Register this manager for atexit cleanup
+        _active_managers.add(self)
 
         for language, available in self.detected_languages.items():
             if not available:
@@ -1048,9 +1061,9 @@ class LspManager:
                     timeout_incremental=entry.get("timeout_incremental", 5.0),
                 )
                 self._status[language] = "running"
-                # Track PID for atexit cleanup
+                # Track PID for atexit cleanup (instance-level, not module-level)
                 if hasattr(conn._client, '_server') and conn._client._server:
-                    _active_pids.append(conn._client._server.pid)
+                    self._pids.append(conn._client._server.pid)
                 tracer.log("lsp_manager", {"language": language, "status": "running", "cmd": cmd[0]})
             except Exception as e:
                 self._status[language] = "unavailable"
@@ -1068,7 +1081,8 @@ class LspManager:
             tracer.log("lsp_manager", {"language": language, "status": "stopped"})
         self._connections.clear()
         self._clients.clear()
-        _active_pids.clear()
+        self._pids.clear()
+        _active_managers.discard(self)
 
     def get_client(self, language: str) -> LspDiagnosticClient | None:
         """Get a diagnostic client for a language. Returns None if unavailable/degraded."""
@@ -1287,6 +1301,12 @@ async def _lsp_validate(client, file_path: str, edit_entry: dict) -> dict | None
     from agent.tools.lsp_client import diff_diagnostics
     from lsprotocol import types
 
+    # Known limitation (Phase 4 TODO): baseline diagnostics are captured with the
+    # current LSP server state, which may include other files' post-edit content from
+    # earlier steps in the same run. For multi-file edits, this means baseline_diags
+    # may contain phantom errors from old-A + new-B combinations. Acceptable for
+    # Phase 3 (single-file TS edits). Fix in Phase 4: cache baseline at run start.
+
     # Read current (post-edit) content
     try:
         with open(file_path, "r") as f:
@@ -1325,12 +1345,64 @@ async def _lsp_validate(client, file_path: str, edit_entry: dict) -> dict | None
     return {"error_state": None}
 ```
 
-- [ ] **Step 3: Run validator tests**
+- [ ] **Step 3: Rewrite existing tests for async validator**
+
+The existing `tests/test_validator_node.py` calls `validator_node(state)` synchronously. After the async migration, these calls return a coroutine object (not a dict), which is truthy — so `assert result["error_state"]` silently passes incorrectly. **All existing tests must be converted to async.**
+
+Replace the existing tests with:
+
+```python
+import os
+import pytest
+from agent.nodes.validator import validator_node
+
+
+@pytest.fixture
+def valid_edit_state(tmp_codebase):
+    ts_path = os.path.join(tmp_codebase, "sample.ts")
+    return {
+        "messages": [],
+        "instruction": "Add due_date",
+        "working_directory": tmp_codebase,
+        "context": {},
+        "plan": ["Add due_date"],
+        "current_step": 0,
+        "file_buffer": {ts_path: open(ts_path).read()},
+        "edit_history": [{"file": ts_path, "snapshot": open(ts_path).read()}],
+        "error_state": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_validator_passes_valid_file(valid_edit_state):
+    result = await validator_node(valid_edit_state)
+    assert result["error_state"] is None
+
+
+@pytest.mark.asyncio
+async def test_validator_catches_invalid_json(tmp_codebase):
+    json_path = os.path.join(tmp_codebase, "config.json")
+    with open(json_path, "w") as f:
+        f.write('{"port": 3000,}')
+    state = {
+        "messages": [],
+        "instruction": "test",
+        "working_directory": tmp_codebase,
+        "context": {},
+        "plan": [],
+        "current_step": 0,
+        "file_buffer": {json_path: open(json_path).read()},
+        "edit_history": [{"file": json_path, "snapshot": '{"port": 3000}'}],
+        "error_state": None,
+    }
+    result = await validator_node(state)
+    assert result["error_state"] is not None
+```
+
+- [ ] **Step 4: Run ALL validator tests (existing + new)**
 
 Run: `.venv/bin/pytest tests/test_validator_node.py -v`
-Expected: All pass (new async tests + any existing tests updated).
-
-Note: Existing tests may need updating from `validator_node(state)` to `await validator_node(state, config)`. Check and update the test calls.
+Expected: All pass — both converted existing tests and new LSP tests.
 
 - [ ] **Step 4: Run full test suite for regressions**
 
