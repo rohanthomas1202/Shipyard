@@ -4,6 +4,8 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from store.sqlite import SQLiteSessionStore
 from agent.router import ModelRouter
+from agent.events import EventBus
+from server.websocket import ConnectionManager
 
 
 @pytest_asyncio.fixture
@@ -22,13 +24,18 @@ async def client(tmp_path):
     # without relying on lifespan (ASGITransport doesn't trigger lifespan)
     store = SQLiteSessionStore(db_file)
     await store.initialize()
+    event_bus = EventBus(store)
+    conn_manager = ConnectionManager(event_bus)
     app.state.store = store
     app.state.router = ModelRouter()
+    app.state.event_bus = event_bus
+    app.state.conn_manager = conn_manager
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
+    await event_bus.shutdown()
     await store.close()
 
 
