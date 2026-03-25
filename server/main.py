@@ -5,9 +5,11 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+from typing import Literal as TypingLiteral
 from agent.graph import build_graph
 from agent.router import ModelRouter
 from agent.events import EventBus
+from agent.approval import ApprovalManager, InvalidTransitionError
 from store.sqlite import SQLiteSessionStore
 from store.models import Project, Run
 from server.websocket import ConnectionManager
@@ -34,11 +36,15 @@ async def lifespan(app: FastAPI):
     event_bus.set_send_callback(send_callback)
     event_bus.start_batcher()
 
+    approval_manager = ApprovalManager(store=store, event_bus=event_bus)
+    conn_manager.set_approval_manager(approval_manager)
+
     app.state.store = store
     app.state.router = ModelRouter()
     app.state.graph = build_graph()
     app.state.event_bus = event_bus
     app.state.conn_manager = conn_manager
+    app.state.approval_manager = approval_manager
 
     heartbeat_task = asyncio.create_task(_heartbeat_loop(conn_manager))
     yield
@@ -78,6 +84,38 @@ class InstructionResponse(BaseModel):
 class CreateProjectRequest(BaseModel):
     name: str
     path: str
+
+
+class EditActionRequest(BaseModel):
+    action: TypingLiteral["approve", "reject"]
+    op_id: str
+
+
+async def _resume_run(run_id: str) -> None:
+    if run_id not in runs:
+        return
+    if runs[run_id].get("status") != "waiting_for_human":
+        return
+    store = app.state.store
+    router = app.state.router
+    runs[run_id]["status"] = "running"
+    try:
+        graph = app.state.graph
+        state = runs[run_id].get("result", {})
+        if isinstance(state, str):
+            state = {}
+        state["error_state"] = None
+        state["waiting_for_human"] = False
+        config = {"configurable": {"store": store, "router": router}}
+        result = await graph.ainvoke(state, config=config)
+        if result.get("waiting_for_human"):
+            runs[run_id] = {"status": "waiting_for_human", "result": result}
+        elif result.get("error_state") is None:
+            runs[run_id] = {"status": "completed", "result": result}
+        else:
+            runs[run_id] = {"status": "failed", "result": result}
+    except Exception as e:
+        runs[run_id] = {"status": "error", "result": str(e)}
 
 
 @app.get("/health")
@@ -127,10 +165,12 @@ async def submit_instruction(req: InstructionRequest):
             }
             config = {"configurable": {"store": store, "router": router}}
             result = await graph.ainvoke(initial_state, config=config)
-            runs[run_id] = {
-                "status": "completed" if result.get("error_state") is None else "failed",
-                "result": result,
-            }
+            if result.get("waiting_for_human"):
+                runs[run_id] = {"status": "waiting_for_human", "result": result}
+            elif result.get("error_state") is None:
+                runs[run_id] = {"status": "completed", "result": result}
+            else:
+                runs[run_id] = {"status": "failed", "result": result}
         except Exception as e:
             runs[run_id] = {"status": "error", "result": str(e)}
 
@@ -165,10 +205,12 @@ async def continue_run(run_id: str, req: InstructionRequest):
             state["error_state"] = None
             config = {"configurable": {"store": store, "router": router}}
             result = await graph.ainvoke(state, config=config)
-            runs[run_id] = {
-                "status": "completed" if result.get("error_state") is None else "failed",
-                "result": result,
-            }
+            if result.get("waiting_for_human"):
+                runs[run_id] = {"status": "waiting_for_human", "result": result}
+            elif result.get("error_state") is None:
+                runs[run_id] = {"status": "completed", "result": result}
+            else:
+                runs[run_id] = {"status": "failed", "result": result}
         except Exception as e:
             runs[run_id] = {"status": "error", "result": str(e)}
 
@@ -198,6 +240,34 @@ async def get_project(project_id: str):
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project.model_dump()
+
+
+@app.patch("/runs/{run_id}/edits/{edit_id}")
+async def patch_edit(run_id: str, edit_id: str, req: EditActionRequest):
+    approval_manager: ApprovalManager = app.state.approval_manager
+    store: SQLiteSessionStore = app.state.store
+
+    # Ownership check
+    edit = await store.get_edit(edit_id)
+    if edit is None or edit.run_id != run_id:
+        raise HTTPException(status_code=404, detail="Edit not found for this run")
+
+    try:
+        if req.action == "approve":
+            result = await approval_manager.approve(edit_id, req.op_id)
+            result = await approval_manager.apply_edit(edit_id)
+            # Resume graph if waiting
+            asyncio.create_task(_resume_run(run_id))
+        else:
+            result = await approval_manager.reject(edit_id, req.op_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Edit not found")
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to apply edit: {e}")
+
+    return {"edit_id": edit_id, "run_id": run_id, "status": result.status}
 
 
 @app.websocket("/ws/{project_id}")
