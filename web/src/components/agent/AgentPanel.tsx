@@ -3,6 +3,7 @@ import { useProjectContext } from '../../context/ProjectContext'
 import { TypingIndicator } from './TypingIndicator'
 import { StreamingText } from './StreamingText'
 import { StepTimeline } from './StepTimeline'
+import { AutonomyToggle } from './AutonomyToggle'
 
 export function AgentPanel() {
   const { status } = useWebSocketContext()
@@ -91,11 +92,8 @@ export function AgentPanel() {
               </button>
             </div>
 
-            {/* Mode Display */}
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Mode</span>
-              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Supervised</span>
-            </div>
+            {/* Mode Toggle */}
+            <AutonomyToggle />
 
             {/* Recent Contexts */}
             <div className="flex flex-col gap-2">
