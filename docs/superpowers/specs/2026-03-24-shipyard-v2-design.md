@@ -6,13 +6,26 @@ Shipyard V2 transforms the current API-only autonomous coding agent into a full-
 
 **Key decisions:**
 - Switch from Anthropic Claude to OpenAI (o3 / GPT-4o / GPT-4o-mini)
-- Unlimited tokens — no budgeting, full context everywhere
+- Aggressive context strategy — send as much context as fits model windows (200K for o3, 128K for GPT-4o), no artificial budgeting
 - Multi-model routing with classify + auto-escalate
 - Web UI: Frosted Glassmorphic IDE (macOS-inspired, Linear/Vercel aesthetic)
 - Configurable autonomy: autonomous vs. supervised, toggleable mid-run
 - Full Git lifecycle: branch, commit, push, PR, review loop, merge
 - SQLite persistence with Protocol abstraction for future Postgres swap
 - Ship-first, then generalize to any codebase
+- Single-user, local-first — no authentication layer in V2
+
+**Out of scope for V2:**
+- Multi-user / multi-tenant support
+- User authentication and authorization
+- Cloud-hosted deployment (Railway is local-push only)
+- GitHub webhook receivers (polling only for V2)
+- SSE fallback transport (WebSocket only)
+
+**Dependency migration (Anthropic → OpenAI):**
+- Remove: `anthropic`, `langchain-anthropic`
+- Add: `openai`, `langchain-openai`, `aiosqlite`, `httpx` (for GitHub API)
+- Update: `.env.example` to use `OPENAI_API_KEY` instead of `ANTHROPIC_API_KEY`
 
 ---
 
@@ -40,8 +53,8 @@ Two separate apps connected by WebSockets + REST:
 │                                                     │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────┐ │
 │  │ Event Bus   │  │ Multi-Model  │  │ Session   │ │
-│  │ (WebSocket  │  │ Router       │  │ Store     │ │
-│  │  + SSE)     │  │ (o3/4o/mini) │  │ (SQLite)  │ │
+│  │ (WebSocket) │  │ Router       │  │ Store     │ │
+│  │             │  │ (o3/4o/mini) │  │ (SQLite)  │ │
 │  └─────────────┘  └──────────────┘  └───────────┘ │
 │                                                     │
 │  ┌─────────────────────────────────────────────┐   │
@@ -82,7 +95,8 @@ Replaces the current single-model `agent/llm.py` with an intelligent routing lay
 | `editor` (simple) | GPT-4o | o3 on validation fail | Single-file, localized edits |
 | `reader` | GPT-4o | — | File comprehension, summarization |
 | `validator` | GPT-4o-mini | GPT-4o on failure | Syntax checks are mechanical |
-| `classifier` | GPT-4o-mini | GPT-4o on ambiguity | Step routing is simple classification |
+| `classifier` | — (no LLM) | GPT-4o-mini if keyword match fails | Step routing via keyword matching (fast, deterministic), with LLM fallback for ambiguous steps |
+| `merger` | GPT-4o | o3 on conflict | Merge parallel branch outputs; uses LLM only when conflicts detected |
 | `reporter` | GPT-4o | — | Summarization |
 | `test_runner` | — (no LLM) | — | Runs shell commands |
 | `parse_results` | GPT-4o | o3 on complex failures | Analyze test output |
@@ -90,10 +104,28 @@ Replaces the current single-model `agent/llm.py` with an intelligent routing lay
 
 ### Design Decisions
 
-- **No token budgeting** — send full file contents, full context, every time.
+- **Aggressive context** — send as much file content as fits the model's context window (200K for o3, 128K for GPT-4o). When total context exceeds the window, prioritize: current file being edited > files referenced in the plan > surrounding files. No artificial truncation.
 - Each model call records `model_used` in the trace for observability.
 - The router is a standalone module (`agent/router.py`). No node knows which model it's talking to.
 - **Escalation logic:** When a node fails validation or produces low-confidence output, the router retries with the next-tier model. Max one escalation per node invocation.
+
+### Failure Definitions
+
+| Failure Type | Trigger | Behavior |
+|---|---|---|
+| Malformed output | LLM returns unparseable JSON or missing fields | Retry same model once, then escalate |
+| Validation error | Syntax check fails on edited code | Rollback edit, escalate model, retry with error context |
+| Timeout | o3: 120s, GPT-4o: 60s, GPT-4o-mini: 30s | Retry same model once, then escalate |
+| API error (429/500) | OpenAI rate limit or server error | Exponential backoff (1s, 2s, 4s), max 3 retries |
+| Terminal failure | Final escalation tier also fails | Emit `error` event, set run status to `waiting_for_human`, pause for user intervention |
+
+### Edit Complexity Classification
+
+The `planner` node classifies each step's complexity when generating the plan. Classification criteria:
+- **Simple:** Single file, localized change (add/remove/modify within one function or block)
+- **Complex:** Multi-file changes, architectural modifications, changes that affect type signatures used across files, refactors touching >3 functions
+
+The classification is stored as `complexity: "simple" | "complex"` in each plan step. The `editor` node reads this to select its model via the router.
 
 ### Module: `agent/router.py`
 
@@ -148,8 +180,7 @@ Real-time streaming layer between backend and frontend.
 
 ### Transport
 
-- **WebSocket** (primary) — bidirectional for events + user actions
-- **SSE fallback** — if WebSocket fails, degrade to server-sent events (read-only)
+- **WebSocket** — bidirectional for events + user actions. Only transport in V2.
 
 ### Key Features
 
@@ -167,6 +198,7 @@ Real-time streaming layer between backend and frontend.
   { "action": "update_mode", "mode": "autonomous" }
   ```
 - **Heartbeat** — Server sends heartbeat every 15s. Three missed heartbeats trigger auto-reconnect + replay. Powers "Agent Idle" / "Agent Active" indicator.
+- **Event retention** — Token-level `stream` events are NOT persisted to SQLite (transient). Only `status`, `diff`, `approval`, `error`, `git`, `review`, `file`, and `exec` events are persisted. This keeps the events table manageable for long-running sessions. On reconnect, the current streaming state is reconstructed from the latest `status` event + live stream.
 
 ### Frontend Consumption
 
@@ -251,7 +283,7 @@ CREATE TABLE projects (
     name TEXT NOT NULL,
     path TEXT NOT NULL,
     github_repo TEXT,          -- e.g. "owner/repo"
-    github_pat TEXT,           -- encrypted personal access token
+    github_pat TEXT,           -- personal access token (local-only, single-user; encrypt at rest in future multi-user version)
     default_model TEXT DEFAULT 'gpt-4o',
     autonomy_mode TEXT DEFAULT 'supervised',  -- 'supervised' | 'autonomous'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -291,7 +323,7 @@ CREATE TABLE edits (
     run_id TEXT REFERENCES runs(id),
     file_path TEXT NOT NULL,
     step INTEGER,
-    anchor TEXT,
+    anchor TEXT,               -- unique search string used to locate the edit position in the file (V1's anchor-based editing approach)
     old_content TEXT,
     new_content TEXT,
     status TEXT DEFAULT 'proposed',  -- proposed | approved | rejected
@@ -349,11 +381,14 @@ receive ──→ planner (o3)
                 │
                 ▼
           coordinator (o3)
-          ┌────┴────┐
-      sequential  parallel
-          │     ┌───┴───┐
-          ▼     ▼       ▼
-       classify (4o-mini)
+          ┌────┴─────────────────┐
+      sequential               parallel (via LangGraph Send API)
+          │                 ┌────┴────┐
+          │              branch_1  branch_2  (each gets state copy)
+          │                 │         │
+          ▼                 ▼         ▼
+       classify          classify  classify
+       (keyword/4o-mini)
        ┌───┼───────┼────┐
        ▼   ▼       ▼    ▼
      read  edit   exec  test
@@ -375,18 +410,36 @@ receive ──→ planner (o3)
        │
       yes
        ▼
-    git_ops ──→ reporter (4o) ──→ done
+  [was parallel?] ──yes──→ merger (4o, o3 on conflict)
+       │                       │
+       no                      ▼
+       │              [conflicts?] ──yes──→ emit error, wait for human
+       │                   │
+       │                  no
+       ▼                   ▼
+    git_ops ──────────── git_ops
   (commit/push/PR)
+       │
+       ▼
+    reporter (4o) ──→ done
 ```
+
+**Parallel execution details:**
+- Coordinator uses LangGraph `Send` API to fork state into parallel branches
+- Each branch runs its own classify → read → edit → validate cycle independently
+- When all branches complete, merger node receives all branch outputs
+- Merger uses pure Python to check for file-level conflicts (same file edited by multiple branches)
+- If conflicts found: GPT-4o attempts resolution, escalates to o3 if needed. If unresolvable, pauses for human.
+- If no conflicts: branch outputs are combined into a single state
 
 ### Node Changes from V1
 
 | Node | Status | What Changed |
 |---|---|---|
-| `receive` | Enhanced | Accepts project context from session store, not just raw instruction |
+| `receive` | Enhanced | Server layer injects project context from session store into initial state before graph invocation |
 | `planner` | Enhanced | No token budget — sends full file contents for better plans. Uses o3. |
 | `coordinator` | Enhanced | Fully wired (was a stub). Real parallel fan-out via LangGraph `Send` API |
-| `classifier` | Same | Routes steps. Now uses GPT-4o-mini |
+| `classifier` | Same | Routes steps via keyword matching (same as V1). Falls back to GPT-4o-mini LLM call only for ambiguous steps |
 | `reader` | Enhanced | Reads full files always — no truncation |
 | `editor` | Enhanced | Sends full file + surrounding context. Smart model selection |
 | `validator` | Enhanced | Escalation on failure. Rollback + retry with stronger model |
@@ -400,9 +453,22 @@ receive ──→ planner (o3)
 ### Key Improvements
 
 - **Test feedback loop** — agent runs tests after edits. If they fail, it reads the error, identifies the cause, and fixes (up to 3 retries).
-- **No token limits** — every node gets full context. Planner sees entire files, editor gets full surrounding code.
-- **Approval gates** — in supervised mode, graph pauses at `editor` output and `git_ops`, emitting `approval` events and waiting for user response via WebSocket.
-- **Parallel execution** — coordinator fans out independent steps to run simultaneously.
+- **Aggressive context** — every node gets as much context as fits the model window. Planner sees full files, editor gets full surrounding code. When context exceeds window, prioritize by relevance.
+- **Approval gates** — in supervised mode, the graph uses LangGraph checkpointing to pause execution. The `editor` and `git_ops` nodes save a checkpoint, emit an `approval` event via WebSocket, and return a `waiting_for_human` status. When the user approves/rejects via WebSocket, the server resumes the graph from the checkpoint with the user's decision injected into state.
+- **Parallel execution** — coordinator fans out independent steps via LangGraph `Send` API. Merger node reconverges outputs.
+
+### Store Injection
+
+The `SessionStore` and `ModelRouter` are injected into the graph via LangGraph's config mechanism, not the state dict. The server passes them as `configurable` params when invoking the graph:
+
+```python
+result = await graph.ainvoke(
+    initial_state,
+    config={"configurable": {"store": store, "router": router, "event_bus": event_bus}}
+)
+```
+
+Nodes access these via `config` parameter: `store = config["configurable"]["store"]`
 
 ---
 
@@ -454,7 +520,7 @@ Located in the Agent panel. Toggle switch between "Supervised" and "Autonomous" 
 ### Frontend Tech Stack
 
 - Vite + React + TypeScript
-- Tailwind CSS v3 with custom design tokens
+- Tailwind CSS v4 with custom design tokens
 - WebSocket client with auto-reconnect and event replay
 - React context for WebSocket state distribution
 - Component library: panels, diff viewer, chat, file tree (all custom, glassmorphic)
