@@ -1,8 +1,17 @@
+import { WebSocketProvider } from './context/WebSocketContext'
+import { ProjectProvider } from './context/ProjectContext'
+import { AppShell } from './components/layout/AppShell'
+
 function App() {
+  // TODO: Get projectId from URL or selection. Use null for now.
+  const projectId = null
+
   return (
-    <div className="h-screen w-screen flex items-center justify-center">
-      <h1 className="text-3xl font-bold text-text">Shipyard</h1>
-    </div>
+    <WebSocketProvider projectId={projectId}>
+      <ProjectProvider>
+        <AppShell />
+      </ProjectProvider>
+    </WebSocketProvider>
   )
 }
 
