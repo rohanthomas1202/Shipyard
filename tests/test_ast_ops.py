@@ -1,4 +1,6 @@
 """Tests for agent/tools/ast_ops.py — ast-grep structural operations."""
+import os
+import subprocess
 import pytest
 
 
@@ -122,3 +124,56 @@ class TestStructuralReplace:
         content = "line1\nline2\nline3\n"
         result = structural_replace(content, "line2", "LINE2", "typescript")
         assert result == "line1\nLINE2\nline3\n"
+
+
+class TestDetectLanguages:
+    def test_detects_typescript_files(self, tmp_path):
+        from agent.tools.ast_ops import detect_languages
+        (tmp_path / "app.ts").write_text("const x = 1;")
+        (tmp_path / "comp.tsx").write_text("<div/>")
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+        result = detect_languages(str(tmp_path))
+        assert result.get("typescript") is True
+
+    def test_detects_python_files(self, tmp_path):
+        from agent.tools.ast_ops import detect_languages
+        (tmp_path / "main.py").write_text("x = 1")
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+        result = detect_languages(str(tmp_path))
+        assert result.get("python") is True
+
+    def test_unsupported_language_returns_false(self, tmp_path):
+        from agent.tools.ast_ops import detect_languages
+        (tmp_path / "data.csv").write_text("a,b,c")
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+        result = detect_languages(str(tmp_path))
+        assert "csv" not in result or result.get("csv") is False
+
+    def test_non_git_directory_fallback(self, tmp_path):
+        from agent.tools.ast_ops import detect_languages
+        (tmp_path / "main.py").write_text("x = 1")
+        result = detect_languages(str(tmp_path))
+        assert result.get("python") is True
+
+
+class TestCacheOperations:
+    def test_clear_cache(self):
+        from agent.tools.ast_ops import validate_anchor, clear_cache, get_stats, reset_stats
+        reset_stats()
+        validate_anchor("const x = 1;", "const x = 1;", "typescript")
+        assert get_stats().cache_misses == 1
+        validate_anchor("const x = 1;", "const x = 1;", "typescript")
+        assert get_stats().cache_hits == 1
+        clear_cache()
+        validate_anchor("const x = 1;", "const x = 1;", "typescript")
+        assert get_stats().cache_misses == 2
+
+    def test_stats_reset(self):
+        from agent.tools.ast_ops import get_stats, reset_stats
+        reset_stats()
+        stats = get_stats()
+        assert stats.structural_matches == 0
+        assert stats.fallbacks_to_text == 0

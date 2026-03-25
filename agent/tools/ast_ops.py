@@ -7,6 +7,8 @@ or the language is unsupported.
 from __future__ import annotations
 
 import hashlib
+import os
+import subprocess as _subprocess
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
@@ -201,3 +203,84 @@ def _apply_with_indentation(content: str, anchor: str, replacement: str) -> str:
         replacement = "\n".join(adjusted)
 
     return content[:start] + replacement + content[start + len(anchor):]
+
+
+# Extension → ast-grep language mapping
+_EXT_TO_LANGUAGE: dict[str, str] = {
+    ".ts": "typescript", ".tsx": "typescript",
+    ".js": "javascript", ".jsx": "javascript",
+    ".py": "python",
+    ".rs": "rust",
+    ".go": "go",
+    ".java": "java",
+    ".c": "c", ".h": "c",
+    ".cpp": "cpp", ".cc": "cpp", ".cxx": "cpp", ".hpp": "cpp",
+    ".cs": "csharp",
+    ".rb": "ruby",
+    ".swift": "swift",
+    ".kt": "kotlin",
+    ".lua": "lua",
+    ".html": "html",
+    ".css": "css",
+    ".json": "json",
+    ".yaml": "yaml", ".yml": "yaml",
+}
+
+
+def detect_languages(working_directory: str) -> dict[str, bool]:
+    """Detect languages in a working directory and check ast-grep grammar support."""
+    extensions = _collect_extensions(working_directory)
+    languages: set[str] = set()
+    for ext in extensions:
+        lang = _EXT_TO_LANGUAGE.get(ext)
+        if lang:
+            languages.add(lang)
+
+    result: dict[str, bool] = {}
+    for lang in languages:
+        result[lang] = _probe_grammar(lang)
+    return result
+
+
+def _collect_extensions(directory: str) -> set[str]:
+    try:
+        proc = _subprocess.run(
+            ["git", "ls-files"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            extensions = set()
+            for line in proc.stdout.strip().split("\n")[:10_000]:
+                _, ext = os.path.splitext(line)
+                if ext:
+                    extensions.add(ext.lower())
+            return extensions
+    except (FileNotFoundError, _subprocess.TimeoutExpired):
+        pass
+
+    exclusions = {"node_modules", ".git", "__pycache__", "dist", "build", ".venv", "target"}
+    extensions = set()
+    count = 0
+    for dirpath, dirnames, filenames in os.walk(directory):
+        dirnames[:] = [d for d in dirnames if d not in exclusions]
+        for f in filenames:
+            _, ext = os.path.splitext(f)
+            if ext:
+                extensions.add(ext.lower())
+            count += 1
+            if count >= 10_000:
+                return extensions
+    return extensions
+
+
+def _probe_grammar(language: str) -> bool:
+    if not AST_GREP_AVAILABLE:
+        return False
+    try:
+        SgRoot("x", language)
+        return True
+    except BaseException:
+        return False
