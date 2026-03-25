@@ -6,10 +6,23 @@ import { FileTree } from '../explorer/FileTree'
 import { DiffViewer } from '../editor/DiffViewer'
 import { SettingsModal } from '../settings/SettingsModal'
 import { useProjectContext } from '../../context/ProjectContext'
+import { useHotkeys } from '../../hooks/useHotkeys'
 
 export function AppShell() {
   const { currentRun } = useProjectContext()
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  useHotkeys([
+    {
+      key: 'p',
+      modifiers: ['ctrl', 'shift'],
+      handler: () => {
+        // Focus prompt input — WorkspaceHome needs to expose a ref or we use DOM query
+        const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+        textarea?.focus()
+      },
+    },
+  ])
 
   return (
     <>
