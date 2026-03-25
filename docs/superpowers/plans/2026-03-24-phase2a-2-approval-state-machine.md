@@ -1939,3 +1939,19 @@ async def mark_committed(self, run_id: str, edit_ids: list[str]) -> None:
 ### Fix 12: Remove `branch` from AgentState in this phase
 
 `branch` belongs in 2a-3 (Git Integration), not 2a-2. Adding it here is harmless but mixed-scope. The worker may skip adding `branch` in Task 3 and defer it to 2a-3.
+
+### Fix 13: Freeze run status values and add `waiting_for_human`
+
+In `server/main.py`, the `execute()` function inside `POST /instruction` must recognize `waiting_for_human` from the editor node:
+
+```python
+result = await graph.ainvoke(initial_state, config=config)
+if result.get("waiting_for_human"):
+    runs[run_id] = {"status": "waiting_for_human", "result": result}
+elif result.get("error_state") is None:
+    runs[run_id] = {"status": "completed", "result": result}
+else:
+    runs[run_id] = {"status": "failed", "result": result}
+```
+
+Valid run statuses are frozen to: `running`, `completed`, `failed`, `error`, `waiting_for_human`.

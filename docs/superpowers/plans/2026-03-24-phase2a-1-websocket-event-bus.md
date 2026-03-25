@@ -2317,3 +2317,57 @@ async def _flush_loop(self) -> None:
 - Reconnect tests must assert snapshot message arrives before replayed events
 - `send_to_subscribed()` should read `event.project_id` instead of taking `project_id` as a separate argument — update tests and implementation
 - Add a test proving P2 `flush_node_boundary(run_id)` only flushes that run's queue
+
+### Fix 9: `get_snapshot` must include `type: "snapshot"` in returned dict
+
+The snapshot dict must include `"type": "snapshot"` so the client can identify it. Also add `total_steps` and `autonomy_mode`:
+
+```python
+def get_snapshot(self, run_id: str, state: dict) -> dict:
+    last_seq = self._seq_counters.get(run_id, 1) - 1
+    if last_seq < 0:
+        last_seq = 0
+    return {
+        "type": "snapshot",
+        "run_id": run_id,
+        "status": state.get("status", "unknown"),
+        "last_seq": last_seq,
+        "current_step": state.get("current_step", 0),
+        "total_steps": len(state.get("plan", [])),
+        "plan": state.get("plan", []),
+        "autonomy_mode": state.get("autonomy_mode", "supervised"),
+    }
+```
+
+Update `test_get_snapshot` to assert `snap["type"] == "snapshot"`.
+
+### Fix 10: Server message envelope must include `model` field
+
+In `ConnectionManager.send_to_subscribed`, the payload dict must include `"model": event.model`:
+
+```python
+payload = {
+    "type": event.type,
+    "run_id": event.run_id,
+    "seq": event.seq,
+    "timestamp": event.timestamp,
+    "data": event.data,
+    "node": event.node,
+    "model": event.model,
+}
+```
+
+### Fix 11: WebSocket approve/reject must read and forward `op_id`
+
+The approve/reject branches in `handle_client_message` must extract `op_id` from the client message and forward it to the callback:
+
+```python
+elif action == "approve":
+    run_id = data.get("run_id")
+    edit_id = data.get("edit_id", "")
+    op_id = data.get("op_id", "")
+    if self._approve_callback and run_id and edit_id and op_id:
+        await self._approve_callback(run_id, edit_id, op_id)
+```
+
+Update callback type annotations to `Callable[[str, str, str], Awaitable[None]]` (run_id, edit_id, op_id).

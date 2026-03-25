@@ -1995,3 +1995,32 @@ async def create_pr(self, branch, title, body, draft=False, reviewers=None):
 ### Fix 13: Verify GitOperation model and store support exist
 
 Before implementation, confirm that `store/models.py` has `GitOperation` and `store/sqlite.py` has `log_git_op()`. These were created in Phase 1 — the worker should read these files first to verify field names match what git_ops_node expects.
+
+### Fix 14: Normalize PR response shape
+
+The `POST /runs/:id/git/pr` endpoint must not return raw GitHub API data. Normalize to:
+
+```python
+return {
+    "number": pr_data.get("number"),
+    "html_url": pr_data.get("html_url"),
+}
+```
+
+### Fix 15: Normalize merge response shape
+
+The `POST /runs/:id/git/merge` endpoint must not return raw GitHub API data. Normalize to:
+
+```python
+return {
+    "merged": merge_data.get("merged", False),
+    "sha": merge_data.get("sha", ""),
+}
+```
+
+### Fix 16: Tighten git endpoint test assertions
+
+- Commit response test must assert `"message"` field is present and matches the input
+- Push-no-remote test must assert status code 400 (not a loose `in (200, 400, 422)`)
+- Merge response test must assert exactly `{"merged", "sha"}` keys
+- PR response test must assert exactly `{"number", "html_url"}` keys
