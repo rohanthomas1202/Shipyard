@@ -179,6 +179,29 @@ class TestCacheOperations:
         assert stats.fallbacks_to_text == 0
 
 
+class TestExecutorInvalidation:
+    def test_executor_sets_invalidated_files(self):
+        from agent.nodes.executor import executor_node
+        state = {
+            "plan": ["Run: echo hello"],
+            "current_step": 0,
+            "working_directory": "/tmp",
+        }
+        result = executor_node(state)
+        assert result.get("invalidated_files") == ["*"]
+
+    def test_executor_does_not_invalidate_on_failure(self):
+        from agent.nodes.executor import executor_node
+        state = {
+            "plan": ["Run: false"],
+            "current_step": 0,
+            "working_directory": "/tmp",
+        }
+        result = executor_node(state)
+        assert result.get("error_state") is not None
+        assert "invalidated_files" not in result
+
+
 class TestReceiveNodeIntegration:
     def test_receive_node_populates_ast_available(self, tmp_path):
         from agent.nodes.receive import receive_instruction_node

@@ -12,11 +12,14 @@ def executor_node(state: dict) -> dict:
         return {"error_state": None}
 
     step_text = plan[step]
-    command = step_text
-    for prefix in ["Run:", "run:", "Execute:", "execute:"]:
-        if prefix in step_text:
-            command = step_text.split(prefix, 1)[1].strip()
-            break
+    if isinstance(step_text, dict):
+        command = step_text.get("command", "")
+    else:
+        command = step_text
+        for prefix in ["Run:", "run:", "Execute:", "execute:"]:
+            if prefix in step_text:
+                command = step_text.split(prefix, 1)[1].strip()
+                break
 
     result = run_command(command, cwd=working_dir)
     tracer.log("executor", {
@@ -29,4 +32,5 @@ def executor_node(state: dict) -> dict:
     if result["exit_code"] != 0:
         return {"error_state": f"Command failed (exit {result['exit_code']}): {result['stderr'][:500]}"}
 
-    return {"error_state": None}
+    # Invalidate all cached state — exec may have modified files on disk
+    return {"error_state": None, "invalidated_files": ["*"]}
