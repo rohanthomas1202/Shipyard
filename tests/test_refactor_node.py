@@ -116,3 +116,53 @@ async def test_refactor_rollback_on_apply_failure(tmp_path):
     assert "oldFunc(1)" in (tmp_path / "a.ts").read_text()
 
     os.chmod(str(tmp_path / "b.ts"), 0o644)
+
+
+@pytest.mark.asyncio
+async def test_full_refactor_flow_through_graph_routing(tmp_path):
+    """Test that classify_step routes to refactor_node and it executes."""
+    from agent.graph import classify_step
+    from agent.nodes.coordinator import coordinator_node
+    from agent.nodes.refactor import refactor_node
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.ts").write_text("const x = oldFunc(1);\n")
+
+    # Verify routing
+    state = {
+        "plan": [{
+            "id": "refactor-1",
+            "kind": "refactor",
+            "pattern": "oldFunc($ARG)",
+            "refactor_replacement": "newFunc($ARG)",
+            "language": "typescript",
+            "scope": str(tmp_path / "src"),
+            "complexity": "complex",
+        }],
+        "current_step": 0,
+    }
+    assert classify_step(state) == "refactor"
+
+    # Verify coordinator puts refactor in sequential
+    coord_state = {
+        "plan": [
+            state["plan"][0],
+            {"id": "step-2", "kind": "edit", "target_files": ["web/b.ts"], "complexity": "simple"},
+        ],
+    }
+    coord_result = coordinator_node(coord_state)
+    assert 0 in coord_result["sequential_first"]
+
+    # Verify refactor node applies
+    full_state = {
+        **state,
+        "file_buffer": {},
+        "edit_history": [],
+        "error_state": None,
+        "working_directory": str(tmp_path),
+        "ast_available": {"typescript": True},
+    }
+    config = {"configurable": {}}
+    result = await refactor_node(full_state, config)
+    assert result["error_state"] is None
+    assert "newFunc(1)" in (tmp_path / "src" / "a.ts").read_text()
