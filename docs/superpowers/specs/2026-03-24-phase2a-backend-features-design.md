@@ -10,6 +10,57 @@ Phase 2a adds three backend capabilities to the Shipyard agent: real-time WebSoc
 
 **Commit rule:** Never include `Co-Authored-By` lines in commit messages.
 
+### Required Store/Model Updates (before sub-phases)
+
+These changes are prerequisites for all three sub-phases:
+
+**`store/models.py` — Add status validation to EditRecord:**
+```python
+from typing import Literal
+EDIT_STATUSES = Literal["proposed", "approved", "rejected", "applied", "committed"]
+
+class EditRecord(BaseModel):
+    status: EDIT_STATUSES = "proposed"
+```
+
+**`store/protocol.py` — Add `get_edit` method:**
+```python
+async def get_edit(self, edit_id: str) -> EditRecord | None: ...
+```
+
+**`store/sqlite.py` — Implement `get_edit`:**
+```python
+async def get_edit(self, edit_id: str) -> EditRecord | None:
+    cursor = await self._db.execute("SELECT * FROM edits WHERE id = ?", (edit_id,))
+    row = await cursor.fetchone()
+    return EditRecord(**dict(row)) if row else None
+```
+
+**`agent/state.py` — Add Phase 2a fields:**
+```python
+autonomy_mode: str          # "supervised" | "autonomous"
+pending_approvals: list[str] # edit IDs waiting for approval
+branch: str                  # current git branch
+```
+
+**`agent/tools/shell.py` — Add async variant:**
+```python
+async def run_command_async(command: str, cwd: str = ".", timeout: int = 60) -> dict:
+    """Non-blocking subprocess execution using asyncio."""
+    proc = await asyncio.create_subprocess_shell(
+        command, cwd=cwd,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return {"stdout": stdout.decode(), "stderr": stderr.decode(), "exit_code": proc.returncode}
+    except asyncio.TimeoutError:
+        proc.kill()
+        return {"stdout": "", "stderr": "Command timed out", "exit_code": -1}
+```
+
+GitManager uses `run_command_async` (not the synchronous `run_command`) to avoid blocking the event loop during git operations like push.
+
 ---
 
 ## Sub-phase 2a-1: WebSocket Event Bus + Streaming
@@ -69,13 +120,13 @@ Buffers P1 events (primarily LLM token stream) and flushes every 50ms. This feel
   "node": "editor",
   "model": "o3",
   "timestamp": 1711300000,
-  "data": { "tokens": "const router = ", "done": false }
+  "data": { "token": "const router = ", "done": false }
 }
 ```
 
 ### WebSocket Endpoint
 
-`ws://localhost:8000/ws/{project_id}` — one persistent connection per project.
+`ws://localhost:8000/ws/{project_id}` — one persistent connection per project. On connect, validate that `project_id` exists in the store; close with code 4004 if not found.
 
 **Server → Client messages:**
 - Events (by subscription)
@@ -130,17 +181,21 @@ Buffers P1 events (primarily LLM token stream) and flushes every 50ms. This feel
 ### Module: `agent/events.py`
 
 ```python
+from typing import Callable, Awaitable
+
 class EventBus:
     def __init__(self, store: SessionStore):
         self.store = store
-        self._manager: ConnectionManager | None = None
+        self._send_callback: Callable[[Event], Awaitable[None]] | None = None
         self._batcher = TokenBatcher(flush_interval=0.05)
 
-    def set_manager(self, manager: ConnectionManager):
-        """Set the connection manager (called by server on startup)."""
+    def set_send_callback(self, callback: Callable[[Event], Awaitable[None]]):
+        """Register a callback for sending events to clients.
+        ConnectionManager registers its send_to_subscribed method here.
+        This avoids circular dependency between EventBus and ConnectionManager."""
 
     async def emit(self, event: Event):
-        """Emit event. Persist if durable, route by priority."""
+        """Emit event. Persist if durable, route by priority, send via callback."""
 
     async def replay(self, run_id: str, after_id: str | None) -> list[Event]:
         """Replay persisted events for reconnection."""
@@ -150,16 +205,48 @@ class EventBus:
 
 
 class TokenBatcher:
-    def __init__(self, flush_interval: float = 0.05):
+    """Buffers P1 events and flushes every 50ms.
+
+    Mechanism: A background asyncio.Task is started on the first add() call.
+    It flushes the buffer every 50ms. The task is cancelled when the stream
+    completes (on receiving an event with data.done == True).
+    """
+    def __init__(self, flush_interval: float = 0.05,
+                 send_callback: Callable[[list[Event]], Awaitable[None]] | None = None):
         self._buffer: list[Event] = []
         self._flush_interval = flush_interval
+        self._send_callback = send_callback
+        self._flush_task: asyncio.Task | None = None
 
     async def add(self, event: Event):
-        """Add event to buffer. Auto-flush after interval."""
+        """Add event to buffer. Starts flush task on first call."""
+        self._buffer.append(event)
+        if self._flush_task is None:
+            self._flush_task = asyncio.create_task(self._flush_loop())
+        # Stop flushing when stream ends
+        if event.data.get("done"):
+            await self.flush()
+            self._flush_task.cancel()
+            self._flush_task = None
+
+    async def _flush_loop(self):
+        """Background loop that flushes every flush_interval."""
+        while True:
+            await asyncio.sleep(self._flush_interval)
+            await self.flush()
 
     async def flush(self):
-        """Send all buffered events to subscribed connections."""
+        """Send all buffered events, clear buffer."""
+        if self._buffer and self._send_callback:
+            events = self._buffer.copy()
+            self._buffer.clear()
+            await self._send_callback(events)
 ```
+
+**Initialization order in server lifespan:**
+1. Create `EventBus(store)`
+2. Create `ConnectionManager(event_bus)`
+3. `event_bus.set_send_callback(connection_manager.send_to_subscribed)` — no circular reference
 
 ### Module: `server/websocket.py`
 
@@ -203,6 +290,8 @@ proposed → approved → applied → committed
 - Transitions only from valid predecessor states
 - REST is authoritative, WebSocket is advisory — both write to same store
 
+**Idempotency storage:** Add `last_idempotency_key TEXT` column to the `edits` table. Before processing an approval/reject, check if `last_idempotency_key` matches the incoming key — if so, return the current state without re-processing. Update the key on every successful transition.
+
 ### LangGraph Integration
 
 **Supervised mode:**
@@ -236,6 +325,10 @@ proposed → approved → applied → committed
 | File | Change |
 |---|---|
 | `agent/nodes/editor.py` | Integrate approval gates |
+| `agent/state.py` | Add `autonomy_mode`, `pending_approvals`, `branch` fields |
+| `store/models.py` | Add `Literal` validation to `EditRecord.status`, add `last_idempotency_key` field |
+| `store/protocol.py` | Add `get_edit(edit_id)` method |
+| `store/sqlite.py` | Implement `get_edit`, add `last_idempotency_key` column |
 | `server/main.py` | Add `PATCH /runs/:id/edits/:edit_id` |
 | `server/websocket.py` | Handle approve/reject client actions |
 
@@ -340,7 +433,8 @@ The node:
 
 | File | Change |
 |---|---|
-| `agent/graph.py` | Wire git_ops node before reporter |
+| `agent/graph.py` | Two changes: (1) Update `classify_step` to route `kind == "git"` to `"git_ops"` instead of `"reporter"`. (2) Add `git_ops` node and edge `git_ops → reporter` for end-of-run git operations. |
+| `agent/tools/shell.py` | Add `run_command_async` (non-blocking subprocess) |
 | `server/main.py` | Add git REST endpoints (commit, push, PR, merge) |
 
 ### Module: `agent/git.py`
@@ -372,7 +466,7 @@ class GitHubClient:
         )
 
     async def create_pr(self, branch: str, title: str, body: str,
-                        draft: bool = False, reviewers: list[str] = []) -> dict
+                        draft: bool = False, reviewers: list[str] | None = None) -> dict
     async def get_review_comments(self, pr_number: int,
                                    since: str | None = None) -> list[dict]
     async def merge_pr(self, pr_number: int, method: str = "squash") -> dict
@@ -415,8 +509,13 @@ class GitHubClient:
 
 | File | Sub-phases |
 |---|---|
+| `agent/state.py` | 2a-2 |
 | `agent/nodes/editor.py` | 2a-2 |
 | `agent/graph.py` | 2a-3 |
+| `agent/tools/shell.py` | 2a-3 |
+| `store/models.py` | 2a-2 |
+| `store/protocol.py` | 2a-2 |
+| `store/sqlite.py` | 2a-2 |
 | `server/main.py` | 2a-1, 2a-2, 2a-3 |
 
 ---
