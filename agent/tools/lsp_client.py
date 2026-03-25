@@ -89,7 +89,6 @@ class LspConnection:
     - Readiness tracking via workDoneProgress
     - Diagnostic notification collection
     - Stderr draining (prevents deadlock from full OS pipe buffers)
-    - Crash detection (EOF on stdout → degraded status)
     """
 
     def __init__(self, cmd: list[str], root_path: str, language: str):
@@ -314,7 +313,6 @@ class LspDiagnosticClient:
         self.timeout_incremental = timeout_incremental
         self._opened_files: set[str] = set()
         self._first_call = True
-        self._first_call_just_happened = False
         self._version_counter: dict[str, int] = {}
 
     def _next_version(self, file_path: str) -> int:
@@ -334,7 +332,6 @@ class LspDiagnosticClient:
         if self._first_call:
             await self.connection.wait_ready(timeout=60.0)
             self._first_call = False
-            self._first_call_just_happened = True
 
         version = self._next_version(file_path)
 
