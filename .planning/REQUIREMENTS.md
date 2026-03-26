@@ -9,10 +9,10 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 
 ### Edit Precision
 
-- [ ] **EDIT-01**: Editor implements layered anchor matching with fuzzy fallbacks (exact -> whitespace-normalized -> fuzzy Levenshtein) so edits succeed despite trivial formatting differences
+- [x] **EDIT-01**: Editor implements layered anchor matching with fuzzy fallbacks (exact -> whitespace-normalized -> fuzzy Levenshtein) so edits succeed despite trivial formatting differences
 - [ ] **EDIT-02**: Editor provides actionable error feedback when anchor matching fails (which anchor, what was found instead, similarity score) and feeds this into retry prompts
-- [ ] **EDIT-03**: Editor preserves indentation style of surrounding code when applying replacements (detect tabs vs spaces, indentation level)
-- [ ] **EDIT-04**: Editor checks file freshness via content checksums before applying edits, re-reads file if content has changed since last read
+- [x] **EDIT-03**: Editor preserves indentation style of surrounding code when applying replacements (detect tabs vs spaces, indentation level)
+- [x] **EDIT-04**: Editor checks file freshness via content checksums before applying edits, re-reads file if content has changed since last read
 
 ### Validation
 
@@ -92,10 +92,10 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EDIT-01 | Phase 1 | Pending |
+| EDIT-01 | Phase 1 | Complete |
 | EDIT-02 | Phase 1 | Pending |
-| EDIT-03 | Phase 1 | Pending |
-| EDIT-04 | Phase 1 | Pending |
+| EDIT-03 | Phase 1 | Complete |
+| EDIT-04 | Phase 1 | Complete |
 | VALID-01 | Phase 1 | Pending |
 | VALID-02 | Phase 2 | Pending |
 | VALID-03 | Phase 2 | Pending |
