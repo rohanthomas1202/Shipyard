@@ -26,4 +26,16 @@ Instruction: {edit_instruction}
 
 {context_section}
 
-Respond with the JSON object containing "anchor" and "replacement"."""
+Respond with the JSON object containing "anchor" and "replacement".
+
+{error_feedback}"""
+
+ERROR_FEEDBACK_TEMPLATE = """PREVIOUS ATTEMPT FAILED:
+- Anchor tried: ```
+{failed_anchor}
+```
+- Error: {error_message}
+- Best match found (score {best_score}): ```
+{best_match}
+```
+- DO NOT repeat the same anchor. Use the actual file content shown above."""

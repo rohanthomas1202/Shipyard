@@ -5,6 +5,7 @@ import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
 from agent.nodes.editor import editor_node
 from agent.state import AgentState
+from agent.prompts.editor import EDITOR_USER, ERROR_FEEDBACK_TEMPLATE
 from store.models import EditRecord, Project, Run
 from store.sqlite import SQLiteSessionStore
 from agent.approval import ApprovalManager
@@ -204,3 +205,28 @@ async def test_editor_uses_structural_replace_when_available(tmp_codebase):
     result = await editor_node(state, config=config)
     assert result["error_state"] is None
     assert "due_date" in result["file_buffer"][ts_path]
+
+
+# ---------------------------------------------------------------------------
+# Prompt template tests (Task 1)
+# ---------------------------------------------------------------------------
+
+
+def test_error_feedback_template_formats():
+    """ERROR_FEEDBACK_TEMPLATE.format() produces a string containing all four values."""
+    result = ERROR_FEEDBACK_TEMPLATE.format(
+        failed_anchor="def foo():",
+        error_message="Anchor not found in main.py",
+        best_score="0.45",
+        best_match="def foobar():",
+    )
+    assert "def foo():" in result
+    assert "Anchor not found in main.py" in result
+    assert "0.45" in result
+    assert "def foobar():" in result
+    assert "PREVIOUS ATTEMPT FAILED" in result
+
+
+def test_editor_user_has_error_feedback_placeholder():
+    """EDITOR_USER contains {error_feedback} placeholder."""
+    assert "{error_feedback}" in EDITOR_USER

@@ -1,5 +1,6 @@
 import json
 import os
+from langgraph.types import RunnableConfig
 from agent.prompts.editor import EDITOR_SYSTEM, EDITOR_USER
 from agent.tools.file_ops import read_file, edit_file
 from agent.tracing import TraceLogger
@@ -41,7 +42,7 @@ def _select_file(state: dict) -> str:
     return list(file_buffer.keys())[0] if file_buffer else ""
 
 
-async def editor_node(state: dict, config: dict) -> dict:
+async def editor_node(state: dict, config: RunnableConfig) -> dict:
     router = config["configurable"]["router"]
     approval_manager = config["configurable"].get("approval_manager")
     run_id = config["configurable"].get("run_id", "")
@@ -82,7 +83,12 @@ async def editor_node(state: dict, config: dict) -> dict:
     step_text = ""
     if current_step < len(plan):
         step = plan[current_step]
-        step_text = step if isinstance(step, str) else step.get("id", "edit")
+        if isinstance(step, str):
+            step_text = step
+        else:
+            # Typed PlanStep: combine acceptance_criteria for a meaningful instruction
+            criteria = step.get("acceptance_criteria", [])
+            step_text = "; ".join(criteria) if criteria else step.get("id", "edit")
 
     context = state.get("context", {})
     context_section = ""
@@ -94,16 +100,28 @@ async def editor_node(state: dict, config: dict) -> dict:
         numbered_content=numbered,
         edit_instruction=step_text,
         context_section=context_section,
+        error_feedback="",
     )
 
     raw = await router.call(task_type, EDITOR_SYSTEM, user_prompt)
 
-    # Parse JSON response
+    import logging
+    logging.getLogger("shipyard.editor").warning("LLM raw response: %s", raw[:500] if raw else "EMPTY")
+
+    # Parse JSON response — strip markdown fences if present
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        # Remove ```json ... ``` wrapping
+        lines = cleaned.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        cleaned = "\n".join(lines)
+
     try:
-        data = json.loads(raw)
+        data = json.loads(cleaned)
         anchor = data["anchor"]
         replacement = data["replacement"]
     except (json.JSONDecodeError, KeyError) as e:
+        logging.getLogger("shipyard.editor").error("Parse failed: %s | raw: %s", e, cleaned[:300])
         return {"error_state": f"Editor output parse error: {e}"}
 
     # --- ast-grep enhancement: structural validation + replace ---
