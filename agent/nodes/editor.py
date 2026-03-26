@@ -1,12 +1,24 @@
+"""Editor node — structured LLM output, error feedback in retries, file freshness.
+
+Uses router.call_structured() for general-tier edits (guaranteed schema compliance),
+falls back to router.call() with manual JSON parsing for reasoning-tier (o3).
+Error feedback flows into retry prompts from two sources:
+1. Edit-level failures (anchor matching) with failed_anchor, best_match, score
+2. Validator-level failures (syntax/LSP) with file_path and error_message
+File freshness is checked via content_hash before applying edits.
+"""
 import json
+import logging
 import os
 from langgraph.types import RunnableConfig
-from agent.prompts.editor import EDITOR_SYSTEM, EDITOR_USER
-from agent.tools.file_ops import read_file, edit_file
+from agent.prompts.editor import EDITOR_SYSTEM, EDITOR_USER, ERROR_FEEDBACK_TEMPLATE
+from agent.schemas import EditResponse
+from agent.tools.file_ops import read_file, edit_file, content_hash
 from agent.tracing import TraceLogger
 from store.models import EditRecord
 
 tracer = TraceLogger()
+logger = logging.getLogger("shipyard.editor")
 
 
 def _detect_language(file_path: str) -> str | None:
@@ -42,6 +54,50 @@ def _select_file(state: dict) -> str:
     return list(file_buffer.keys())[0] if file_buffer else ""
 
 
+def _build_error_feedback(state: dict) -> str:
+    """Build error feedback section for retry prompts.
+
+    Handles two sources of error context:
+    1. Edit-level failures (from edit_history) -- anchor not found, fuzzy match below threshold
+    2. Validator-level failures (from last_validation_error) -- syntax/LSP errors after edit applied
+    """
+    error = state.get("error_state")
+    if not error:
+        return ""
+
+    # Source 1: Check for validator-level error (syntax/LSP failure)
+    validation_err = state.get("last_validation_error")
+    if validation_err:
+        parts = ["VALIDATION ERROR from previous attempt:"]
+        parts.append("- File: " + str(validation_err.get("file_path", "unknown")))
+        parts.append("- Error: " + str(validation_err.get("error_message", error)))
+        vtype = validation_err.get("validator_type")
+        if vtype:
+            parts.append("- Validator: " + str(vtype))
+        parts.append("- The previous edit was syntactically invalid and was rolled back.")
+        parts.append("- Fix the issue in your next edit attempt.")
+        return "\n".join(parts)
+
+    # Source 2: Check for edit-level failure (anchor matching failure)
+    edit_history = state.get("edit_history", [])
+    last_error_entry = None
+    for entry in reversed(edit_history):
+        if entry.get("error"):
+            last_error_entry = entry
+            break
+
+    if not last_error_entry:
+        # Fallback: just include the error string
+        return "PREVIOUS ATTEMPT FAILED:\n- Error: " + str(error)
+
+    return ERROR_FEEDBACK_TEMPLATE.format(
+        failed_anchor=last_error_entry.get("failed_anchor", "unknown")[:500],
+        error_message=str(last_error_entry.get("error", error)),
+        best_score=str(last_error_entry.get("best_score", "N/A")),
+        best_match=last_error_entry.get("best_match_preview", "N/A")[:500],
+    )
+
+
 async def editor_node(state: dict, config: RunnableConfig) -> dict:
     router = config["configurable"]["router"]
     approval_manager = config["configurable"].get("approval_manager")
@@ -65,6 +121,17 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
 
     file_path = _select_file(state)
     content = file_buffer[file_path]
+
+    # File freshness check
+    file_hashes = state.get("file_hashes", {})
+    stored_hash = file_hashes.get(file_path)
+    if stored_hash:
+        current_content = _read_raw(file_path)
+        current_hash = content_hash(current_content)
+        if stored_hash != current_hash:
+            # File changed since last read -- update buffer
+            content = current_content
+            file_buffer = {**file_buffer, file_path: content}
 
     # Determine complexity from typed step
     complexity = "simple"
@@ -95,34 +162,42 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
     if context.get("spec"):
         context_section = f"Spec: {context['spec']}"
 
+    error_feedback = _build_error_feedback(state)
+
     user_prompt = EDITOR_USER.format(
         file_path=file_path,
         numbered_content=numbered,
         edit_instruction=step_text,
         context_section=context_section,
-        error_feedback="",
+        error_feedback=error_feedback,
     )
 
-    raw = await router.call(task_type, EDITOR_SYSTEM, user_prompt)
+    # Use structured output for general tier, fallback to string for reasoning tier (o3)
+    if task_type == "edit_complex":
+        # Reasoning tier (o3) may not support structured outputs -- use string path
+        raw = await router.call(task_type, EDITOR_SYSTEM, user_prompt)
 
-    import logging
-    logging.getLogger("shipyard.editor").warning("LLM raw response: %s", raw[:500] if raw else "EMPTY")
+        logger.warning("LLM raw response: %s", raw[:500] if raw else "EMPTY")
 
-    # Parse JSON response — strip markdown fences if present
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        # Remove ```json ... ``` wrapping
-        lines = cleaned.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        cleaned = "\n".join(lines)
+        # Parse JSON response -- strip markdown fences if present
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            lines_raw = cleaned.split("\n")
+            lines_raw = [l for l in lines_raw if not l.strip().startswith("```")]
+            cleaned = "\n".join(lines_raw)
 
-    try:
-        data = json.loads(cleaned)
-        anchor = data["anchor"]
-        replacement = data["replacement"]
-    except (json.JSONDecodeError, KeyError) as e:
-        logging.getLogger("shipyard.editor").error("Parse failed: %s | raw: %s", e, cleaned[:300])
-        return {"error_state": f"Editor output parse error: {e}"}
+        try:
+            data = json.loads(cleaned)
+            anchor = data["anchor"]
+            replacement = data["replacement"]
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error("Parse failed: %s | raw: %s", e, cleaned[:300])
+            return {"error_state": f"Editor output parse error: {e}"}
+    else:
+        # General/fast tier -- use structured output (guaranteed schema compliance)
+        edit_response = await router.call_structured(task_type, EDITOR_SYSTEM, user_prompt, EditResponse)
+        anchor = edit_response.anchor
+        replacement = edit_response.replacement
 
     # --- ast-grep enhancement: structural validation + replace ---
     ast_available = state.get("ast_available", {})
@@ -151,9 +226,6 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
 
     # If approval_manager is present, use approval gates
     if approval_manager is not None:
-        # When using full-file content: ApprovalManager._write_edit_to_file() handles
-        # this correctly — it does content.replace(old_content, new_content, 1), and
-        # when old_content IS the full file, this replaces the entire file content.
         edit_old = anchor
         edit_new = replacement
         if new_content is not None:
@@ -183,9 +255,12 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
             await approval_manager.approve(proposed.id, op_id)
             applied = await approval_manager.apply_edit(proposed.id)
             tracer.log("editor", {"file": file_path, "edit_id": applied.id, "mode": "autonomous"})
-            updated_content = _read_raw(file_path)  # raw content, not numbered
+            updated_content = _read_raw(file_path)
+            new_hash = content_hash(updated_content)
+            updated_hashes = {**state.get("file_hashes", {}), file_path: new_hash}
             return {
                 "file_buffer": {**file_buffer, file_path: updated_content},
+                "file_hashes": updated_hashes,
                 "edit_history": state.get("edit_history", []) + [
                     {"file": file_path, "edit_id": applied.id, "old": anchor, "new": replacement, "status": "applied"}
                 ],
@@ -194,35 +269,47 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
 
     # Legacy path (no approval_manager)
     if new_content is not None:
-        # ast-grep produced the result — write it directly
+        # ast-grep produced the result -- write it directly
         snapshot = content
         with open(file_path, "w") as f:
             f.write(new_content)
         tracer.log("editor", {"file": file_path, "anchor": anchor[:50], "model": task_type, "ast_grep": True})
+        updated_content = _read_raw(file_path)
+        new_hash = content_hash(updated_content)
+        updated_hashes = {**state.get("file_hashes", {}), file_path: new_hash}
         return {
             "file_buffer": {**file_buffer, file_path: new_content},
+            "file_hashes": updated_hashes,
             "edit_history": state.get("edit_history", []) + [
                 {"file": file_path, "old": anchor, "new": replacement, "snapshot": snapshot}
             ],
             "error_state": None,
         }
 
-    # Fallback: existing str.replace path
+    # Fallback: existing str.replace path via edit_file
     result = edit_file(file_path, anchor, replacement)
     if result.get("error"):
         tracer.log("editor", {"file": file_path, "error": result["error"]})
+        error_entry = {
+            "file": file_path,
+            "error": result["error"],
+            "failed_anchor": anchor[:500],
+            "best_score": result.get("best_score"),
+            "best_match_preview": result.get("best_match_preview", ""),
+        }
         return {
             "error_state": result["error"],
-            "edit_history": state.get("edit_history", []) + [
-                {"file": file_path, "error": result["error"]}
-            ],
+            "edit_history": state.get("edit_history", []) + [error_entry],
         }
 
     tracer.log("editor", {"file": file_path, "anchor": anchor[:50], "model": task_type})
 
-    updated_content = _read_raw(file_path)  # raw content, not numbered
+    updated_content = _read_raw(file_path)
+    new_hash = content_hash(updated_content)
+    updated_hashes = {**state.get("file_hashes", {}), file_path: new_hash}
     return {
         "file_buffer": {**file_buffer, file_path: updated_content},
+        "file_hashes": updated_hashes,
         "edit_history": state.get("edit_history", []) + [
             {"file": file_path, "old": anchor, "new": replacement, "snapshot": result.get("snapshot")}
         ],
