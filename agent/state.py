@@ -9,6 +9,7 @@ class AgentState(TypedDict):
     plan: list[str]
     current_step: int
     file_buffer: dict[str, str]
+    file_hashes: dict[str, str]
     edit_history: list[dict]
     error_state: Optional[str]
     # Multi-agent coordination fields
