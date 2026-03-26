@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import subprocess
+from langgraph.types import RunnableConfig
 from agent.tracing import TraceLogger
 
 tracer = TraceLogger()
@@ -75,7 +76,7 @@ def _detect_language(file_path: str) -> str | None:
     return ext_map.get(ext.lower())
 
 
-async def validator_node(state: dict, config: dict | None = None) -> dict:
+async def validator_node(state: dict, config: RunnableConfig | None = None) -> dict:
     """Validate the most recent edit. Rollback if validation fails.
 
     Uses LSP diagnostics when lsp_manager is available, falls back to
@@ -118,7 +119,15 @@ async def validator_node(state: dict, config: dict | None = None) -> dict:
 
     if not check["valid"]:
         _rollback(last_edit)
-        return {"error_state": f"Syntax check failed for {file_path}: {check['error']}. Edit rolled back."}
+        error_msg = f"Syntax check failed for {file_path}: {check['error']}. Edit rolled back."
+        return {
+            "error_state": error_msg,
+            "last_validation_error": {
+                "file_path": file_path,
+                "error_message": check["error"],
+                "validator_type": "syntax_check",
+            },
+        }
 
     return {"error_state": None}
 
@@ -164,6 +173,14 @@ async def _lsp_validate(client, file_path: str, edit_entry: dict) -> dict | None
         await client.notify_rollback(file_path, baseline_content or "")
 
         error_msgs = "; ".join(f"{e.message} (code {e.code})" for e in new_errors[:3])
-        return {"error_state": f"LSP validation failed for {file_path}: {error_msgs}. Edit rolled back."}
+        error_msg = f"LSP validation failed for {file_path}: {error_msgs}. Edit rolled back."
+        return {
+            "error_state": error_msg,
+            "last_validation_error": {
+                "file_path": file_path,
+                "error_message": error_msgs,
+                "validator_type": "lsp",
+            },
+        }
 
     return {"error_state": None}

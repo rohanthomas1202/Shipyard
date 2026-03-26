@@ -12,6 +12,7 @@ class AgentState(TypedDict):
     file_hashes: dict[str, str]
     edit_history: list[dict]
     error_state: Optional[str]
+    last_validation_error: Optional[dict]
     # Multi-agent coordination fields
     is_parallel: bool
     parallel_batches: list[list[int]]
