@@ -92,41 +92,41 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EDIT-01 | TBD | Pending |
-| EDIT-02 | TBD | Pending |
-| EDIT-03 | TBD | Pending |
-| EDIT-04 | TBD | Pending |
-| VALID-01 | TBD | Pending |
-| VALID-02 | TBD | Pending |
-| VALID-03 | TBD | Pending |
-| VALID-04 | TBD | Pending |
-| CTX-01 | TBD | Pending |
-| CTX-02 | TBD | Pending |
-| INFRA-01 | TBD | Pending |
-| INFRA-02 | TBD | Pending |
-| INFRA-03 | TBD | Pending |
-| INFRA-04 | TBD | Pending |
-| LIFE-01 | TBD | Pending |
-| LIFE-02 | TBD | Pending |
-| LIFE-03 | TBD | Pending |
-| CORE-01 | TBD | Pending |
-| CORE-02 | TBD | Pending |
-| CORE-03 | TBD | Pending |
-| CORE-04 | TBD | Pending |
-| SHIP-01 | TBD | Pending |
-| SHIP-02 | TBD | Pending |
-| DELIV-01 | TBD | Pending |
-| DELIV-02 | TBD | Pending |
-| DELIV-03 | TBD | Pending |
-| DELIV-04 | TBD | Pending |
-| DELIV-05 | TBD | Pending |
-| DELIV-06 | TBD | Pending |
+| EDIT-01 | Phase 1 | Pending |
+| EDIT-02 | Phase 1 | Pending |
+| EDIT-03 | Phase 1 | Pending |
+| EDIT-04 | Phase 1 | Pending |
+| VALID-01 | Phase 1 | Pending |
+| VALID-02 | Phase 2 | Pending |
+| VALID-03 | Phase 2 | Pending |
+| VALID-04 | Phase 2 | Pending |
+| CTX-01 | Phase 3 | Pending |
+| CTX-02 | Phase 3 | Pending |
+| INFRA-01 | Phase 2 | Pending |
+| INFRA-02 | Phase 2 | Pending |
+| INFRA-03 | Phase 1 | Pending |
+| INFRA-04 | Phase 4 | Pending |
+| LIFE-01 | Phase 4 | Pending |
+| LIFE-02 | Phase 3 | Pending |
+| LIFE-03 | Phase 4 | Pending |
+| CORE-01 | Phase 5 | Pending |
+| CORE-02 | Phase 5 | Pending |
+| CORE-03 | Phase 5 | Pending |
+| CORE-04 | Phase 5 | Pending |
+| SHIP-01 | Phase 6 | Pending |
+| SHIP-02 | Phase 6 | Pending |
+| DELIV-01 | Phase 7 | Pending |
+| DELIV-02 | Phase 7 | Pending |
+| DELIV-03 | Phase 7 | Pending |
+| DELIV-04 | Phase 7 | Pending |
+| DELIV-05 | Phase 7 | Pending |
+| DELIV-06 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 29 total
-- Mapped to phases: 0
-- Unmapped: 29
+- Mapped to phases: 29
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-26*
-*Last updated: 2026-03-26 after initial definition*
+*Last updated: 2026-03-26 after roadmap creation*
