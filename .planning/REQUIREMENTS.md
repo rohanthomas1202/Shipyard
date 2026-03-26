@@ -10,13 +10,13 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 ### Edit Precision
 
 - [x] **EDIT-01**: Editor implements layered anchor matching with fuzzy fallbacks (exact -> whitespace-normalized -> fuzzy Levenshtein) so edits succeed despite trivial formatting differences
-- [ ] **EDIT-02**: Editor provides actionable error feedback when anchor matching fails (which anchor, what was found instead, similarity score) and feeds this into retry prompts
+- [x] **EDIT-02**: Editor provides actionable error feedback when anchor matching fails (which anchor, what was found instead, similarity score) and feeds this into retry prompts
 - [x] **EDIT-03**: Editor preserves indentation style of surrounding code when applying replacements (detect tabs vs spaces, indentation level)
 - [x] **EDIT-04**: Editor checks file freshness via content checksums before applying edits, re-reads file if content has changed since last read
 
 ### Validation
 
-- [ ] **VALID-01**: Validator feeds specific error details (file, line, error message, validator output) into the retry prompt so retries are informed, not blind
+- [x] **VALID-01**: Validator feeds specific error details (file, line, error message, validator output) into the retry prompt so retries are informed, not blind
 - [ ] **VALID-02**: Validator checks Python file syntax via py_compile or ast.parse after edits
 - [ ] **VALID-03**: LSP diagnostic diffing reliably detects only NEW errors introduced by edits (baseline vs post-edit comparison), with graceful fallback when LSP is unavailable
 - [ ] **VALID-04**: Validator implements circuit breaker — after 2 identical errors on same file/step, escalates model tier or skips step instead of retrying same approach
@@ -93,10 +93,10 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | EDIT-01 | Phase 1 | Complete |
-| EDIT-02 | Phase 1 | Pending |
+| EDIT-02 | Phase 1 | Complete |
 | EDIT-03 | Phase 1 | Complete |
 | EDIT-04 | Phase 1 | Complete |
-| VALID-01 | Phase 1 | Pending |
+| VALID-01 | Phase 1 | Complete |
 | VALID-02 | Phase 2 | Pending |
 | VALID-03 | Phase 2 | Pending |
 | VALID-04 | Phase 2 | Pending |

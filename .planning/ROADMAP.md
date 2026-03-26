@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
 - [x] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
-- [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
+- [x] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
 
 ### Phase 2: Validation & Infrastructure
 **Goal**: Validator catches real errors without false positives, and infrastructure does not block the event loop or cause data contention
@@ -64,8 +64,8 @@ Plans:
   3. Each run surfaces total token usage (input/output) and estimated cost in traces and UI
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
+- [x] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
+- [x] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
 - [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
 
 ### Phase 4: Crash Recovery & Run Lifecycle
