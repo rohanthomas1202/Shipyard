@@ -31,7 +31,7 @@ async def test_call_llm_forwards_params():
         mock_client.chat.completions.create.assert_called_once()
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
         assert call_kwargs["model"] == "gpt-4o"
-        assert call_kwargs["max_tokens"] == 1000
+        assert call_kwargs["max_completion_tokens"] == 1000
 
 
 # ---------------------------------------------------------------------------

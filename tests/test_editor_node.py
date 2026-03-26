@@ -341,7 +341,7 @@ async def test_editor_error_feedback_on_retry(tmp_codebase):
 
     router = config["configurable"]["router"]
     user_prompt = router.call_structured.call_args[0][2]  # 3rd positional arg
-    assert "PREVIOUS ATTEMPT FAILED" in user_prompt
+    assert "PREVIOUS EDIT ATTEMPT FAILED" in user_prompt
     assert "nonexistent anchor text" in user_prompt
 
 

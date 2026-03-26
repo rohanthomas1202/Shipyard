@@ -90,12 +90,14 @@ def _build_error_feedback(state: dict) -> str:
         # Fallback: just include the error string
         return "PREVIOUS ATTEMPT FAILED:\n- Error: " + str(error)
 
-    return ERROR_FEEDBACK_TEMPLATE.format(
-        failed_anchor=last_error_entry.get("failed_anchor", "unknown")[:500],
-        error_message=str(last_error_entry.get("error", error)),
-        best_score=str(last_error_entry.get("best_score", "N/A")),
-        best_match=last_error_entry.get("best_match_preview", "N/A")[:500],
-    )
+    parts = [
+        "PREVIOUS EDIT ATTEMPT FAILED:",
+        "- Failed anchor: " + str(last_error_entry.get("failed_anchor", "unknown"))[:500],
+        "- Error: " + str(last_error_entry.get("error", error)),
+        "- Best match score: " + str(last_error_entry.get("best_score", "N/A")),
+        "- Best match preview: " + str(last_error_entry.get("best_match_preview", "N/A"))[:500],
+    ]
+    return "\n".join(parts)
 
 
 async def editor_node(state: dict, config: RunnableConfig) -> dict:
