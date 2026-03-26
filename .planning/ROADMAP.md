@@ -34,8 +34,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. All LLM calls return schema-compliant structured output — zero JSON parse failures
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
+- [x] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
+- [x] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
 - [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
 
 ### Phase 2: Validation & Infrastructure
@@ -50,8 +50,8 @@ Plans:
   5. SQLite handles concurrent reads and writes without lock contention errors
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
+- [x] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
+- [x] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
 - [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
 
 ### Phase 3: Context & Token Management
