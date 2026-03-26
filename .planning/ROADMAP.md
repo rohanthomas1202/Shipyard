@@ -50,9 +50,9 @@ Plans:
   5. SQLite handles concurrent reads and writes without lock contention errors
 **Plans**: 3 plans
 Plans:
-- [x] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [x] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
-- [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
+- [ ] 02-01-PLAN.md — Async subprocess conversion and SQLite WAL mode (INFRA-01, INFRA-02)
+- [ ] 02-02-PLAN.md — Python syntax checking and LSP fallback hardening (VALID-02, VALID-03)
+- [ ] 02-03-PLAN.md — Circuit breaker for repeated validation errors (VALID-04)
 
 ### Phase 3: Context & Token Management
 **Goal**: LLM prompts are token-budgeted and context-aware, and token spend is tracked per run
@@ -64,8 +64,8 @@ Plans:
   3. Each run surfaces total token usage (input/output) and estimated cost in traces and UI
 **Plans**: 3 plans
 Plans:
-- [x] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [x] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
+- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
+- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
 - [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
 
 ### Phase 4: Crash Recovery & Run Lifecycle
@@ -133,8 +133,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Edit Reliability | 0/3 | Not started | - |
-| 2. Validation & Infrastructure | 0/TBD | Not started | - |
+| 1. Edit Reliability | 3/3 | Complete | - |
+| 2. Validation & Infrastructure | 0/3 | Planning | - |
 | 3. Context & Token Management | 0/TBD | Not started | - |
 | 4. Crash Recovery & Run Lifecycle | 0/TBD | Not started | - |
 | 5. Agent Core Features | 0/TBD | Not started | - |
