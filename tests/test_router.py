@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 from agent.router import ModelRouter, ROUTING_POLICY
+from agent.schemas import EditResponse
 
 
 def test_routing_policy_covers_all_task_types():
@@ -81,3 +82,35 @@ async def test_router_call_raises_after_failed_escalation():
         with pytest.raises(Exception, match="all models failed"):
             await router.call("plan", "system", "user")
         assert mock_llm.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_router_call_structured_routes_correctly():
+    router = ModelRouter()
+    expected = EditResponse(anchor="a", replacement="b")
+    with patch("agent.router.call_llm_structured", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = expected
+        result = await router.call_structured(
+            "edit_simple", "sys", "usr", EditResponse,
+        )
+        assert isinstance(result, EditResponse)
+        assert result is expected
+        mock_llm.assert_called_once()
+        call_kwargs = mock_llm.call_args.kwargs
+        assert call_kwargs["model"] == "gpt-4o"
+        assert call_kwargs["response_model"] == EditResponse
+
+
+@pytest.mark.asyncio
+async def test_router_call_structured_escalates_on_error():
+    router = ModelRouter()
+    expected = EditResponse(anchor="x", replacement="y")
+    with patch("agent.router.call_llm_structured", new_callable=AsyncMock) as mock_llm:
+        mock_llm.side_effect = [Exception("timeout"), expected]
+        result = await router.call_structured(
+            "edit_simple", "sys", "usr", EditResponse,
+        )
+        assert mock_llm.call_count == 2
+        second_call = mock_llm.call_args_list[1]
+        assert second_call.kwargs["model"] == "o3"
+        assert isinstance(result, EditResponse)

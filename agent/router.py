@@ -1,6 +1,8 @@
 """Policy-based model router with tier resolution and auto-escalation."""
+from pydantic import BaseModel
+
 from agent.models import get_model_for_tier, ModelConfig
-from agent.llm import call_llm
+from agent.llm import call_llm, call_llm_structured
 
 ROUTING_POLICY: dict[str, dict] = {
     "plan":           {"tier": "reasoning"},
@@ -51,6 +53,37 @@ class ModelRouter:
             return await call_llm(
                 system=system,
                 user=user,
+                model=escalated.id,
+                max_tokens=escalated.max_output,
+                timeout=escalated.timeout,
+            )
+
+    async def call_structured(
+        self,
+        task_type: str,
+        system: str,
+        user: str,
+        response_model: type[BaseModel],
+    ) -> BaseModel:
+        """Route a structured LLM call. Returns parsed Pydantic model."""
+        model = self.resolve_model(task_type)
+        try:
+            return await call_llm_structured(
+                system=system,
+                user=user,
+                response_model=response_model,
+                model=model.id,
+                max_tokens=model.max_output,
+                timeout=model.timeout,
+            )
+        except Exception:
+            escalated = self.resolve_escalation(task_type)
+            if escalated is None:
+                raise
+            return await call_llm_structured(
+                system=system,
+                user=user,
+                response_model=response_model,
                 model=escalated.id,
                 max_tokens=escalated.max_output,
                 timeout=escalated.timeout,
