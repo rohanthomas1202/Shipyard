@@ -25,7 +25,7 @@
 **Milestone Goal:** Rebuild the frontend as a VS Code-style three-panel IDE with live agent feedback, file explorer, and side-by-side diff views.
 
 - [ ] **Phase 8: Foundation — Layout, State Architecture, TopBar** - Zustand stores, resizable three-panel shell, persistent layout, top bar with instruction input
-- [ ] **Phase 9: File Explorer & Backend APIs** - Backend file endpoints, lazy-loaded directory tree, live M/A/D change indicators
+- [x] **Phase 9: File Explorer & Backend APIs** - Backend file endpoints, lazy-loaded directory tree, live M/A/D change indicators (completed 2026-03-27)
 - [ ] **Phase 10: Code & Diff Viewing** - Tabbed editor area with syntax highlighting, side-by-side diff with proper line-level algorithm
 - [ ] **Phase 11: Agent Activity Stream** - Real-time step timeline with auto-scroll and new-event badge
 
@@ -63,7 +63,7 @@ Plans:
 
 Plans:
 - [x] 09-01-PLAN.md — Enhance /browse to return files with filtering, add /files endpoint with path traversal security
-- [ ] 09-02-PLAN.md — Lazy-loaded FileTree with TreeNode component, M/A/D change indicators, file click to open
+- [x] 09-02-PLAN.md — Lazy-loaded FileTree with TreeNode component, M/A/D change indicators, file click to open
 
 **UI hint**: yes
 
@@ -105,7 +105,7 @@ Note: Phase 11 depends on Phase 8 (not 10) and can overlap with Phases 9-10 if n
 | 6. Ship Rebuild | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 7. Deliverables & Deployment | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 8. Foundation — Layout, State Architecture, TopBar | v1.1 | 0/2 | In progress | - |
-| 9. File Explorer & Backend APIs | v1.1 | 1/2 | In progress | - |
+| 9. File Explorer & Backend APIs | v1.1 | 2/2 | Complete   | 2026-03-27 |
 | 10. Code & Diff Viewing | v1.1 | 0/0 | Not started | - |
 | 11. Agent Activity Stream | v1.1 | 0/0 | Not started | - |
 
