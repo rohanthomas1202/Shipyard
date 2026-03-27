@@ -268,11 +268,21 @@ async def _resume_run(run_id: str) -> None:
                 runs[run_id]["task"] = task
             result = await graph.ainvoke(state, config=config)
             if result.get("waiting_for_human"):
-                runs[run_id] = {"status": "waiting_for_human", "result": result}
+                final_status = "waiting_for_human"
             elif result.get("error_state") is None:
-                runs[run_id] = {"status": "completed", "result": result}
+                final_status = "completed"
             else:
-                runs[run_id] = {"status": "failed", "result": result}
+                final_status = "failed"
+            runs[run_id] = {"status": final_status, "result": result}
+
+            # Persist final status to database
+            try:
+                db_run = await store.get_run(run_id)
+                if db_run:
+                    db_run.status = final_status
+                    await store.update_run(db_run)
+            except Exception:
+                logger.exception("Failed to persist final status for run %s (resume)", run_id)
 
             # Capture LangSmith trace link
             from agent.tracing import share_trace_link
@@ -375,32 +385,44 @@ async def submit_instruction(req: InstructionRequest):
                 ))
                 result = await graph.ainvoke(initial_state, config=config)
                 if result.get("waiting_for_human"):
-                    runs[run_id] = {"status": "waiting_for_human", "result": result}
+                    final_status = "waiting_for_human"
+                    runs[run_id] = {"status": final_status, "result": result}
                     await event_bus.emit(Event(
                         project_id=project_id,
                         run_id=run_id,
                         type="run_waiting",
                         node="system",
-                        data={"status": "waiting_for_human"},
+                        data={"status": final_status},
                     ))
                 elif result.get("error_state") is None:
-                    runs[run_id] = {"status": "completed", "result": result}
+                    final_status = "completed"
+                    runs[run_id] = {"status": final_status, "result": result}
                     await event_bus.emit(Event(
                         project_id=project_id,
                         run_id=run_id,
                         type="run_completed",
                         node="system",
-                        data={"status": "completed"},
+                        data={"status": final_status},
                     ))
                 else:
-                    runs[run_id] = {"status": "failed", "result": result}
+                    final_status = "failed"
+                    runs[run_id] = {"status": final_status, "result": result}
                     await event_bus.emit(Event(
                         project_id=project_id,
                         run_id=run_id,
                         type="run_failed",
                         node="system",
-                        data={"status": "failed", "error": str(result.get("error_state", ""))},
+                        data={"status": final_status, "error": str(result.get("error_state", ""))},
                     ))
+
+                # Persist final status to database
+                try:
+                    db_run_obj = await store.get_run(run_id)
+                    if db_run_obj:
+                        db_run_obj.status = final_status
+                        await store.update_run(db_run_obj)
+                except Exception:
+                    logger.exception("Failed to persist final status for run %s", run_id)
 
                 # Capture LangSmith trace link
                 from agent.tracing import share_trace_link
@@ -532,32 +554,44 @@ async def continue_run(run_id: str, req: InstructionRequest):
                 ))
                 result = await graph.ainvoke(state, config=config)
                 if result.get("waiting_for_human"):
-                    runs[run_id] = {"status": "waiting_for_human", "result": result}
+                    final_status = "waiting_for_human"
+                    runs[run_id] = {"status": final_status, "result": result}
                     await event_bus.emit(Event(
                         project_id=project_id,
                         run_id=run_id,
                         type="run_waiting",
                         node="system",
-                        data={"status": "waiting_for_human"},
+                        data={"status": final_status},
                     ))
                 elif result.get("error_state") is None:
-                    runs[run_id] = {"status": "completed", "result": result}
+                    final_status = "completed"
+                    runs[run_id] = {"status": final_status, "result": result}
                     await event_bus.emit(Event(
                         project_id=project_id,
                         run_id=run_id,
                         type="run_completed",
                         node="system",
-                        data={"status": "completed"},
+                        data={"status": final_status},
                     ))
                 else:
-                    runs[run_id] = {"status": "failed", "result": result}
+                    final_status = "failed"
+                    runs[run_id] = {"status": final_status, "result": result}
                     await event_bus.emit(Event(
                         project_id=project_id,
                         run_id=run_id,
                         type="run_failed",
                         node="system",
-                        data={"status": "failed", "error": str(result.get("error_state", ""))},
+                        data={"status": final_status, "error": str(result.get("error_state", ""))},
                     ))
+
+                # Persist final status to database
+                try:
+                    db_run_obj = await store.get_run(run_id)
+                    if db_run_obj:
+                        db_run_obj.status = final_status
+                        await store.update_run(db_run_obj)
+                except Exception:
+                    logger.exception("Failed to persist final status for run %s (continue)", run_id)
 
                 # Capture LangSmith trace link
                 from agent.tracing import share_trace_link
