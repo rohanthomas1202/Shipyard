@@ -1,8 +1,15 @@
+"""Reporter node — summarizes run results and emits token usage.
+
+Collects edit history, error state, ast-grep statistics, and token usage
+from the ModelRouter to produce a comprehensive run summary for traces.
+"""
+from langgraph.types import RunnableConfig
 from agent.tracing import TraceLogger
 
 tracer = TraceLogger()
 
-def reporter_node(state: dict) -> dict:
+
+def reporter_node(state: dict, config: RunnableConfig) -> dict:
     edit_history = state.get("edit_history", [])
     error_state = state.get("error_state")
     plan = state.get("plan", [])
@@ -15,6 +22,10 @@ def reporter_node(state: dict) -> dict:
     else:
         status = "failed"
 
+    # Extract token usage from router
+    router = config["configurable"]["router"]
+    token_summary = router.get_usage_summary()
+
     summary = {
         "steps_completed": current_step,
         "total_steps": len(plan),
@@ -22,7 +33,7 @@ def reporter_node(state: dict) -> dict:
         "files_edited": list(set(e["file"] for e in edit_history if "file" in e)),
         "error": error_state,
         "status": status,
-        "model_usage": state.get("model_usage", {}),
+        "token_usage": token_summary,
     }
 
     # Log ast-grep statistics if available
@@ -42,4 +53,4 @@ def reporter_node(state: dict) -> dict:
     tracer.log("reporter", summary)
     tracer.save()
 
-    return {"error_state": error_state}
+    return {"error_state": error_state, "model_usage": token_summary}
