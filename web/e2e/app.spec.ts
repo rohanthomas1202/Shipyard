@@ -11,7 +11,7 @@ test.describe('Shipyard App', () => {
     await page.goto('/')
     await expect(page.getByText('Explorer', { exact: true })).toBeVisible()
     await expect(page.locator('textarea')).toBeVisible()
-    await expect(page.getByText('AI Agent', { exact: true })).toBeVisible()
+    await expect(page.getByText('AGENT', { exact: true })).toBeVisible()
   })
 
   test('shows "No project selected" in file tree', async ({ page }) => {
@@ -123,9 +123,10 @@ test.describe('Shipyard App', () => {
     await expect(page.getByRole('heading', { name: 'Project Settings' })).not.toBeVisible()
   })
 
-  test('welcome card is visible in agent panel', async ({ page }) => {
+  test('agent panel shows empty state when no runs exist', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText('Welcome to your workspace.')).toBeVisible()
+    await expect(page.getByText('No activity yet')).toBeVisible()
+    await expect(page.getByText('Start a run from the instruction bar above')).toBeVisible()
   })
 
   test('health endpoint returns ok', async ({ page }) => {
