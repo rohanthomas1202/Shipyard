@@ -1,3 +1,5 @@
+import { useState, useEffect, useRef } from 'react'
+
 interface DiffHeaderProps {
   filePath: string
   stepLabel?: string
@@ -7,6 +9,23 @@ interface DiffHeaderProps {
 }
 
 export function DiffHeader({ filePath, stepLabel, onAccept, onReject, loading }: DiffHeaderProps) {
+  const [confirmingReject, setConfirmingReject] = useState(false)
+  const rejectTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+  const handleRejectClick = () => {
+    if (confirmingReject) {
+      clearTimeout(rejectTimerRef.current)
+      setConfirmingReject(false)
+      onReject?.()
+    } else {
+      setConfirmingReject(true)
+      rejectTimerRef.current = setTimeout(() => setConfirmingReject(false), 3000)
+    }
+  }
+
+  // Cleanup timer on unmount
+  useEffect(() => () => clearTimeout(rejectTimerRef.current), [])
+
   return (
     <header
       className="flex items-center justify-between px-6 h-[56px] shrink-0 sticky top-0 z-20"
@@ -36,12 +55,16 @@ export function DiffHeader({ filePath, stepLabel, onAccept, onReject, loading }:
       </div>
       <div className="flex gap-3">
         <button
-          onClick={onReject}
+          onClick={handleRejectClick}
           disabled={loading}
-          className="flex items-center justify-center rounded-lg h-8 px-4 text-[13px] font-semibold transition-colors disabled:opacity-50"
-          style={{ border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+          className="flex items-center justify-center rounded-lg h-8 px-4 text-[13px] font-semibold transition-colors disabled:opacity-50 gap-1.5"
+          style={{
+            border: confirmingReject ? '1px solid #EF4444' : '1px solid var(--color-border)',
+            color: confirmingReject ? '#EF4444' : 'var(--color-text)',
+          }}
         >
-          Reject
+          <span className="material-symbols-outlined text-[16px]">close</span>
+          {confirmingReject ? 'Confirm Reject?' : 'Reject Edit'}
         </button>
         <button
           onClick={onAccept}
@@ -50,7 +73,7 @@ export function DiffHeader({ filePath, stepLabel, onAccept, onReject, loading }:
           style={{ background: 'var(--color-primary)', boxShadow: '0 0 15px rgba(99, 102, 241, 0.4)' }}
         >
           <span className="material-symbols-outlined text-[16px]">check</span>
-          Accept
+          Accept Edit
         </button>
       </div>
     </header>

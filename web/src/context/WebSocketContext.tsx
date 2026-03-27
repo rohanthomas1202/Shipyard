@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useWsStore } from '../stores/wsStore'
+import { useWorkspaceStore } from '../stores/workspaceStore'
 import type { RunSnapshot } from '../types'
 
 interface WebSocketContextValue {
@@ -45,6 +46,14 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
       }
       if (event.type === 'file_deleted' && typeof event.data.file_path === 'string') {
         store.setFileChanged(event.data.file_path, 'deleted')
+      }
+
+      // Auto-open diff tab when agent proposes an edit
+      if (event.type === 'approval' && event.data?.event === 'edit.proposed') {
+        const editId = event.data?.edit_id
+        if (typeof editId === 'string') {
+          useWorkspaceStore.getState().openDiff(editId)
+        }
       }
 
       // All non-snapshot events go to agentEvents
