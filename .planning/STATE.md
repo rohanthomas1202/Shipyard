@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-27T02:24:00Z"
+status: verifying
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-03-27T02:26:13.415Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 15
-  completed_plans: 14
-  percent: 93
+  completed_plans: 12
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 06 — ship-rebuild
+**Current focus:** Phase 05 — agent-core-features
 
 ## Current Position
 
-Phase: 06 (ship-rebuild) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
+Phase: 05 (agent-core-features) — EXECUTING
+Plan: 3 of 3
+Status: Phase complete — ready for verification
 Last activity: 2026-03-27
 
-Progress: [█████████░] 93%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -65,7 +65,7 @@ Progress: [█████████░] 93%
 | Phase 04 P03 | 9min | 1 tasks | 3 files |
 | Phase 05 P01 | 3min | 2 tasks | 4 files |
 | Phase 05 P02 | 5min | 2 tasks | 3 files |
-| Phase 06 P01 | 2min | 1 tasks | 2 files |
+| Phase 06 P02 | 3min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -103,8 +103,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Editor context uses list-join pattern matching planner_node for consistency
 - [Phase 05]: Separate auto_git node from plan-step git_ops to avoid cycle; both call git_ops_node but wire differently
 - [Phase 05]: project_id resolved from config first, state context fallback in git_ops_node
-- [Phase 06]: autonomy_mode=autonomous for Ship rebuild to skip approval gates
-- [Phase 06]: pnpm for Ship app build/test/lint commands
+- [Phase 06]: Test individual nodes in isolation rather than full graph for Ship integration tests
+- [Phase 06]: Copy fixtures to tmpdir so edits in tests do not mutate source fixtures
 
 ### Pending Todos
 
@@ -116,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T02:24:00Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-03-27T02:26:13.411Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
