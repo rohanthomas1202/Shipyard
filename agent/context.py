@@ -12,8 +12,8 @@ CHARS_PER_TOKEN = 4
 
 
 class ContextAssembler:
-    def __init__(self, max_tokens: int = 128_000):
-        self.max_chars = max_tokens * CHARS_PER_TOKEN
+    def __init__(self, max_tokens: int = 128_000, system_prompt_reserve: int = 500):
+        self.max_chars = max(0, (max_tokens - system_prompt_reserve)) * CHARS_PER_TOKEN
         self._task: str = ""
         self._files: dict[str, tuple[str, str]] = {}  # path -> (content, priority)
         self._errors: list[str] = []

@@ -6,11 +6,13 @@ Error feedback flows into retry prompts from two sources:
 1. Edit-level failures (anchor matching) with failed_anchor, best_match, score
 2. Validator-level failures (syntax/LSP) with file_path and error_message
 File freshness is checked via content_hash before applying edits.
+Uses ContextAssembler for model-aware context budget management.
 """
 import json
 import logging
 import os
 from langgraph.types import RunnableConfig
+from agent.context import ContextAssembler
 from agent.prompts.editor import EDITOR_SYSTEM, EDITOR_USER, ERROR_FEEDBACK_TEMPLATE
 from agent.schemas import EditResponse
 from agent.tools.file_ops import read_file, edit_file, content_hash
@@ -144,6 +146,12 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
 
     task_type = "edit_complex" if complexity == "complex" else "edit_simple"
 
+    # Resolve model budget for context assembly
+    model_config = router.resolve_model(task_type)
+    assembler = ContextAssembler(
+        max_tokens=model_config.context_window - model_config.max_output,
+    )
+
     # Number the lines for the LLM
     lines = content.split("\n")
     numbered = "\n".join(f"{i+1}: {line}" for i, line in enumerate(lines))
@@ -159,19 +167,26 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
             criteria = step.get("acceptance_criteria", [])
             step_text = "; ".join(criteria) if criteria else step.get("id", "edit")
 
-    context = state.get("context", {})
-    context_section = ""
-    if context.get("spec"):
-        context_section = f"Spec: {context['spec']}"
+    # Assemble context with budget-aware priority filling
+    assembler.add_task(step_text, step=current_step + 1, total_steps=len(plan))
+    assembler.add_file(file_path, numbered, priority="working")
 
     error_feedback = _build_error_feedback(state)
+    if error_feedback:
+        assembler.add_error(error_feedback)
+
+    context = state.get("context", {})
+    if context.get("spec"):
+        assembler.add_file("spec", context["spec"], priority="reference")
+
+    context_section = assembler.build()
 
     user_prompt = EDITOR_USER.format(
         file_path=file_path,
-        numbered_content=numbered,
-        edit_instruction=step_text,
+        numbered_content="",
+        edit_instruction="",
         context_section=context_section,
-        error_feedback=error_feedback,
+        error_feedback="",
     )
 
     # Use structured output for general tier, fallback to string for reasoning tier (o3)

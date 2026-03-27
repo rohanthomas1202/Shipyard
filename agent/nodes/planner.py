@@ -1,3 +1,8 @@
+"""Planner node — decomposes instructions into typed PlanSteps.
+
+Uses ContextAssembler for model-aware context budget management.
+"""
+from agent.context import ContextAssembler
 from agent.prompts.planner import PLANNER_SYSTEM, PLANNER_USER
 from agent.steps import parse_plan_steps
 from agent.tracing import TraceLogger
@@ -12,22 +17,35 @@ async def planner_node(state: dict, config: dict) -> dict:
     working_dir = state["working_directory"]
     context = state.get("context", {})
 
-    context_parts = []
-    if context.get("spec"):
-        context_parts.append(f"Spec:\n{context['spec']}")
-    if context.get("schema"):
-        context_parts.append(f"Schema:\n{context['schema']}")
-    if context.get("files"):
-        context_parts.append(f"Key files:\n{', '.join(context['files'])}")
-    context_section = "\n\n".join(context_parts) if context_parts else "No additional context."
+    # Resolve model budget for context assembly
+    model_config = router.resolve_model("plan")
+    assembler = ContextAssembler(
+        max_tokens=model_config.context_window - model_config.max_output,
+    )
 
+    # Add task instruction
+    assembler.add_task(instruction)
+
+    # Add context at appropriate priorities
+    if context.get("spec"):
+        assembler.add_file("spec", context["spec"], priority="working")
+    if context.get("schema"):
+        assembler.add_file("schema", context["schema"], priority="reference")
+    if context.get("files"):
+        assembler.add_file("key_files", ", ".join(context["files"]), priority="reference")
+
+    # Add file listing as reference context
     file_listing = list_files(working_dir) if working_dir else ""
+    if file_listing:
+        assembler.add_file("file_listing", file_listing, priority="reference")
+
+    context_section = assembler.build()
 
     user_prompt = PLANNER_USER.format(
         working_directory=working_dir,
         instruction=instruction,
         context_section=context_section,
-        file_listing=f"Files in project:\n{file_listing}" if file_listing else "",
+        file_listing="",
     )
 
     raw = await router.call("plan", PLANNER_SYSTEM, user_prompt)
