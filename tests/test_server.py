@@ -320,3 +320,102 @@ async def test_browse_sorted_dirs_first(client, browse_project):
             assert not saw_file, "Directory appeared after a file"
         else:
             saw_file = True
+
+
+# ---------------------------------------------------------------------------
+# /files endpoint tests (file content with language detection)
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture
+async def files_project(client, tmp_path):
+    """Create a project with known files for /files tests."""
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    (src_dir / "main.py").write_text("print('hello')")
+    (tmp_path / "README.md").write_text("# Test Project")
+    (tmp_path / "style.css").write_text("body { color: red; }")
+    (tmp_path / "data").mkdir()
+    # Binary file (PNG header)
+    (tmp_path / "icon.png").write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 20)
+
+    resp = await client.post("/projects", json={
+        "name": "FilesTest",
+        "path": str(tmp_path),
+    })
+    assert resp.status_code == 201
+    return resp.json()
+
+
+@pytest.mark.asyncio
+async def test_files_returns_content(client, files_project):
+    """GET /files returns file content with language detection."""
+    pid = files_project["id"]
+    resp = await client.get(f"/files?project_id={pid}&path=src/main.py")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["content"] == "print('hello')"
+    assert data["language"] == "python"
+    assert isinstance(data["size"], int)
+    assert data["size"] > 0
+
+
+@pytest.mark.asyncio
+async def test_files_markdown_language(client, files_project):
+    """README.md returns language 'markdown'."""
+    pid = files_project["id"]
+    resp = await client.get(f"/files?project_id={pid}&path=README.md")
+    assert resp.status_code == 200
+    assert resp.json()["language"] == "markdown"
+
+
+@pytest.mark.asyncio
+async def test_files_css_language(client, files_project):
+    """style.css returns language 'css'."""
+    pid = files_project["id"]
+    resp = await client.get(f"/files?project_id={pid}&path=style.css")
+    assert resp.status_code == 200
+    assert resp.json()["language"] == "css"
+
+
+@pytest.mark.asyncio
+async def test_files_path_traversal(client, files_project):
+    """Path traversal attempts return 403."""
+    pid = files_project["id"]
+    resp = await client.get(f"/files?project_id={pid}&path=../../etc/passwd")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_files_not_found(client, files_project):
+    """Nonexistent file returns 404."""
+    pid = files_project["id"]
+    resp = await client.get(f"/files?project_id={pid}&path=nonexistent.txt")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_files_directory_returns_400(client, files_project):
+    """Requesting a directory returns 400."""
+    pid = files_project["id"]
+    resp = await client.get(f"/files?project_id={pid}&path=data")
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_files_nonexistent_project(client):
+    """Nonexistent project returns 404."""
+    resp = await client.get("/files?project_id=nonexistent&path=foo")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_files_binary_detection(client, files_project):
+    """Binary files return content=null and binary=true."""
+    pid = files_project["id"]
+    resp = await client.get(f"/files?project_id={pid}&path=icon.png")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["content"] is None
+    assert data["language"] == "binary"
+    assert data["binary"] is True
+    assert isinstance(data["size"], int)
