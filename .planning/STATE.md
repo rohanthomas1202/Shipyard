@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-27T01:14:03.091Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-27T01:18:35.510Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 ## Current Position
 
 Phase: 04 (crash-recovery-run-lifecycle) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-03-27
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P01 | 4min | 2 tasks | 6 files |
 | Phase 03 P03 | 3min | 2 tasks | 5 files |
 | Phase 04 P01 | 5min | 2 tasks | 6 files |
+| Phase 04 P02 | 4min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,8 @@ Recent decisions affecting current work:
 - [Phase 04]: AsyncSqliteSaver uses separate shipyard_checkpoints.db to isolate checkpoint data
 - [Phase 04]: Resume passes None to ainvoke() to trigger LangGraph checkpoint resume
 - [Phase 04]: trace_url added to Run model proactively to prevent schema conflicts with Plan 03
+- [Phase 04]: Rollback all edits with snapshots on cancel -- no partial writes survive cancellation
+- [Phase 04]: Store asyncio.Task in runs dict for all execution paths for cancellation control
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T01:14:03.087Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-03-27T01:18:35.504Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None

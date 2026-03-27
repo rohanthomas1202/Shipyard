@@ -79,7 +79,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 04-01-PLAN.md — AsyncSqliteSaver checkpointing and crash recovery resume (INFRA-04)
-- [ ] 04-02-PLAN.md — Graceful cancellation with edit rollback (LIFE-01)
+- [x] 04-02-PLAN.md — Graceful cancellation with edit rollback (LIFE-01)
 - [ ] 04-03-PLAN.md — LangSmith tracing with shared trace links (LIFE-03)
 
 ### Phase 5: Agent Core Features
