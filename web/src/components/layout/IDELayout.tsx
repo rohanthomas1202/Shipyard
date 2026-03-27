@@ -136,7 +136,7 @@ export function IDELayout() {
                       collapseDirection="left"
                       collapseTooltip="Collapse explorer"
                     />
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden">
                       <FileTree onCollapse={() => leftPanelRef.current?.collapse()} />
                     </div>
                   </>
@@ -221,7 +221,7 @@ export function IDELayout() {
                   collapseDirection="right"
                   collapseTooltip="Collapse agent panel"
                 />
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden flex flex-col">
                   <AgentPanel />
                 </div>
               </div>
