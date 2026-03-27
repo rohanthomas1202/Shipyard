@@ -48,7 +48,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 
 ### Ship Rebuild
 
-- [ ] **SHIP-01**: Agent successfully rebuilds the Ship app from scratch using natural language instructions with minimal human intervention
+- [x] **SHIP-01**: Agent successfully rebuilds the Ship app from scratch using natural language instructions with minimal human intervention
 - [ ] **SHIP-02**: Every human intervention during the rebuild is documented in the rebuild log with what broke, what was done, and what it reveals
 
 ### Deliverables
@@ -113,7 +113,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | CORE-02 | Phase 5 | Complete |
 | CORE-03 | Phase 5 | Pending |
 | CORE-04 | Phase 5 | Complete |
-| SHIP-01 | Phase 6 | Pending |
+| SHIP-01 | Phase 6 | Complete |
 | SHIP-02 | Phase 6 | Pending |
 | DELIV-01 | Phase 7 | Pending |
 | DELIV-02 | Phase 7 | Pending |
