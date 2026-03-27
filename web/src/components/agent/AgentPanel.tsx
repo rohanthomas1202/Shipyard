@@ -1,21 +1,98 @@
+import { useRef, useEffect, useMemo, useState } from 'react'
 import { useWsStore } from '../../stores/wsStore'
 import { useProjectContext } from '../../context/ProjectContext'
-import { TypingIndicator } from './TypingIndicator'
-import { StreamingText } from './StreamingText'
 import { StepTimeline } from './StepTimeline'
 import { AutonomyToggle } from './AutonomyToggle'
+import { RunSection } from './RunSection'
+import { NewEventBadge } from './NewEventBadge'
+import type { WSEvent } from '../../types'
 
 export function AgentPanel() {
-  const status = useWsStore((s) => s.status)
-  const runError = useWsStore((s) => s.runError)
-  const activeNode = useWsStore((s) => s.activeNode)
+  const agentEvents = useWsStore((s) => s.agentEvents)
   const wsPlanSteps = useWsStore((s) => s.planSteps)
-  const { currentRun, currentProject, setCurrentRun } = useProjectContext()
+  const runError = useWsStore((s) => s.runError)
+  const status = useWsStore((s) => s.status)
+  const { currentRun, currentProject } = useProjectContext()
 
+  // Auto-scroll refs and state (D-02)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isAtBottomRef = useRef(true)
+  const rafRef = useRef(0)
+  const [newEventCount, setNewEventCount] = useState(0)
+
+  // Run grouping (D-05): group events by run_id
+  const runGroups = useMemo(() => {
+    const groups: Map<string, { instruction: string; events: WSEvent[] }> = new Map()
+    for (const event of agentEvents) {
+      const rid = event.run_id
+      if (!rid) continue
+      if (!groups.has(rid)) {
+        let instruction = rid.slice(0, 8) + '...'
+        if (currentRun && currentRun.id === rid) {
+          instruction = currentRun.instruction
+        } else if (event.type === 'status' && typeof event.data.instruction === 'string') {
+          instruction = event.data.instruction
+        }
+        groups.set(rid, { instruction, events: [] })
+      }
+      groups.get(rid)!.events.push(event)
+    }
+    return groups
+  }, [agentEvents, currentRun])
+
+  // Scroll handler with RAF guard (Research Pattern 1)
+  const handleScroll = () => {
+    cancelAnimationFrame(rafRef.current)
+    rafRef.current = requestAnimationFrame(() => {
+      const el = containerRef.current
+      if (!el) return
+      isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 50
+      if (isAtBottomRef.current) {
+        setNewEventCount(0)
+      }
+    })
+  }
+
+  // Auto-scroll effect: fires when events count changes
+  useEffect(() => {
+    if (isAtBottomRef.current && containerRef.current) {
+      containerRef.current.scrollTo({
+        top: containerRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
+    } else if (!isAtBottomRef.current) {
+      setNewEventCount((prev) => prev + 1)
+    }
+  }, [agentEvents.length])
+
+  // Reset on new run start
+  useEffect(() => {
+    if (currentRun?.status === 'running') {
+      setNewEventCount(0)
+      isAtBottomRef.current = true
+      if (containerRef.current) {
+        containerRef.current.scrollTo({ top: containerRef.current.scrollHeight, behavior: 'smooth' })
+      }
+    }
+  }, [currentRun?.id])
+
+  // Badge click handler
+  const handleBadgeClick = () => {
+    setNewEventCount(0)
+    isAtBottomRef.current = true
+    containerRef.current?.scrollTo({
+      top: containerRef.current.scrollHeight,
+      behavior: 'smooth',
+    })
+  }
+
+  // Derived state
   const hasError = runError && currentRun && runError.runId === currentRun.id
   const isWorking = currentRun?.status === 'running' && !hasError
+  const hasEvents = agentEvents.length > 0
+  const isMultiRun = runGroups.size > 1
 
-  // Build timeline from live WS plan steps (or fall back to run plan)
+  // Timeline steps: prefer live wsStore steps, fallback to run plan
   const timelineSteps = wsPlanSteps.length > 0
     ? wsPlanSteps.map((step, i) => ({
         label: step.label || `Step ${i + 1}`,
@@ -28,149 +105,55 @@ export function AgentPanel() {
 
   return (
     <>
-      {/* Header */}
-      <div
-        className="px-4 py-3 flex items-center justify-between shrink-0"
-        style={{ borderBottom: '1px solid var(--color-border)' }}
-      >
-        <div className="flex items-center gap-2">
-          <span
-            className="material-symbols-outlined text-[18px]"
-            style={{ color: 'var(--color-primary)', fontVariationSettings: "'FILL' 1" }}
-          >
-            smart_toy
-          </span>
-          <h2 className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-            AI Agent
-          </h2>
+      {/* StepTimeline -- shown when plan steps exist */}
+      {timelineSteps.length > 0 && (
+        <div className="px-4 pt-2 pb-0 shrink-0" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <StepTimeline steps={timelineSteps} />
         </div>
-        <button className="p-1 rounded transition-colors" style={{ color: 'var(--color-muted)' }}>
-          <span className="material-symbols-outlined text-[16px]">tune</span>
-        </button>
-      </div>
+      )}
 
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-        {hasError ? (
-          /* Error state */
-          <div className="flex flex-col items-center gap-3 py-6">
+      {/* Stream body */}
+      <div className="flex-1 overflow-hidden relative">
+        {!hasEvents ? (
+          /* Empty state per UI-SPEC */
+          <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
             <span
               className="material-symbols-outlined"
-              style={{ fontSize: 40, color: 'var(--color-error, #EF4444)' }}
+              style={{ fontSize: 48, color: 'var(--color-muted)' }}
             >
-              error
+              smart_toy
             </span>
             <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              Run Failed
+              No activity yet
             </h3>
-            <div
-              className="w-full p-3 rounded-lg text-xs"
-              style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: 'rgba(239, 68, 68, 0.9)',
-                fontFamily: 'var(--font-code)',
-                wordBreak: 'break-word',
-              }}
-            >
-              {runError.error}
-            </div>
-            <button
-              onClick={() => {
-                setCurrentRun(null)
-                useWsStore.getState().clearRunError()
-              }}
-              className="flex items-center gap-1.5 h-8 px-4 rounded-lg text-xs font-semibold transition-colors"
-              style={{
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text)',
-              }}
-            >
-              <span className="material-symbols-outlined text-[14px]">refresh</span>
-              Dismiss
-            </button>
-          </div>
-        ) : isWorking ? (
-          /* Active run: streaming UI */
-          <>
-            {timelineSteps.length > 0 && <StepTimeline steps={timelineSteps} />}
-
-            <div
-              className="p-3 rounded-lg text-xs"
-              style={{ background: 'rgba(30, 33, 43, 0.4)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
-            >
-              <span className="font-medium" style={{ color: 'var(--color-text)' }}>Task: </span>
-              {currentRun.instruction}
-            </div>
-
-            <StreamingText />
-            <TypingIndicator />
-          </>
-        ) : (
-          /* Idle: welcome UI */
-          <>
-            {/* Welcome Card */}
-            <div
-              className="p-4 rounded-xl relative overflow-hidden"
-              style={{
-                background: 'rgba(30, 33, 43, 0.4)',
-                border: '1px solid var(--color-border)',
-              }}
-            >
-              <div
-                className="absolute -top-10 -right-10 w-24 h-24 rounded-full"
-                style={{ background: 'rgba(99, 102, 241, 0.2)', filter: 'blur(20px)' }}
-              />
-              <p className="text-sm font-medium mb-2 relative z-10" style={{ color: 'var(--color-text)' }}>
-                Welcome to your workspace.
-              </p>
-              <p className="text-xs leading-relaxed relative z-10 mb-4" style={{ color: 'var(--color-muted)' }}>
-                I'm ready to help you write, refactor, and understand your code.
-              </p>
-              <button
-                className="w-full flex items-center justify-center gap-2 h-8 rounded-lg text-xs font-semibold relative z-10"
-                style={{
-                  background: 'rgba(99, 102, 241, 0.1)',
-                  color: 'var(--color-primary)',
-                  border: '1px solid rgba(99, 102, 241, 0.2)',
-                }}
-              >
-                <span className="material-symbols-outlined text-[16px]">add</span>
-                New Chat
-              </button>
-            </div>
-
-            {/* Mode Toggle */}
+            <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+              Start a run from the instruction bar above to see agent progress here.
+            </p>
             <AutonomyToggle />
-
-            {/* Recent Contexts */}
-            <div className="flex flex-col gap-2">
-              <h3
-                className="text-xs font-bold uppercase tracking-wider px-1 mb-1"
-                style={{ color: 'var(--color-muted)' }}
-              >
-                Recent Contexts
-              </h3>
-              {[
-                { title: 'Fix layout bug in header', meta: 'Yesterday • 4 messages' },
-                { title: 'Optimize database query', meta: '2 days ago • 12 messages' },
-                { title: 'Setup initial project structure', meta: 'Last week • 24 messages' },
-              ].map(({ title, meta }) => (
-                <button
-                  key={title}
-                  className="w-full flex items-start gap-3 p-2.5 rounded-xl text-left group transition-colors hover:bg-white/5"
-                >
-                  <span className="material-symbols-outlined text-[16px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    chat_bubble
-                  </span>
-                  <div className="flex-1 overflow-hidden">
-                    <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                      {title}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{meta}</p>
-                  </div>
-                </button>
+          </div>
+        ) : (
+          /* Activity stream */
+          <>
+            <div
+              ref={containerRef}
+              onScroll={handleScroll}
+              role="log"
+              aria-live="polite"
+              className="h-full overflow-y-auto px-4 py-2 flex flex-col gap-2"
+            >
+              {Array.from(runGroups.entries()).map(([rid, group]) => (
+                <RunSection
+                  key={rid}
+                  runId={rid}
+                  instruction={group.instruction}
+                  events={group.events}
+                  isMultiRun={isMultiRun}
+                />
               ))}
             </div>
+
+            {/* Floating badge per D-02 */}
+            <NewEventBadge count={newEventCount} onClick={handleBadgeClick} />
           </>
         )}
       </div>
@@ -186,7 +169,6 @@ export function AgentPanel() {
             style={{
               background: !currentProject ? 'var(--color-muted)'
                 : status === 'disconnected' ? 'var(--color-warning)'
-                : hasError ? 'var(--color-error, #EF4444)'
                 : isWorking ? 'var(--color-warning)'
                 : 'var(--color-primary)',
             }}
@@ -196,7 +178,6 @@ export function AgentPanel() {
             style={{
               background: !currentProject ? 'var(--color-muted)'
                 : status === 'disconnected' ? 'var(--color-warning)'
-                : hasError ? 'var(--color-error, #EF4444)'
                 : isWorking ? 'var(--color-warning)'
                 : 'var(--color-primary)',
             }}
@@ -209,10 +190,8 @@ export function AgentPanel() {
             ? 'Disconnected — reconnecting...'
             : status === 'connecting'
             ? 'Connecting...'
-            : hasError
-            ? 'Error'
             : isWorking
-            ? `Agent Working${activeNode ? ` — ${activeNode}` : ''}`
+            ? 'Agent Working'
             : 'Agent Idle'}
         </span>
       </div>

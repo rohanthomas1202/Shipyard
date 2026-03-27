@@ -9,9 +9,9 @@ test.describe('Shipyard App', () => {
 
   test('shows the three-panel layout', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText('EXPLORER')).toBeVisible()
+    await expect(page.getByText('Explorer', { exact: true })).toBeVisible()
     await expect(page.locator('textarea')).toBeVisible()
-    await expect(page.getByText('AGENT')).toBeVisible()
+    await expect(page.getByText('AGENT', { exact: true })).toBeVisible()
   })
 
   test('shows "No project selected" in file tree', async ({ page }) => {
@@ -19,9 +19,9 @@ test.describe('Shipyard App', () => {
     await expect(page.getByRole('paragraph').filter({ hasText: 'No project selected' })).toBeVisible()
   })
 
-  test('shows run status as Idle', async ({ page }) => {
+  test('shows agent status', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText('Idle')).toBeVisible()
+    await expect(page.locator('span').filter({ hasText: 'No project selected' })).toBeVisible()
   })
 
   test('mesh background blobs are rendered', async ({ page }) => {
@@ -36,6 +36,12 @@ test.describe('Shipyard App', () => {
     await expect(page.getByRole('button', { name: /Workspace settings/ })).toBeVisible()
   })
 
+  test('clicking "Open Project" opens project picker', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Open Project' }).click()
+    await expect(page.getByRole('heading', { name: 'Select Project' })).toBeVisible()
+  })
+
   test('clicking "Create new project" opens project picker', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /Create new project/ }).click()
@@ -44,14 +50,14 @@ test.describe('Shipyard App', () => {
 
   test('project picker shows both tabs', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: /Create new project/ }).click()
+    await page.getByRole('button', { name: 'Open Project' }).click()
     await expect(page.getByText('Existing Projects')).toBeVisible()
     await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeVisible()
   })
 
   test('can create a new project via picker', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: /Create new project/ }).click()
+    await page.getByRole('button', { name: 'Open Project' }).click()
 
     // Switch to New Project tab
     await page.getByRole('button', { name: 'New Project', exact: true }).click()
@@ -67,40 +73,33 @@ test.describe('Shipyard App', () => {
     await expect(page.locator('text=e2e-test-')).toBeVisible({ timeout: 5000 })
   })
 
-  test('top bar is visible with project selector and instruction input', async ({ page }) => {
+  test('selecting a project updates the sidebar', async ({ page }) => {
+    const projName = 'pw-select-' + Date.now()
+    await page.request.post('/projects', {
+      data: { name: projName, path: '/tmp/pw-select' },
+    })
+
     await page.goto('/')
-    // Project selector button
-    await expect(page.getByText('Select project...')).toBeVisible()
-    // Instruction input textarea in top bar
-    await expect(page.locator('textarea[placeholder*="Describe the code change"]')).toBeVisible()
-    // Run status indicator
-    await expect(page.getByText('Idle')).toBeVisible()
+    await page.getByRole('button', { name: 'Open Project' }).click()
+
+    await expect(page.getByText(projName)).toBeVisible({ timeout: 5000 })
+    await page.getByText(projName).click()
+
+    // Project name in sidebar
+    await expect(page.locator('aside').first().getByText(projName)).toBeVisible()
   })
 
   test('prompt textarea accepts input', async ({ page }) => {
     await page.goto('/')
-    // The top bar textarea
-    const textarea = page.locator('textarea[placeholder*="Describe the code change"]')
+    const textarea = page.locator('textarea')
     await textarea.fill('Refactor the auth module')
     await expect(textarea).toHaveValue('Refactor the auth module')
   })
 
-  test('instruction input expands on focus', async ({ page }) => {
+  test('send button is disabled when prompt is empty', async ({ page }) => {
     await page.goto('/')
-    const textarea = page.locator('textarea[placeholder*="Describe the code change"]')
-    await textarea.click()
-    // After focus, the expanded placeholder should appear
-    await expect(page.locator('textarea[placeholder*="Be specific about files"]')).toBeVisible()
-    // The "Run instruction" button should appear
-    await expect(page.getByRole('button', { name: 'Run instruction' })).toBeVisible()
-  })
-
-  test('Run instruction button is disabled when input is empty', async ({ page }) => {
-    await page.goto('/')
-    const textarea = page.locator('textarea[placeholder*="Describe the code change"]')
-    await textarea.click()
-    const runBtn = page.getByRole('button', { name: 'Run instruction' })
-    await expect(runBtn).toBeDisabled()
+    const sendBtn = page.locator('button:has(span:text("send"))').last()
+    await expect(sendBtn).toBeDisabled()
   })
 
   test('settings modal requires a project', async ({ page }) => {
@@ -111,8 +110,7 @@ test.describe('Shipyard App', () => {
     })
 
     await page.goto('/')
-    // Open project picker from quick actions
-    await page.getByRole('button', { name: /Create new project/ }).click()
+    await page.getByRole('button', { name: 'Open Project' }).click()
     await expect(page.getByText(projName)).toBeVisible({ timeout: 5000 })
     await page.getByText(projName).click()
 
@@ -125,9 +123,10 @@ test.describe('Shipyard App', () => {
     await expect(page.getByRole('heading', { name: 'Project Settings' })).not.toBeVisible()
   })
 
-  test('welcome card is visible in agent panel', async ({ page }) => {
+  test('agent panel shows empty state when no runs exist', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText('Welcome to your workspace.')).toBeVisible()
+    await expect(page.getByText('No activity yet')).toBeVisible()
+    await expect(page.getByText('Start a run from the instruction bar above')).toBeVisible()
   })
 
   test('health endpoint returns ok', async ({ page }) => {
