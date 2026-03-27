@@ -127,6 +127,16 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
                         timeout=30.0,
                     )
                     if result is not None:
+                        # Wire validation_error_history for circuit breaker
+                        if result.get("error_state"):
+                            lve = result.get("last_validation_error", {})
+                            error_history = list(state.get("validation_error_history", []))
+                            error_history.append({
+                                "step": state.get("current_step", 0),
+                                "file_path": file_path,
+                                "normalized_error": _normalize_error_msg(lve.get("error_message", "")),
+                            })
+                            result["validation_error_history"] = error_history
                         return result
                 except (Exception, asyncio.TimeoutError) as e:
                     tracer.log("validator", {
@@ -215,6 +225,9 @@ async def _lsp_validate(client, file_path: str, edit_entry: dict) -> dict | None
 
         error_msgs = "; ".join(f"{e.message} (code {e.code})" for e in new_errors[:3])
         error_msg = f"LSP validation failed for {file_path}: {error_msgs}. Edit rolled back."
+        # Build error history for circuit breaker tracking
+        # state is not passed to _lsp_validate, so caller must handle;
+        # return the error info and let caller append to history
         return {
             "error_state": error_msg,
             "last_validation_error": {
@@ -222,7 +235,6 @@ async def _lsp_validate(client, file_path: str, edit_entry: dict) -> dict | None
                 "error_message": error_msgs,
                 "validator_type": "lsp",
             },
-            "validation_error_history": error_history,
         }
 
     return {"error_state": None}
