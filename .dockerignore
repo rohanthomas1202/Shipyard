@@ -1,0 +1,17 @@
+.git
+.gitignore
+node_modules
+__pycache__
+*.pyc
+.env
+shipyard.db
+traces/
+.claude/
+ship-rebuild/
+tests/
+.planning/
+docs/
+.venv/
+*.egg-info/
+.pytest_cache/
+web/node_modules
