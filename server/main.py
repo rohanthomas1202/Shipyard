@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncio
 import logging
+import pathlib
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -18,6 +19,12 @@ from server.websocket import ConnectionManager
 
 
 runs: dict[str, dict] = {}
+
+_IGNORED_NAMES = {
+    ".git", "node_modules", "__pycache__", ".venv", ".mypy_cache",
+    ".tox", ".pytest_cache", ".ruff_cache", "__pypackages__",
+    ".next", ".nuxt", "dist", "build", ".DS_Store",
+}
 
 
 def _rollback_edits(run_id: str) -> None:
@@ -444,38 +451,64 @@ async def continue_run(run_id: str, req: InstructionRequest):
 
 
 @app.get("/browse")
-async def browse_directory(path: str = "~"):
-    """List directories at the given path for the folder picker UI."""
-    import pathlib
-    target = pathlib.Path(path).expanduser().resolve()
+async def browse_directory(project_id: str, path: str = ""):
+    """List files and directories at the given path within a project root."""
+    store: SQLiteSessionStore = app.state.store
+    project = await store.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    project_root = pathlib.Path(project.path).resolve()
+    target = (project_root / path).resolve()
+
+    if not target.is_relative_to(project_root):
+        raise HTTPException(status_code=403, detail="Path traversal not allowed")
     if not target.exists():
-        raise HTTPException(status_code=404, detail=f"Path not found: {target}")
+        raise HTTPException(status_code=404, detail=f"Path not found: {path}")
     if not target.is_dir():
-        raise HTTPException(status_code=400, detail=f"Not a directory: {target}")
-    entries = []
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+
+    dir_entries = []
+    file_entries = []
     try:
-        for entry in sorted(target.iterdir()):
-            if entry.name.startswith('.'):
+        for entry in sorted(target.iterdir(), key=lambda e: e.name.lower()):
+            if entry.name.startswith('.') or entry.name in _IGNORED_NAMES:
                 continue
+            rel_path = str(entry.relative_to(project_root).as_posix())
             try:
                 if entry.is_dir():
                     try:
-                        has_kids = any(c.is_dir() for c in entry.iterdir() if not c.name.startswith('.'))
+                        has_kids = any(
+                            c for c in entry.iterdir()
+                            if not c.name.startswith('.') and c.name not in _IGNORED_NAMES
+                        )
                     except (PermissionError, OSError):
                         has_kids = False
-                    entries.append({
+                    dir_entries.append({
                         "name": entry.name,
-                        "path": str(entry),
+                        "path": rel_path,
                         "is_dir": True,
                         "has_children": has_kids,
+                    })
+                else:
+                    try:
+                        size = entry.stat().st_size
+                    except (PermissionError, OSError):
+                        size = 0
+                    file_entries.append({
+                        "name": entry.name,
+                        "path": rel_path,
+                        "is_dir": False,
+                        "size": size,
                     })
             except (PermissionError, OSError):
                 continue
     except PermissionError:
-        raise HTTPException(status_code=403, detail=f"Permission denied: {target}")
+        raise HTTPException(status_code=403, detail=f"Permission denied: {path}")
+
+    entries = dir_entries + file_entries
     return {
-        "current": str(target),
-        "parent": str(target.parent) if target != target.parent else None,
+        "current": str(target.relative_to(project_root)),
         "entries": entries,
     }
 
