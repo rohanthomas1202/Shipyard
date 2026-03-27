@@ -1,7 +1,16 @@
 import json
 import os
+import re
 import subprocess
 from agent.tracing import TraceLogger
+
+
+def _normalize_error_msg(msg: str) -> str:
+    """Strip line/col numbers and paths for error dedup comparison."""
+    normalized = re.sub(r'[Ll]ine \d+', 'Line N', msg)
+    normalized = re.sub(r'col \d+|column \d+|offset \d+', 'col N', normalized)
+    normalized = re.sub(r'/[^\s:]+/', '/', normalized)
+    return normalized.strip()
 
 tracer = TraceLogger()
 
@@ -67,6 +76,21 @@ def validator_node(state: dict) -> dict:
 
     if not check["valid"]:
         _rollback(last_edit)
-        return {"error_state": f"Syntax check failed for {file_path}: {check['error']}. Edit rolled back."}
+        error_msg = f"Syntax check failed for {file_path}: {check['error']}. Edit rolled back."
+        error_history = list(state.get("validation_error_history", []))
+        error_history.append({
+            "step": state.get("current_step", 0),
+            "file_path": file_path,
+            "normalized_error": _normalize_error_msg(check["error"]),
+        })
+        return {
+            "error_state": error_msg,
+            "last_validation_error": {
+                "file_path": file_path,
+                "error_message": check["error"],
+                "validator_type": "syntax_check",
+            },
+            "validation_error_history": error_history,
+        }
 
     return {"error_state": None}
