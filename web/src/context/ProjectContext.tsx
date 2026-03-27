@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { api } from '../lib/api'
-import { useWebSocketContext } from './WebSocketContext'
+import { useWebSocketSend } from './WebSocketContext'
 import type { Project, Run } from '../types'
 
 interface ProjectContextValue {
@@ -33,7 +33,7 @@ export function ProjectProvider({ children, onProjectChange }: ProjectProviderPr
   const [runs] = useState<Run[]>([])
   const [currentRun, setCurrentRun] = useState<Run | null>(null)
   const [loading, setLoading] = useState(true)
-  const { send } = useWebSocketContext()
+  const send = useWebSocketSend()
 
   const refreshProjects = useCallback(async () => {
     try {

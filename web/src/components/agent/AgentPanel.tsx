@@ -1,4 +1,4 @@
-import { useWebSocketContext } from '../../context/WebSocketContext'
+import { useWsStore } from '../../stores/wsStore'
 import { useProjectContext } from '../../context/ProjectContext'
 import { TypingIndicator } from './TypingIndicator'
 import { StreamingText } from './StreamingText'
@@ -6,7 +6,7 @@ import { StepTimeline } from './StepTimeline'
 import { AutonomyToggle } from './AutonomyToggle'
 
 export function AgentPanel() {
-  const { status } = useWebSocketContext()
+  const status = useWsStore((s) => s.status)
   const { currentRun, currentProject } = useProjectContext()
 
   const isWorking = currentRun?.status === 'running'
