@@ -7,7 +7,7 @@ stopped_at: null
 last_updated: "2026-03-27"
 last_activity: 2026-03-27
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,52 +21,35 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** v1.1 IDE UI Rebuild
+**Current focus:** Phase 8 — Foundation (Layout, State Architecture, TopBar)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-27 — Milestone v1.1 started
+Phase: 8 of 11 (Foundation — Layout, State Architecture, TopBar)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-27 — Roadmap created for v1.1 IDE UI Rebuild
+
+Progress: [░░░░░░░░░░] 0% (v1.1 milestone)
 
 ## Performance Metrics
 
-**Velocity:**
+**Velocity (v1.0 reference):**
+- Total plans completed: 21
+- Average duration: ~4 min
+- Total execution time: ~1.5 hours
 
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
-
-**By Phase:**
+**By Phase (v1.1):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | - | - | - | - |
 
-**Recent Trend:**
-
-- Last 5 plans: -
-- Trend: -
+**Recent Trend (v1.0):**
+- Last 5 plans: 4min, 5min, 3min, 2min, 5min
+- Trend: Stable
 
 *Updated after each plan completion*
-| Phase 01 P02 | 2m | 2 tasks | 5 files |
-| Phase 01 P01 | 3min | 1 tasks | 3 files |
-| Phase 01 P03 | 6min | 3 tasks | 6 files |
-| Phase 02 P01 | 2min | 2 tasks | 5 files |
-| Phase 02 P03 | 2min | 2 tasks | 4 files |
-| Phase 03 P02 | 3min | 1 tasks | 3 files |
-| Phase 03 P01 | 4min | 2 tasks | 6 files |
-| Phase 03 P03 | 3min | 2 tasks | 5 files |
-| Phase 04 P01 | 5min | 2 tasks | 6 files |
-| Phase 04 P02 | 4min | 1 tasks | 2 files |
-| Phase 04 P03 | 9min | 1 tasks | 3 files |
-| Phase 05 P01 | 3min | 2 tasks | 4 files |
-| Phase 05 P02 | 5min | 2 tasks | 3 files |
-| Phase 05 P03 | 4min | 2 tasks | 7 files |
-| Phase 06 P03 | 2min | 1 tasks | 1 files |
-| Phase 02 P02 | 6min | 2 tasks | 2 files |
-| Phase 02 P03 | 5min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -75,42 +58,10 @@ Last activity: 2026-03-27 — Milestone v1.1 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [Roadmap]: Edit reliability before all other work — edits are the P0 failure mode and have no prerequisites
-- [Roadmap]: Research recommends tenacity, structlog, langgraph-checkpoint-sqlite as targeted additions
-- [Roadmap]: Ship rebuild is the integration test that validates all hardening work
-- [Phase 01]: Used OpenAI non-beta parse() path for structured output (SDK 2.x recommended)
-- [Phase 01]: FUZZY_THRESHOLD=0.85 for anchor matching balances recall vs false-positive risk
-- [Phase 01]: 16-char SHA-256 truncated digest sufficient for file freshness detection
-- [Phase 01]: String concatenation for error feedback to avoid brace injection from code content
-- [Phase 01]: Reasoning tier (o3) falls back to router.call() since structured outputs may not be supported
-- [Phase 01]: last_validation_error as separate dict field preserves error_state string backward compat
-- [Phase 02]: Used sh -c wrapper for executor_node to preserve shell features while being async
-- [Phase 02]: Duplicated _normalize_error in graph.py and validator.py to avoid circular imports
-- [Phase 02]: Circuit breaker threshold=2 identical errors before skip/advance
-- [Phase 02]: Used encoding=utf-8 with errors=replace for ast.parse to avoid encoding false negatives
-- [Phase 02]: 30s asyncio.wait_for timeout on _lsp_validate as outer safety net for LSP calls
-- [Phase 02]: Resolved merge conflicts in graph.py merging circuit breaker + refactor + auto_git features
-- [Phase 03]: content_hash as 16-char truncated SHA-256 in file_ops.py
-- [Phase 03]: Skeleton threshold at 200 lines, head=30 tail=10 for reader_node
-- [Phase 03]: LLMResult/LLMStructuredResult are dataclasses not Pydantic — lightweight, no validation overhead
-- [Phase 03]: Router external API unchanged (str/BaseModel) — no breaking changes to node callers
-- [Phase 03]: system_prompt_reserve default 500 tokens for ContextAssembler budget accuracy
-- [Phase 03]: Assembler build() output replaces inline context; template wraps it
-- [Phase 04]: AsyncSqliteSaver uses separate shipyard_checkpoints.db to isolate checkpoint data
-- [Phase 04]: Resume passes None to ainvoke() to trigger LangGraph checkpoint resume
-- [Phase 04]: trace_url added to Run model proactively to prevent schema conflicts with Plan 03
-- [Phase 04]: Rollback all edits with snapshots on cancel -- no partial writes survive cancellation
-- [Phase 04]: Store asyncio.Task in runs dict for all execution paths for cancellation control
-- [Phase 04]: Tag-based LangSmith trace lookup using run_id for Shipyard-to-trace correlation
-- [Phase 04]: asyncio.run_in_executor for sync LangSmith SDK calls to avoid blocking event loop
-- [Phase 05]: Refactor node does not exist -- skipped plan modifications for nonexistent file
-- [Phase 05]: Editor context uses list-join pattern matching planner_node for consistency
-- [Phase 05]: Separate auto_git node from plan-step git_ops to avoid cycle; both call git_ops_node but wire differently
-- [Phase 05]: project_id resolved from config first, state context fallback in git_ops_node
-- [Phase 05]: parallel_executor_node builds sub-graph without checkpointer for isolated batch execution
-- [Phase 05]: Resolved merge conflicts in graph.py/git_ops.py: kept both refactor and auto_git nodes
-- [Phase 05]: git_ops_node made resilient with optional store/router for both auto_git and plan-step usage
-- [Phase 06]: 5 graduated instructions from simple to multi-agent for rebuild orchestration
+- [v1.1 Research]: Use Zustand for high-frequency WebSocket state (not React Context)
+- [v1.1 Research]: Use react-resizable-panels for IDE layout (not CSS grid)
+- [v1.1 Research]: Use Shiki for syntax highlighting (not Monaco — read-only, ~25KB vs 2MB)
+- [v1.1 Research]: Use jsdiff for diff algorithm (replace naive buildDiffLines)
 
 ### Pending Todos
 
@@ -118,10 +69,12 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- Confirm React Arborist compatibility with React 19 before Phase 9 (TanStack Virtual is fallback)
+- Zustand version selection needed in Phase 8 planning
+- Large file diff strategy (>2000 lines) needs decision in Phase 10 planning
 
 ## Session Continuity
 
-Last session: 2026-03-27T09:26:14.534Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-03-27
+Stopped at: Roadmap created for v1.1 milestone
 Resume file: None

@@ -85,31 +85,31 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LAYOUT-01 | — | Pending |
-| LAYOUT-02 | — | Pending |
-| LAYOUT-03 | — | Pending |
-| LAYOUT-04 | — | Pending |
-| LAYOUT-05 | — | Pending |
-| FILES-01 | — | Pending |
-| FILES-02 | — | Pending |
-| FILES-03 | — | Pending |
-| FILES-04 | — | Pending |
-| FILES-05 | — | Pending |
-| DIFF-01 | — | Pending |
-| DIFF-02 | — | Pending |
-| DIFF-03 | — | Pending |
-| DIFF-04 | — | Pending |
-| STREAM-01 | — | Pending |
-| STREAM-02 | — | Pending |
-| API-01 | — | Pending |
-| API-02 | — | Pending |
-| API-03 | — | Pending |
+| LAYOUT-01 | Phase 8 | Pending |
+| LAYOUT-02 | Phase 8 | Pending |
+| LAYOUT-03 | Phase 8 | Pending |
+| LAYOUT-04 | Phase 8 | Pending |
+| LAYOUT-05 | Phase 8 | Pending |
+| FILES-01 | Phase 9 | Pending |
+| FILES-02 | Phase 9 | Pending |
+| FILES-03 | Phase 9 | Pending |
+| FILES-04 | Phase 9 | Pending |
+| FILES-05 | Phase 9 | Pending |
+| API-01 | Phase 9 | Pending |
+| API-02 | Phase 9 | Pending |
+| API-03 | Phase 9 | Pending |
+| DIFF-01 | Phase 10 | Pending |
+| DIFF-02 | Phase 10 | Pending |
+| DIFF-03 | Phase 10 | Pending |
+| DIFF-04 | Phase 10 | Pending |
+| STREAM-01 | Phase 11 | Pending |
+| STREAM-02 | Phase 11 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-27*
-*Last updated: 2026-03-27 after initial definition*
+*Last updated: 2026-03-27 after roadmap creation*
