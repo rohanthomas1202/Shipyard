@@ -106,9 +106,9 @@ Plans:
   2. Every human intervention during the rebuild is logged with what broke, what was done manually, and what it reveals about agent limitations
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
-- [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
+- [ ] 06-01-PLAN.md — Register ship-rebuild project and create rebuild log template (SHIP-02)
+- [ ] 06-02-PLAN.md — Integration test infrastructure for Ship-like TypeScript/React tasks (SHIP-01)
+- [ ] 06-03-PLAN.md — Rebuild orchestration script with instruction sequencing and logging (SHIP-01, SHIP-02)
 
 ### Phase 7: Deliverables & Deployment
 **Goal**: All submission artifacts are complete and both the agent and the agent-built Ship app are publicly accessible
@@ -138,5 +138,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Context & Token Management | 0/3 | Planning | - |
 | 4. Crash Recovery & Run Lifecycle | 0/3 | Planned | - |
 | 5. Agent Core Features | 0/3 | Planned | - |
-| 6. Ship Rebuild | 0/TBD | Not started | - |
+| 6. Ship Rebuild | 0/3 | Planning | - |
 | 7. Deliverables & Deployment | 0/TBD | Not started | - |
