@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Crash Recovery & Run Lifecycle** - LangGraph checkpointing, graceful cancellation, LangSmith tracing with shared links
 - [ ] **Phase 5: Agent Core Features** - Persistent agent loop, external context injection, multi-agent coordination, git operations end-to-end
 - [ ] **Phase 6: Ship Rebuild** - Agent rebuilds the Ship app from scratch, every intervention documented
-- [ ] **Phase 7: Deliverables & Deployment** - CODEAGENT.md, comparative analysis, dev log, cost analysis, demo video, deployment
+- [x] **Phase 7: Deliverables & Deployment** - CODEAGENT.md, comparative analysis, dev log, cost analysis, demo video, deployment (completed 2026-03-27)
 
 ## Phase Details
 
@@ -106,9 +106,9 @@ Plans:
   2. Every human intervention during the rebuild is logged with what broke, what was done manually, and what it reveals about agent limitations
 **Plans**: 3 plans
 Plans:
-- [x] 06-01-PLAN.md — Ship project registration and rebuild log template (SHIP-02)
-- [x] 06-02-PLAN.md — Ship app rebuild execution
-- [x] 06-03-PLAN.md — Rebuild analysis and intervention summary
+- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
+- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
+- [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
 
 ### Phase 7: Deliverables & Deployment
 **Goal**: All submission artifacts are complete and both the agent and the agent-built Ship app are publicly accessible
@@ -122,9 +122,9 @@ Plans:
   5. Agent and agent-built Ship app are both deployed and publicly accessible on Heroku/Railway
 **Plans**: 3 plans
 Plans:
-- [ ] 07-01-PLAN.md — CODEAGENT.md and comparative analysis
-- [ ] 07-02-PLAN.md — Dev log, cost analysis, demo video
-- [ ] 07-03-PLAN.md — Deployment to Heroku/Railway
+- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
+- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
+- [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
 
 ## Progress
 
@@ -138,5 +138,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Context & Token Management | 0/3 | Planning | - |
 | 4. Crash Recovery & Run Lifecycle | 0/3 | Planned | - |
 | 5. Agent Core Features | 0/3 | Planned | - |
-| 6. Ship Rebuild | 1/3 | Executing | - |
-| 7. Deliverables & Deployment | 0/3 | Planned | - |
+| 6. Ship Rebuild | 0/TBD | Not started | - |
+| 7. Deliverables & Deployment | 1/1 | Complete   | 2026-03-27 |
