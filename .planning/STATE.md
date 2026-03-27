@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: IDE UI Rebuild
-status: executing
-stopped_at: Phase 11 context gathered
-last_updated: "2026-03-27T19:38:42.603Z"
+milestone: v1.0
+milestone_name: milestone
+status: verifying
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-03-27T20:43:08.737Z"
 last_activity: 2026-03-27
 progress:
-  total_phases: 4
+  total_phases: 7
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 15
+  completed_plans: 11
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 10 — code-diff-viewing
+**Current focus:** Phase 05 — agent-core-features
 
 ## Current Position
 
-Phase: 10 (code-diff-viewing) — EXECUTING
-Plan: 2 of 2
-Status: Ready to execute
+Phase: 05 (agent-core-features) — EXECUTING
+Plan: 3 of 3
+Status: Phase complete — ready for verification
 Last activity: 2026-03-27
 
 Progress: [░░░░░░░░░░] 0%
@@ -65,10 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P03 | 9min | 1 tasks | 3 files |
 | Phase 05 P01 | 3min | 2 tasks | 4 files |
 | Phase 05 P02 | 5min | 2 tasks | 3 files |
-| Phase 08 P02 | 8min | 2 tasks | 17 files |
-| Phase 09 P01 | 4min | 2 tasks | 2 files |
-| Phase 09 P02 | 6min | 2 tasks | 5 files |
-| Phase 10 P02 | 4min | 1 tasks | 6 files |
+| Phase 11 P01 | 4min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -106,14 +103,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Editor context uses list-join pattern matching planner_node for consistency
 - [Phase 05]: Separate auto_git node from plan-step git_ops to avoid cycle; both call git_ops_node but wire differently
 - [Phase 05]: project_id resolved from config first, state context fallback in git_ops_node
-- [Phase 08]: react-resizable-panels v4 uses panelRef prop, PanelSize object in onResize, orientation not direction
-- [Phase 08]: WebSocketContext kept as dual-write bridge to Zustand for backward compatibility
-- [Phase 09]: Language detection via static extension map, not runtime analysis
-- [Phase 09]: pathlib.Path.is_relative_to() for path traversal security on /browse and /files
-- [Phase 09]: Children cached on collapse -- only fetched once per directory expand
-- [Phase 10]: structuredPatch over diffLines for hunk-based diffing with context control
-- [Phase 10]: Synchronized scroll via onScroll handlers with requestAnimationFrame guard
-- [Phase 10]: Edit data fetched on-demand in EditorArea and cached in component state
+- [Phase 11]: Added wsStore.ts and zustand dependency as blocking prerequisite for StreamingBlock
+- [Phase 11]: EVENT_CONFIG record pattern: centralized event type to icon/color/expandable mapping
 
 ### Pending Todos
 
@@ -125,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T19:38:42.587Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-agent-activity-stream/11-CONTEXT.md
+Last session: 2026-03-27T20:43:08.616Z
+Stopped at: Completed 11-01-PLAN.md
+Resume file: None
