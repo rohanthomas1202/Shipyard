@@ -78,9 +78,9 @@ Plans:
   3. LangSmith traces capture complete structured execution paths, with at least two shared trace links showing different paths (normal run and error recovery)
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
-- [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
+- [ ] 04-01-PLAN.md — AsyncSqliteSaver checkpointing and crash recovery resume (INFRA-04)
+- [ ] 04-02-PLAN.md — Graceful cancellation with edit rollback (LIFE-01)
+- [ ] 04-03-PLAN.md — LangSmith tracing with shared trace links (LIFE-03)
 
 ### Phase 5: Agent Core Features
 **Goal**: Agent operates as a persistent, context-aware system that coordinates work and manages git workflows
@@ -136,7 +136,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. Edit Reliability | 3/3 | Complete | - |
 | 2. Validation & Infrastructure | 0/3 | Planning | - |
 | 3. Context & Token Management | 0/3 | Planning | - |
-| 4. Crash Recovery & Run Lifecycle | 0/TBD | Not started | - |
+| 4. Crash Recovery & Run Lifecycle | 0/3 | Planned | - |
 | 5. Agent Core Features | 0/TBD | Not started | - |
 | 6. Ship Rebuild | 0/TBD | Not started | - |
 | 7. Deliverables & Deployment | 0/TBD | Not started | - |
