@@ -65,7 +65,8 @@ async def _resume_from_checkpoint(run_id: str) -> None:
                 "approval_manager": app.state.approval_manager,
                 "run_id": run_id,
                 "thread_id": run_id,
-            }
+            },
+            "tags": [f"run_id:{run_id}"],
         }
         task = asyncio.current_task()
         if task:
@@ -77,6 +78,14 @@ async def _resume_from_checkpoint(run_id: str) -> None:
         else:
             runs[run_id] = {"status": "failed", "result": result}
             run.status = "failed"
+
+        # Capture LangSmith trace link
+        from agent.tracing import share_trace_link
+        trace_url = await share_trace_link(run_id)
+        if trace_url:
+            runs[run_id]["trace_url"] = trace_url
+            run.trace_url = trace_url
+
         await store.update_run(run)
     except asyncio.CancelledError:
         _rollback_edits(run_id)
@@ -221,7 +230,8 @@ async def _resume_run(run_id: str) -> None:
                     "run_id": run_id,
                     "lsp_manager": lsp_mgr,
                     "thread_id": run_id,
-                }
+                },
+                "tags": [f"run_id:{run_id}"],
             }
             task = asyncio.current_task()
             if task:
@@ -233,6 +243,12 @@ async def _resume_run(run_id: str) -> None:
                 runs[run_id] = {"status": "completed", "result": result}
             else:
                 runs[run_id] = {"status": "failed", "result": result}
+
+            # Capture LangSmith trace link
+            from agent.tracing import share_trace_link
+            trace_url = await share_trace_link(run_id)
+            if trace_url:
+                runs[run_id]["trace_url"] = trace_url
     except asyncio.CancelledError:
         _rollback_edits(run_id)
         runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
@@ -298,7 +314,8 @@ async def submit_instruction(req: InstructionRequest):
                         "run_id": run_id,
                         "lsp_manager": lsp_mgr,
                         "thread_id": run_id,
-                    }
+                    },
+                    "tags": [f"run_id:{run_id}"],
                 }
                 result = await graph.ainvoke(initial_state, config=config)
                 if result.get("waiting_for_human"):
@@ -307,6 +324,19 @@ async def submit_instruction(req: InstructionRequest):
                     runs[run_id] = {"status": "completed", "result": result}
                 else:
                     runs[run_id] = {"status": "failed", "result": result}
+
+                # Capture LangSmith trace link
+                from agent.tracing import share_trace_link
+                trace_url = await share_trace_link(run_id)
+                if trace_url:
+                    runs[run_id]["trace_url"] = trace_url
+                    try:
+                        db_run_obj = await store.get_run(run_id)
+                        if db_run_obj:
+                            db_run_obj.trace_url = trace_url
+                            await store.update_run(db_run_obj)
+                    except Exception:
+                        logger.exception("Failed to persist trace_url for run %s", run_id)
         except asyncio.CancelledError:
             _rollback_edits(run_id)
             runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
@@ -331,7 +361,12 @@ async def get_status(run_id: str):
     if run_id not in runs:
         raise HTTPException(status_code=404, detail="Run not found")
     run = runs[run_id]
-    return {"run_id": run_id, "status": run["status"], "result": run.get("result")}
+    return {
+        "run_id": run_id,
+        "status": run["status"],
+        "result": run.get("result"),
+        "trace_url": run.get("trace_url"),
+    }
 
 
 @app.post("/runs/{run_id}/cancel")
@@ -380,7 +415,8 @@ async def continue_run(run_id: str, req: InstructionRequest):
                         "run_id": run_id,
                         "lsp_manager": lsp_mgr,
                         "thread_id": run_id,
-                    }
+                    },
+                    "tags": [f"run_id:{run_id}"],
                 }
                 result = await graph.ainvoke(state, config=config)
                 if result.get("waiting_for_human"):
@@ -389,6 +425,12 @@ async def continue_run(run_id: str, req: InstructionRequest):
                     runs[run_id] = {"status": "completed", "result": result}
                 else:
                     runs[run_id] = {"status": "failed", "result": result}
+
+                # Capture LangSmith trace link
+                from agent.tracing import share_trace_link
+                trace_url = await share_trace_link(run_id)
+                if trace_url:
+                    runs[run_id]["trace_url"] = trace_url
         except asyncio.CancelledError:
             _rollback_edits(run_id)
             runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
