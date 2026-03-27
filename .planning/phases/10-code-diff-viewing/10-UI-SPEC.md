@@ -47,20 +47,25 @@ Exceptions: Line number gutter width is 50px (not a spacing token -- matches exi
 
 ## Typography
 
+4 sizes, 2 weights.
+
 | Role | Size | Weight | Line Height | Font Family |
 |------|------|--------|-------------|-------------|
 | Tab label | 13px | 400 (regular) | 1.2 | var(--font-ui) |
 | Tab label (preview) | 13px | 400, italic | 1.2 | var(--font-ui) |
-| Diff header file path | 15px | 600 (semibold) | 1.2 | var(--font-code) |
-| Diff header step label | 11px | 500, uppercase tracking-wider | 1.2 | var(--font-ui) |
+| Diff header file path | 14px | 600 (semibold) | 1.2 | var(--font-code) |
+| Diff header step label | 11px | 400, uppercase tracking-wider | 1.2 | var(--font-ui) |
 | Code body (file viewer + diff lines) | 13px | 400 | 1.7 | var(--font-code) |
 | Line numbers | 13px | 400 | 1.7 | var(--font-code) |
 | Welcome heading | 20px | 600 | 1.3 | var(--font-ui) |
 | Welcome body | 14px | 400 | 1.5 | var(--font-ui) |
 | Empty/error state | 14px | 400 | 1.5 | var(--font-ui) |
-| Button text (Accept/Reject) | 13px | 600 | 1.0 | var(--font-ui) |
+| Button text (Accept Edit / Reject Edit) | 13px | 600 | 1.0 | var(--font-ui) |
 
-Source: Existing DiffHeader.tsx and DiffViewer.tsx font sizes preserved. Code body at 13px/1.7 matches current implementation.
+Font size scale (4 values): 11px (step label/badge), 13px (code/tab/button), 14px (prose/header-path), 20px (display heading).
+Font weight scale (2 values): 400 (regular), 600 (semibold).
+
+Source: Existing DiffHeader.tsx and DiffViewer.tsx font sizes adapted. Code body at 13px/1.7 matches current implementation. Step label uses uppercase + tracking-wider for visual distinction at weight 400.
 
 ---
 
@@ -70,8 +75,8 @@ Source: Existing DiffHeader.tsx and DiffViewer.tsx font sizes preserved. Code bo
 |------|-------|-------|
 | Dominant (60%) | #0F111A | Page background, code area background |
 | Secondary (30%) | rgba(30, 33, 43, 0.6) | Glass panels, tab bar background, diff header, diff footer |
-| Accent (10%) | #6366F1 | Accept button, active tab indicator, welcome tab icon |
-| Destructive | #EF4444 | Removed diff lines, Reject button border on hover |
+| Accent (10%) | #6366F1 | Accept Edit button, active tab indicator, welcome tab icon |
+| Destructive | #EF4444 | Removed diff lines, Reject Edit button border on hover |
 | Success | #10B981 | Added diff lines |
 | Muted | #94A3B8 | Line numbers (context), inactive tab labels, step labels |
 | Text | #F8FAFC | Code content, active tab label, heading text |
@@ -90,7 +95,7 @@ These colors are tuned for visibility against the glassmorphic translucent backg
 
 Source: Existing DiffLine.tsx colors preserved. Hunk separator is new (uses accent at low opacity).
 
-Accent reserved for: Accept button background, active tab bottom border (2px), welcome tab icon highlight, diff header icon background.
+Accent reserved for: Accept Edit button background, active tab bottom border (2px), welcome tab icon highlight, diff header icon background.
 
 ### Code Area Background
 
@@ -128,6 +133,17 @@ The code viewing area (both file viewer and diff sides) uses a solid background 
 | Component | Reason |
 |-----------|--------|
 | RunProgress (from center panel) | Moves to right panel (agent stream area) per D-10 |
+
+---
+
+## Focal Points
+
+| Screen | Focal Point | Rationale |
+|--------|-------------|-----------|
+| File Viewer | Code content area (center) | User is reading code; line numbers and tabs are secondary |
+| Side-by-Side Diff | Right (new) column | User's primary interest is what changed; old column provides context |
+| Welcome Tab | Heading + body text (centered) | Guides user to next action |
+| Diff with pending actions | Accept Edit / Reject Edit buttons in DiffHeader | Decision point demands immediate attention |
 
 ---
 
@@ -196,8 +212,8 @@ The code viewing area (both file viewer and diff sides) uses a solid background 
 | View diff | Two equal-width columns. Left = old content, right = new content. Both Shiki-highlighted. |
 | Context lines (D-04) | 3 unchanged lines above and below each change hunk. Collapsed hunks between changes show HunkSeparator. |
 | Scroll | Both sides scroll together (synchronized vertical scroll). Horizontal scroll is independent per side. |
-| Accept edit | Click "Accept" in DiffHeader. Calls `api.patchEdit(runId, editId, 'approve', opId)`. Button shows spinner during request. |
-| Reject edit | Click "Reject" in DiffHeader. Calls `api.patchEdit(runId, editId, 'reject', opId)`. Button shows spinner during request. |
+| Accept edit | Click "Accept Edit" in DiffHeader. Calls `api.patchEdit(runId, editId, 'approve', opId)`. Button shows spinner during request. |
+| Reject edit | Click "Reject Edit" in DiffHeader. Shows inline confirmation: button text changes to "Confirm Reject?" for 3 seconds. Second click within window calls `api.patchEdit(runId, editId, 'reject', opId)`. Timeout reverts to "Reject Edit". |
 | After accept/reject | Tab label updates to show status. If more pending edits, next diff tab auto-activates. |
 | New file (old_content is null) | Left side shows empty with "New file" label. Right side shows full new content, all lines green. |
 | Deleted file (new_content is null) | Left side shows full old content, all lines red. Right side shows empty with "File deleted" label. |
@@ -206,7 +222,7 @@ The code viewing area (both file viewer and diff sides) uses a solid background 
 
 ```
 +---------------------------------------------------+
-| DiffHeader: filepath | step label | [Reject][Accept] |
+| DiffHeader: filepath | step label | [Reject Edit][Accept Edit] |
 +---------------------------------------------------+
 | OLD (left side)           | NEW (right side)        |
 | [gutter] [code]           | [gutter] [code]         |
@@ -264,8 +280,9 @@ Shown when no tabs are open. Vertically and horizontally centered in the editor 
 
 | Element | Copy |
 |---------|------|
-| Primary CTA | "Accept" (diff approval) |
-| Secondary CTA | "Reject" (diff rejection) |
+| Primary CTA | "Accept Edit" (diff approval) |
+| Secondary CTA | "Reject Edit" (diff rejection) |
+| Destructive confirmation | "Confirm Reject?" (inline, replaces Reject Edit label for 3 seconds) |
 | Empty state heading | "No files open" |
 | Empty state body | "Select a file from the explorer to view its contents, or wait for the agent to propose edits." |
 | Error state (file) | "Failed to load file" / "The file may have been moved or deleted. Try refreshing the explorer." |
