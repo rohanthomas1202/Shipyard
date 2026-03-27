@@ -27,7 +27,7 @@
 - [ ] **Phase 8: Foundation — Layout, State Architecture, TopBar** - Zustand stores, resizable three-panel shell, persistent layout, top bar with instruction input
 - [x] **Phase 9: File Explorer & Backend APIs** - Backend file endpoints, lazy-loaded directory tree, live M/A/D change indicators (completed 2026-03-27)
 - [ ] **Phase 10: Code & Diff Viewing** - Tabbed editor area with syntax highlighting, side-by-side diff with proper line-level algorithm
-- [ ] **Phase 11: Agent Activity Stream** - Real-time step timeline with auto-scroll and new-event badge
+- [x] **Phase 11: Agent Activity Stream** - Real-time step timeline with auto-scroll and new-event badge (completed 2026-03-27)
 
 ## Phase Details
 
@@ -89,9 +89,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Event rendering primitives: EventTypeBadge, EventCard, StreamingBlock, RunSection, NewEventBadge, CSS animations
-- [ ] 11-02-PLAN.md — AgentPanel rewrite with ActivityStream assembly, auto-scroll, run grouping, e2e test updates
-- [ ] 11-03-PLAN.md — Gap closure: fix TypeScript build error in WebSocketContext.tsx (event.data.error type mismatch)
+- [x] 11-01-PLAN.md — Event rendering primitives: EventTypeBadge, EventCard, StreamingBlock, RunSection, NewEventBadge, CSS animations
+- [x] 11-02-PLAN.md — AgentPanel rewrite with ActivityStream assembly, auto-scroll, run grouping, e2e test updates
+- [x] 11-03-PLAN.md — Gap closure: fix TypeScript build error in WebSocketContext.tsx (event.data.error type mismatch)
 
 **UI hint**: yes
 
@@ -113,7 +113,7 @@ Note: Phase 11 depends on Phase 8 (not 10) and can overlap with Phases 9-10 if n
 | 8. Foundation — Layout, State Architecture, TopBar | v1.1 | 0/2 | In progress | - |
 | 9. File Explorer & Backend APIs | v1.1 | 2/2 | Complete   | 2026-03-27 |
 | 10. Code & Diff Viewing | v1.1 | 1/2 | In Progress|  |
-| 11. Agent Activity Stream | v1.1 | 0/3 | Not started | - |
+| 11. Agent Activity Stream | v1.1 | 3/3 | Complete   | 2026-03-27 |
 
 ---
 *Full v1.0 details archived in `.planning/milestones/v1.0-ROADMAP.md`*
