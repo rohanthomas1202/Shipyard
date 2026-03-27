@@ -1,9 +1,10 @@
-from agent.tools.shell import run_command
+from agent.tools.shell import run_command_async
 from agent.tracing import TraceLogger
 
 tracer = TraceLogger()
 
-def executor_node(state: dict) -> dict:
+
+async def executor_node(state: dict) -> dict:
     plan = state.get("plan", [])
     step = state.get("current_step", 0)
     working_dir = state["working_directory"]
@@ -21,7 +22,7 @@ def executor_node(state: dict) -> dict:
                 command = step_text.split(prefix, 1)[1].strip()
                 break
 
-    result = run_command(command, cwd=working_dir)
+    result = await run_command_async(["sh", "-c", command], cwd=working_dir)
     tracer.log("executor", {
         "command": command,
         "exit_code": result["exit_code"],

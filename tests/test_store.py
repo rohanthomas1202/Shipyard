@@ -112,6 +112,20 @@ async def test_get_run_returns_none_for_missing(store):
 
 
 @pytest.mark.asyncio
+async def test_wal_mode_enabled(tmp_path):
+    """SQLite database uses WAL journal mode after initialization."""
+    db_path = str(tmp_path / "wal_test.db")
+    s = SQLiteSessionStore(db_path)
+    await s.initialize()
+    try:
+        async with s._db.execute("PRAGMA journal_mode") as cursor:
+            row = await cursor.fetchone()
+        assert row[0] == "wal"
+    finally:
+        await s.close()
+
+
+@pytest.mark.asyncio
 async def test_git_ops_run_index_exists(tmp_path):
     from store.sqlite import SQLiteSessionStore
     store = SQLiteSessionStore(str(tmp_path / "test.db"))

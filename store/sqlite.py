@@ -63,6 +63,8 @@ class SQLiteSessionStore:
 
     async def initialize(self):
         self._db = await aiosqlite.connect(self._db_path)
+        await self._db.execute("PRAGMA journal_mode=WAL")
+        await self._db.execute("PRAGMA synchronous=NORMAL")
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(_SCHEMA)
         await self._db.commit()
