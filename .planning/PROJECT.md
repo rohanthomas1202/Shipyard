@@ -14,7 +14,7 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 
 - ✓ LangGraph state graph with 11 nodes orchestrating plan-read-edit-validate-commit pipeline — v1.0
 - ✓ FastAPI server with REST + WebSocket endpoints for frontend communication — v1.0
-- ✓ React frontend with glassmorphic IDE-style UI — v1.0
+- ✓ React frontend with initial UI — v1.0
 - ✓ SQLite persistence with WAL mode for projects, runs, events, edits — v1.0
 - ✓ Tiered LLM routing with OpenAI models (o3/gpt-4o/gpt-4o-mini) and auto-escalation — v1.0
 - ✓ Supervised edit approval state machine with human-in-the-loop gates — v1.0
@@ -41,10 +41,12 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 
 ### Active
 
-- [ ] DELIV-03: AI Development Log submitted
-- [ ] DELIV-04: AI Cost Analysis with actual dev spend and production cost projections
-- [ ] DELIV-05: Demo video (3-5 min) recorded and submitted
-- [ ] DELIV-06: Agent and Ship app both deployed and publicly accessible
+- [ ] VS Code-style three-panel IDE layout (file explorer | code/diff | agent stream)
+- [ ] Top bar with instruction input, run history dropdown, project selector
+- [ ] Live file explorer with real-time modified/added/deleted indicators
+- [ ] Side-by-side diff view showing old vs new code for agent edits
+- [ ] Agent activity stream with high-level steps, expandable to full LLM output
+- [ ] Real-time WebSocket-driven updates across all panels
 
 ### Out of Scope
 
@@ -54,13 +56,26 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 - Real-time collaboration — single-user agent
 - Custom plugin/extension system — hardcoded pipeline sufficient for v1
 
+## Current Milestone: v1.1 IDE UI Rebuild
+
+**Goal:** Rebuild the frontend as a VS Code-style three-panel IDE with live agent feedback, file explorer, and side-by-side diff views.
+
+**Target features:**
+- VS Code-style three-panel layout (file explorer | code/diff | agent stream)
+- Top bar with instruction input, run history dropdown, project selector
+- Live file explorer with real-time modified/added/deleted indicators
+- Side-by-side diff view showing old vs new code for agent edits
+- Agent activity stream with high-level steps, expandable to full LLM output
+- Real-time WebSocket-driven updates across all panels
+
 ## Context
 
 Shipped v1.0 with 5,425 LOC Python + 2,846 LOC TypeScript.
 Tech stack: Python 3.11, LangGraph 1.1.3, FastAPI, React 19, SQLite, OpenAI.
 7 phases completed across 21 plans in 5 days (2026-03-23 → 2026-03-27).
 All agent core features working. Ship rebuild orchestration complete.
-Remaining work: deliverable submission (log, video, deployment).
+v1.1 is a frontend-only milestone — no backend agent changes planned.
+Existing WebSocket infrastructure (P0/P1/P2 priority routing) supports streaming needs.
 
 ## Constraints
 
@@ -105,4 +120,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v1.0 milestone*
+*Last updated: 2026-03-27 after v1.1 milestone start*
