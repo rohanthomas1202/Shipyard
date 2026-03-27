@@ -25,10 +25,10 @@ Requirements for IDE UI Rebuild milestone. Each maps to roadmap phases.
 
 ### Code & Diff Viewing
 
-- [ ] **DIFF-01**: User sees a side-by-side diff view with proper line-level diff algorithm for agent edits
+- [x] **DIFF-01**: User sees a side-by-side diff view with proper line-level diff algorithm for agent edits
 - [x] **DIFF-02**: User sees syntax-highlighted code when viewing any file in the editor area
 - [x] **DIFF-03**: User can open multiple files and diffs in tabs with close functionality
-- [ ] **DIFF-04**: Diff view shows context lines around changes (not just changed lines)
+- [x] **DIFF-04**: Diff view shows context lines around changes (not just changed lines)
 
 ### Agent Activity Stream
 
@@ -98,10 +98,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-01 | Phase 9 | Complete |
 | API-02 | Phase 9 | Complete |
 | API-03 | Phase 9 | Complete |
-| DIFF-01 | Phase 10 | Pending |
+| DIFF-01 | Phase 10 | Complete |
 | DIFF-02 | Phase 10 | Complete |
 | DIFF-03 | Phase 10 | Complete |
-| DIFF-04 | Phase 10 | Pending |
+| DIFF-04 | Phase 10 | Complete |
 | STREAM-01 | Phase 11 | Pending |
 | STREAM-02 | Phase 11 | Pending |
 
