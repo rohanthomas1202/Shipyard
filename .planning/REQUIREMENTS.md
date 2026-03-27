@@ -19,7 +19,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 - [x] **VALID-01**: Validator feeds specific error details (file, line, error message, validator output) into the retry prompt so retries are informed, not blind
 - [ ] **VALID-02**: Validator checks Python file syntax via py_compile or ast.parse after edits
 - [ ] **VALID-03**: LSP diagnostic diffing reliably detects only NEW errors introduced by edits (baseline vs post-edit comparison), with graceful fallback when LSP is unavailable
-- [ ] **VALID-04**: Validator implements circuit breaker — after 2 identical errors on same file/step, escalates model tier or skips step instead of retrying same approach
+- [x] **VALID-04**: Validator implements circuit breaker — after 2 identical errors on same file/step, escalates model tier or skips step instead of retrying same approach
 
 ### Context Management
 
@@ -99,7 +99,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | VALID-01 | Phase 1 | Complete |
 | VALID-02 | Phase 2 | Pending |
 | VALID-03 | Phase 2 | Pending |
-| VALID-04 | Phase 2 | Pending |
+| VALID-04 | Phase 2 | Complete |
 | CTX-01 | Phase 3 | Pending |
 | CTX-02 | Phase 3 | Pending |
 | INFRA-01 | Phase 2 | Complete |

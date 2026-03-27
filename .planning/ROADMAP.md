@@ -52,7 +52,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Async subprocess conversion and SQLite WAL mode (INFRA-01, INFRA-02)
 - [ ] 02-02-PLAN.md — Python syntax checking and LSP fallback hardening (VALID-02, VALID-03)
-- [ ] 02-03-PLAN.md — Circuit breaker for repeated validation errors (VALID-04)
+- [x] 02-03-PLAN.md — Circuit breaker for repeated validation errors (VALID-04)
 
 ### Phase 3: Context & Token Management
 **Goal**: LLM prompts are token-budgeted and context-aware, and token spend is tracked per run
