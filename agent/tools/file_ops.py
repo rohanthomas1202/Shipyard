@@ -1,5 +1,11 @@
 import os
 import glob as globlib
+import hashlib
+
+def content_hash(content: str) -> str:
+    """Return a 16-char truncated SHA-256 hex digest for file freshness tracking."""
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
+
 
 def read_file(path: str) -> str:
     try:
