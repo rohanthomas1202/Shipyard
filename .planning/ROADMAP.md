@@ -64,9 +64,9 @@ Plans:
   3. Each run surfaces total token usage (input/output) and estimated cost in traces and UI
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
-- [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
+- [ ] 03-01-PLAN.md — LLMResult dataclasses, TokenTracker, router usage accumulation (LIFE-02)
+- [ ] 03-02-PLAN.md — Line-range reads for large files in reader_node (CTX-02)
+- [ ] 03-03-PLAN.md — Wire ContextAssembler into planner/editor, reporter token summary (CTX-01, LIFE-02)
 
 ### Phase 4: Crash Recovery & Run Lifecycle
 **Goal**: Runs survive crashes and disconnects, can be cancelled cleanly, and produce complete observable traces
@@ -135,7 +135,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 |-------|----------------|--------|-----------|
 | 1. Edit Reliability | 3/3 | Complete | - |
 | 2. Validation & Infrastructure | 0/3 | Planning | - |
-| 3. Context & Token Management | 0/TBD | Not started | - |
+| 3. Context & Token Management | 0/3 | Planning | - |
 | 4. Crash Recovery & Run Lifecycle | 0/TBD | Not started | - |
 | 5. Agent Core Features | 0/TBD | Not started | - |
 | 6. Ship Rebuild | 0/TBD | Not started | - |
