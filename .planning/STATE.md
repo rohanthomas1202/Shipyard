@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: IDE UI Rebuild
-status: verifying
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-03-27T15:25:43.961Z"
+status: executing
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-27T15:47:36Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 4
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 
 ## Current Position
 
-Phase: 9
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 9 (file-explorer-backend-apis) -- EXECUTING
+Plan: 1 of 2
+Status: Plan 01 complete
 Last activity: 2026-03-27
 
 Progress: [░░░░░░░░░░] 0%
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 05 P01 | 3min | 2 tasks | 4 files |
 | Phase 05 P02 | 5min | 2 tasks | 3 files |
 | Phase 08 P02 | 8min | 2 tasks | 17 files |
+| Phase 09 P01 | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,8 @@ Recent decisions affecting current work:
 - [Phase 05]: project_id resolved from config first, state context fallback in git_ops_node
 - [Phase 08]: react-resizable-panels v4 uses panelRef prop, PanelSize object in onResize, orientation not direction
 - [Phase 08]: WebSocketContext kept as dual-write bridge to Zustand for backward compatibility
+- [Phase 09]: Language detection via static extension map, not runtime analysis
+- [Phase 09]: pathlib.Path.is_relative_to() for path traversal security on /browse and /files
 
 ### Pending Todos
 
@@ -116,6 +119,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T15:18:43.047Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-03-27T15:47:36Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None

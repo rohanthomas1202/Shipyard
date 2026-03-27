@@ -20,7 +20,7 @@ Requirements for IDE UI Rebuild milestone. Each maps to roadmap phases.
 - [ ] **FILES-01**: User sees a lazy-loaded directory tree of the selected project's files
 - [ ] **FILES-02**: User can expand/collapse directories to browse the file structure
 - [ ] **FILES-03**: User sees live M/A/D indicators on files the agent modifies during a run
-- [ ] **FILES-04**: File tree filters out .git, node_modules, __pycache__, and other gitignored paths
+- [x] **FILES-04**: File tree filters out .git, node_modules, __pycache__, and other gitignored paths
 - [ ] **FILES-05**: User can click a file in the explorer to open it in the editor area
 
 ### Code & Diff Viewing
@@ -37,9 +37,9 @@ Requirements for IDE UI Rebuild milestone. Each maps to roadmap phases.
 
 ### Backend
 
-- [ ] **API-01**: /browse endpoint returns files in addition to directories
-- [ ] **API-02**: New /files endpoint returns file content with language detection
-- [ ] **API-03**: /browse validates paths are within the project directory (no path traversal)
+- [x] **API-01**: /browse endpoint returns files in addition to directories
+- [x] **API-02**: New /files endpoint returns file content with language detection
+- [x] **API-03**: /browse validates paths are within the project directory (no path traversal)
 
 ## Future Requirements
 
@@ -93,11 +93,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FILES-01 | Phase 9 | Pending |
 | FILES-02 | Phase 9 | Pending |
 | FILES-03 | Phase 9 | Pending |
-| FILES-04 | Phase 9 | Pending |
+| FILES-04 | Phase 9 | Complete |
 | FILES-05 | Phase 9 | Pending |
-| API-01 | Phase 9 | Pending |
-| API-02 | Phase 9 | Pending |
-| API-03 | Phase 9 | Pending |
+| API-01 | Phase 9 | Complete |
+| API-02 | Phase 9 | Complete |
+| API-03 | Phase 9 | Complete |
 | DIFF-01 | Phase 10 | Pending |
 | DIFF-02 | Phase 10 | Pending |
 | DIFF-03 | Phase 10 | Pending |

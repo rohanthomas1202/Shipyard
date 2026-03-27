@@ -62,7 +62,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Enhance /browse to return files with filtering, add /files endpoint with path traversal security
+- [x] 09-01-PLAN.md — Enhance /browse to return files with filtering, add /files endpoint with path traversal security
 - [ ] 09-02-PLAN.md — Lazy-loaded FileTree with TreeNode component, M/A/D change indicators, file click to open
 
 **UI hint**: yes
@@ -105,7 +105,7 @@ Note: Phase 11 depends on Phase 8 (not 10) and can overlap with Phases 9-10 if n
 | 6. Ship Rebuild | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 7. Deliverables & Deployment | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 8. Foundation — Layout, State Architecture, TopBar | v1.1 | 0/2 | In progress | - |
-| 9. File Explorer & Backend APIs | v1.1 | 0/2 | Not started | - |
+| 9. File Explorer & Backend APIs | v1.1 | 1/2 | In progress | - |
 | 10. Code & Diff Viewing | v1.1 | 0/0 | Not started | - |
 | 11. Agent Activity Stream | v1.1 | 0/0 | Not started | - |
 
