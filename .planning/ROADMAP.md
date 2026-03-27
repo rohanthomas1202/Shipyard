@@ -44,7 +44,7 @@
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Zustand stores (wsStore, workspaceStore) and WebSocketContext refactor to Zustand bridge
+- [x] 08-01-PLAN.md — Zustand stores (wsStore, workspaceStore) and WebSocketContext refactor to Zustand bridge
 - [ ] 08-02-PLAN.md — Three-panel IDE shell with TopBar, layout components, App.tsx wiring, E2E test updates
 
 **UI hint**: yes

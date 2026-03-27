@@ -13,7 +13,7 @@ Requirements for IDE UI Rebuild milestone. Each maps to roadmap phases.
 - [ ] **LAYOUT-02**: User can drag panel borders to resize, with sizes persisted across sessions
 - [ ] **LAYOUT-03**: User can collapse/expand any panel
 - [ ] **LAYOUT-04**: User sees a persistent top bar with instruction input, project selector, and run status
-- [ ] **LAYOUT-05**: High-frequency WebSocket state uses Zustand stores to prevent render storms across panels
+- [x] **LAYOUT-05**: High-frequency WebSocket state uses Zustand stores to prevent render storms across panels
 
 ### File Explorer
 
@@ -89,7 +89,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LAYOUT-02 | Phase 8 | Pending |
 | LAYOUT-03 | Phase 8 | Pending |
 | LAYOUT-04 | Phase 8 | Pending |
-| LAYOUT-05 | Phase 8 | Pending |
+| LAYOUT-05 | Phase 8 | Complete |
 | FILES-01 | Phase 9 | Pending |
 | FILES-02 | Phase 9 | Pending |
 | FILES-03 | Phase 9 | Pending |
