@@ -1,6 +1,7 @@
+import inspect
 import os
 import pytest
-from agent.nodes.validator import validator_node
+from agent.nodes.validator import validator_node, _syntax_check
 
 
 @pytest.fixture
@@ -138,3 +139,13 @@ async def test_validator_sets_last_validation_error(tmp_codebase):
     assert lve["file_path"] == json_path
     assert "error_message" in lve
     assert lve["validator_type"] == "syntax_check"
+
+
+# ---------------------------------------------------------------------------
+# Task 2: Async conversion verification
+# ---------------------------------------------------------------------------
+
+
+def test_syntax_check_is_async():
+    """Verify _syntax_check is a coroutine function after async conversion."""
+    assert inspect.iscoroutinefunction(_syntax_check)

@@ -9,15 +9,15 @@ in the project are ignored.
 import asyncio
 import json
 import os
-import subprocess
 from langgraph.types import RunnableConfig
+from agent.tools.shell import run_command_async
 from agent.tracing import TraceLogger
 
 tracer = TraceLogger()
 
 
-def _syntax_check(file_path: str) -> dict:
-    """Run a language-appropriate syntax check (synchronous)."""
+async def _syntax_check(file_path: str) -> dict:
+    """Run a language-appropriate syntax check (async)."""
     ext = os.path.splitext(file_path)[1].lower()
 
     if ext == ".json":
@@ -29,21 +29,15 @@ def _syntax_check(file_path: str) -> dict:
             return {"valid": False, "error": str(e)}
 
     if ext in (".ts", ".tsx"):
-        result = subprocess.run(
-            ["npx", "esbuild", file_path],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode != 0:
-            return {"valid": False, "error": result.stderr[:500]}
+        result = await run_command_async(["npx", "esbuild", file_path], timeout=30)
+        if result["exit_code"] != 0:
+            return {"valid": False, "error": result["stderr"][:500]}
         return {"valid": True, "error": None}
 
     if ext in (".js", ".jsx"):
-        result = subprocess.run(
-            ["node", "--check", file_path],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
-            return {"valid": False, "error": result.stderr[:500]}
+        result = await run_command_async(["node", "--check", file_path], timeout=10)
+        if result["exit_code"] != 0:
+            return {"valid": False, "error": result["stderr"][:500]}
         return {"valid": True, "error": None}
 
     if ext in (".yaml", ".yml"):
@@ -112,8 +106,8 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
                 except Exception as e:
                     tracer.log("validator", {"file": file_path, "lsp_error": str(e), "fallback": "syntax_check"})
 
-    # Fallback: subprocess syntax check (wrapped in thread to avoid blocking)
-    check = await asyncio.to_thread(_syntax_check, file_path)
+    # Fallback: async syntax check
+    check = await _syntax_check(file_path)
 
     tracer.log("validator", {"file": file_path, "syntax_valid": check["valid"], "error": check["error"]})
 
