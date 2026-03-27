@@ -23,7 +23,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 
 ### Context Management
 
-- [ ] **CTX-01**: ContextAssembler is wired into all LLM-calling nodes (planner, editor, reader, validator, refactor) with token-budgeted prompt construction using ranked priorities
+- [x] **CTX-01**: ContextAssembler is wired into all LLM-calling nodes (planner, editor, reader, validator, refactor) with token-budgeted prompt construction using ranked priorities
 - [x] **CTX-02**: Reader supports line-range reads for files >200 lines, loading only relevant sections to save tokens and reduce noise
 
 ### Infrastructure
@@ -100,7 +100,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | VALID-02 | Phase 2 | Pending |
 | VALID-03 | Phase 2 | Pending |
 | VALID-04 | Phase 2 | Complete |
-| CTX-01 | Phase 3 | Pending |
+| CTX-01 | Phase 3 | Complete |
 | CTX-02 | Phase 3 | Complete |
 | INFRA-01 | Phase 2 | Complete |
 | INFRA-02 | Phase 2 | Complete |

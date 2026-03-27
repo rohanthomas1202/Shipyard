@@ -66,7 +66,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — LLMResult dataclasses, TokenTracker, router usage accumulation (LIFE-02)
 - [x] 03-02-PLAN.md — Line-range reads for large files in reader_node (CTX-02)
-- [ ] 03-03-PLAN.md — Wire ContextAssembler into planner/editor, reporter token summary (CTX-01, LIFE-02)
+- [x] 03-03-PLAN.md — Wire ContextAssembler into planner/editor, reporter token summary (CTX-01, LIFE-02)
 
 ### Phase 4: Crash Recovery & Run Lifecycle
 **Goal**: Runs survive crashes and disconnects, can be cancelled cleanly, and produce complete observable traces
