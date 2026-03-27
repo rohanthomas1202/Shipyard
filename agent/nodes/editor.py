@@ -43,9 +43,16 @@ async def editor_node(state: dict, config: dict) -> dict:
         step_text = step if isinstance(step, str) else step.get("id", "edit")
 
     context = state.get("context", {})
-    context_section = ""
+    context_parts = []
     if context.get("spec"):
-        context_section = f"Spec: {context['spec']}"
+        context_parts.append(f"Spec: {context['spec']}")
+    if context.get("schema"):
+        context_parts.append(f"Schema: {context['schema']}")
+    if context.get("test_results"):
+        context_parts.append(f"Test Results: {context['test_results']}")
+    if context.get("extra"):
+        context_parts.append(f"Extra Context: {context['extra']}")
+    context_section = "\n\n".join(context_parts) if context_parts else ""
 
     user_prompt = EDITOR_USER.format(
         file_path=file_path,
