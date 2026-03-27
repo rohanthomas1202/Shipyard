@@ -24,7 +24,26 @@ and CODEAGENT.md.
 
 | # | Instruction | Status | Duration | Intervention? | Notes |
 |---|-------------|--------|----------|---------------|-------|
-| 1 | —           | —      | —        | —             | —     |
+| 1 | Add status field to Document | error | 0s | Yes |  |
+| 2 | Add GET /ready health endpoint | error | 0s | Yes |  |
+| 3 | Add documents CRUD routes | error | 0s | Yes |  |
+| 4 | Add tags field and filter | error | 0s | Yes |  |
+| 5 | Parallel: priority field + DELETE endpoint | error | 0s | Yes |  |
+| 1 | Add status field to Document | error | 4s | Yes |  |
+| 2 | Add GET /ready health endpoint | error | 3s | Yes |  |
+| 3 | Add documents CRUD routes | error | 3s | Yes |  |
+| 4 | Add tags field and filter | error | 3s | Yes |  |
+| 5 | Parallel: priority field + DELETE endpoint | error | 3s | Yes |  |
+| 1 | Add status field to Document | error | 4s | Yes |  |
+| 2 | Add GET /ready health endpoint | error | 3s | Yes |  |
+| 3 | Add documents CRUD routes | error | 3s | Yes |  |
+| 4 | Add tags field and filter | error | 3s | Yes |  |
+| 5 | Parallel: priority field + DELETE endpoint | error | 3s | Yes |  |
+| 1 | Add status field to Document | completed | 19s | No |  |
+| 2 | Add GET /ready health endpoint | completed | 33s | No |  |
+| 3 | Add documents CRUD routes | completed | 33s | No |  |
+| 4 | Add tags field and filter | failed | 188s | Yes |  |
+| 5 | Parallel: priority field + DELETE endpoint | completed | 46s | No |  |
 
 ---
 
@@ -42,6 +61,166 @@ Each intervention is numbered and linked back to its instruction.
 - **Time Spent:** —
 
 ---
+
+
+### Intervention (Instruction 1)
+
+- **Instruction #:** 1
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 2)
+
+- **Instruction #:** 2
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 3)
+
+- **Instruction #:** 3
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 4)
+
+- **Instruction #:** 4
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 5)
+
+- **Instruction #:** 5
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 1)
+
+- **Instruction #:** 1
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 2)
+
+- **Instruction #:** 2
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 3)
+
+- **Instruction #:** 3
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 4)
+
+- **Instruction #:** 4
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 5)
+
+- **Instruction #:** 5
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 1)
+
+- **Instruction #:** 1
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 2)
+
+- **Instruction #:** 2
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 3)
+
+- **Instruction #:** 3
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 4)
+
+- **Instruction #:** 4
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 5)
+
+- **Instruction #:** 5
+- **What Broke:** error — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
+
+
+### Intervention (Instruction 4)
+
+- **Instruction #:** 4
+- **What Broke:** failed — see trace: N/A
+- **What Was Done Manually:** TODO
+- **Root Cause:** TODO
+- **What It Reveals:** TODO
+- **Time Spent:** TODO
 
 ## Agent Limitation Categories
 

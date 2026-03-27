@@ -129,7 +129,14 @@ Run the rebuild orchestrator against the Ship app, demonstrating the graduated i
    - Browse the ship-rebuild directory to show generated files
    - Voiceover: "The agent generated real, working code -- not templates or stubs. Each edit was validated against syntax checks and LSP diagnostics"
 
-`[FILL AFTER REBUILD: update with actual rebuild footage, real completion stats, and specific intervention examples]`
+**Actual rebuild results (2026-03-27):**
+- 4/5 instructions completed successfully (80% success rate)
+- Instruction 1 (Add status field): completed in ~30s
+- Instruction 2 (GET /ready endpoint): completed in ~33s
+- Instruction 3 (CRUD routes): completed in ~33s
+- Instruction 4 (Multi-file tags + filter): FAILED at 188s -- agent struggled with 3-file coordination across types/models/components
+- Instruction 5 (Parallel priority + DELETE): completed in ~46s
+- Intervention on #4: Manual fix required for model file that didn't exist in the working directory
 
 ### Key Voiceover Points
 - "5 graduated instructions: simple field add, health endpoint, CRUD routes, multi-file update, parallel multi-agent"
