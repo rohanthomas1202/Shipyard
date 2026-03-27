@@ -198,7 +198,7 @@ Destructive confirmations: None in Phase 11. The stream is read-only; no destruc
 
 - Card: `border-radius: var(--radius-element)` (8px), padding 12px.
 - Gap between cards: 8px vertical.
-- TypeBadge: 6px vertical padding, 8px horizontal, border-radius 4px, 11px font, semibold.
+- TypeBadge: 8px vertical padding, 8px horizontal, border-radius 4px, 11px font, semibold.
 
 ### NewEventBadge Layout
 
