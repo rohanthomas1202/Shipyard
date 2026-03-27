@@ -33,9 +33,18 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
         return
       }
 
-      // Track file changes from diff events
+      // Track file changes from various event types
       if (event.type === 'diff' && typeof event.data.file_path === 'string') {
         store.setFileChanged(event.data.file_path, 'modified')
+      }
+      if (event.type === 'edit_proposed' && typeof event.data.file_path === 'string') {
+        store.setFileChanged(event.data.file_path, 'modified')
+      }
+      if (event.type === 'file_created' && typeof event.data.file_path === 'string') {
+        store.setFileChanged(event.data.file_path, 'added')
+      }
+      if (event.type === 'file_deleted' && typeof event.data.file_path === 'string') {
+        store.setFileChanged(event.data.file_path, 'deleted')
       }
 
       // All non-snapshot events go to agentEvents

@@ -72,3 +72,24 @@ export interface EditResponse {
   run_id: string
   status: string
 }
+
+export interface FileEntry {
+  name: string
+  path: string
+  is_dir: boolean
+  has_children?: boolean
+  size?: number
+}
+
+export interface BrowseResponse {
+  current: string
+  entries: FileEntry[]
+}
+
+export interface FileContent {
+  content: string | null
+  language: string
+  size: number
+  binary: boolean
+  path: string
+}

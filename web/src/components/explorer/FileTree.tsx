@@ -1,7 +1,10 @@
-import { useState } from 'react'
-import { RunList } from './RunList'
+import { useState, useEffect } from 'react'
 import { ProjectPicker } from './ProjectPicker'
+import { TreeNode } from './TreeNode'
 import { useProjectContext } from '../../context/ProjectContext'
+import { useWsStore } from '../../stores/wsStore'
+import { api } from '../../lib/api'
+import type { FileEntry } from '../../types'
 
 interface FileTreeProps {
   onCollapse?: () => void
@@ -10,6 +13,34 @@ interface FileTreeProps {
 export function FileTree({ onCollapse }: FileTreeProps) {
   const { currentProject } = useProjectContext()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [rootEntries, setRootEntries] = useState<FileEntry[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load root entries when project changes
+  useEffect(() => {
+    if (!currentProject) {
+      setRootEntries([])
+      return
+    }
+
+    // Clear changed files on project change
+    useWsStore.getState().clearChangedFiles()
+
+    setLoading(true)
+    setError(null)
+    api.browseProject(currentProject.id)
+      .then((res) => {
+        setRootEntries(res.entries)
+      })
+      .catch((err) => {
+        setError(err.message || 'Failed to load files')
+        setRootEntries([])
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [currentProject?.id])
 
   return (
     <>
@@ -84,7 +115,7 @@ export function FileTree({ onCollapse }: FileTreeProps) {
             </button>
           </div>
         ) : (
-          /* Active State */
+          /* Active State - Project header + tree */
           <div className="py-2">
             <button
               onClick={() => setPickerOpen(true)}
@@ -100,16 +131,45 @@ export function FileTree({ onCollapse }: FileTreeProps) {
                 swap_horiz
               </span>
             </button>
-            <div className="px-4 mt-1">
+            <div className="px-4 mt-1 mb-2">
               <p className="text-[10px] truncate" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-code)' }}>
                 {currentProject.path}
               </p>
             </div>
+
+            {/* Loading state */}
+            {loading && (
+              <div className="px-4 py-2">
+                <p className="text-xs animate-pulse" style={{ color: 'var(--color-muted)' }}>
+                  Loading files...
+                </p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {error && (
+              <div className="px-4 py-2">
+                <p className="text-xs" style={{ color: '#E06C75' }}>
+                  {error}
+                </p>
+              </div>
+            )}
+
+            {/* Tree */}
+            {!loading && !error && (
+              <div role="tree">
+                {rootEntries.map((entry) => (
+                  <TreeNode
+                    key={entry.path}
+                    entry={entry}
+                    projectId={currentProject.id}
+                    depth={0}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
-
-        {/* Runs */}
-        <RunList />
       </div>
 
       <ProjectPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />

@@ -1,4 +1,4 @@
-import type { Project, RunStatus, Edit, EditResponse } from '../types'
+import type { Project, RunStatus, Edit, EditResponse, BrowseResponse, FileContent } from '../types'
 
 class ApiError extends Error {
   status: number
@@ -28,11 +28,22 @@ export const api = {
   // Health
   healthCheck: () => request<{ status: string }>('/health'),
 
-  // Browse filesystem
+  // Browse filesystem (legacy - for project picker)
   browse: (path?: string) =>
     request<{ current: string; parent: string | null; entries: { name: string; path: string; is_dir: boolean; has_children: boolean }[] }>(
       `/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`
     ),
+
+  // Browse project files (for file explorer)
+  browseProject: (projectId: string, path?: string) => {
+    const params = new URLSearchParams({ project_id: projectId })
+    if (path) params.set('path', path)
+    return request<BrowseResponse>(`/browse?${params}`)
+  },
+
+  // Read file content
+  readFile: (projectId: string, path: string) =>
+    request<FileContent>(`/files?project_id=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`),
 
   // Projects
   getProjects: () => request<Project[]>('/projects'),
