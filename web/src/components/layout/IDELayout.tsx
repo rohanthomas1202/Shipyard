@@ -8,17 +8,13 @@ import { SettingsModal } from '../settings/SettingsModal'
 import { ProjectPicker } from '../explorer/ProjectPicker'
 import { FileTree } from '../explorer/FileTree'
 import { AgentPanel } from '../agent/AgentPanel'
-import { WorkspaceHome } from '../home/WorkspaceHome'
-import { DiffViewer } from '../editor/DiffViewer'
-import { RunProgress } from '../home/RunProgress'
-import { useProjectContext } from '../../context/ProjectContext'
+import { EditorArea } from '../editor/EditorArea'
 import { useHotkeys } from '../../hooks/useHotkeys'
 
 const LEFT_COLLAPSED_SIZE = 3
 const RIGHT_COLLAPSED_SIZE = 0
 
 export function IDELayout() {
-  const { currentRun } = useProjectContext()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
@@ -180,16 +176,7 @@ export function IDELayout() {
                   collapsed
                 />
                 <div className="flex-1 overflow-hidden">
-                  {!currentRun ? (
-                    <WorkspaceHome
-                      onOpenSettings={() => setSettingsOpen(true)}
-                      onOpenProjectPicker={() => setProjectPickerOpen(true)}
-                    />
-                  ) : currentRun.status === 'waiting_for_human' ? (
-                    <DiffViewer />
-                  ) : (
-                    <RunProgress />
-                  )}
+                  <EditorArea />
                 </div>
               </div>
             </Panel>

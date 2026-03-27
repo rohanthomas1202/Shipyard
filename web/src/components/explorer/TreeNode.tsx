@@ -63,6 +63,12 @@ export function TreeNode({ entry, projectId, depth }: TreeNodeProps) {
     useWorkspaceStore.getState().setSelectedPath(entry.path)
   }, [entry.is_dir, entry.path, handleToggle])
 
+  const handleFileDoubleClick = useCallback(() => {
+    if (entry.is_dir) return
+    useWorkspaceStore.getState().openFile(entry.path, true)
+    useWorkspaceStore.getState().setSelectedPath(entry.path)
+  }, [entry.is_dir, entry.path])
+
   return (
     <>
       <div
@@ -75,6 +81,7 @@ export function TreeNode({ entry, projectId, depth }: TreeNodeProps) {
           background: isSelected ? 'rgba(99, 102, 241, 0.1)' : undefined,
         }}
         onClick={handleFileClick}
+        onDoubleClick={handleFileDoubleClick}
         onMouseEnter={(e) => {
           if (!isSelected) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'
         }}
