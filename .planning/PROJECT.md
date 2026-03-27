@@ -41,8 +41,8 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 
 ### Active
 
-- [ ] VS Code-style three-panel IDE layout (file explorer | code/diff | agent stream)
-- [ ] Top bar with instruction input, run history dropdown, project selector
+- [x] VS Code-style three-panel IDE layout (file explorer | code/diff | agent stream) — Validated in Phase 8: Foundation Layout
+- [x] Top bar with instruction input, run history dropdown, project selector — Validated in Phase 8: Foundation Layout
 - [ ] Live file explorer with real-time modified/added/deleted indicators
 - [ ] Side-by-side diff view showing old vs new code for agent edits
 - [ ] Agent activity stream with high-level steps, expandable to full LLM output
@@ -120,4 +120,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v1.1 milestone start*
+*Last updated: 2026-03-27 after Phase 8 completion — IDE shell with resizable panels, Zustand state architecture, and TopBar*
