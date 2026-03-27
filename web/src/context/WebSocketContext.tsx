@@ -79,6 +79,20 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
       // Handle run lifecycle events
       if (event.type === 'run_completed' || event.type === 'run_failed' || event.type === 'run_cancelled') {
         store.setActiveNode(null)
+
+        // Auto-open diff tabs for completed runs with edits
+        if (event.type === 'run_completed' && event.run_id) {
+          import('../lib/api').then(({ api }) => {
+            api.getEdits(event.run_id).then((edits) => {
+              const ws = useWorkspaceStore.getState()
+              for (const edit of edits) {
+                if (edit.status === 'applied' || edit.status === 'committed') {
+                  ws.openDiff(edit.id)
+                }
+              }
+            }).catch(() => {})
+          })
+        }
       }
 
       // All non-snapshot events go to agentEvents
