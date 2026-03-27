@@ -58,7 +58,7 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
 
       // Handle run errors from backend
       if (event.type === 'error' && event.run_id && event.data?.error) {
-        store.setRunError(event.run_id, event.data.error)
+        store.setRunError(event.run_id, String(event.data.error ?? ''))
       }
 
       // Track active node from status events
