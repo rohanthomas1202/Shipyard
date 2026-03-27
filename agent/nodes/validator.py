@@ -6,6 +6,7 @@ syntax checks. Rolls back edits that introduce errors.
 Diagnostic diffing: only NEW errors trigger rollback. Pre-existing errors
 in the project are ignored.
 """
+import ast
 import asyncio
 import json
 import os
@@ -57,6 +58,18 @@ async def _syntax_check(file_path: str) -> dict:
             return {"valid": True, "error": None}
         except Exception as e:
             return {"valid": False, "error": str(e)}
+
+    if ext == ".py":
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                source = f.read()
+            ast.parse(source, filename=file_path)
+            return {"valid": True, "error": None}
+        except SyntaxError as e:
+            error = f"Line {e.lineno}, col {e.offset}: {e.msg}"
+            if e.text:
+                error += f" | {e.text.strip()}"
+            return {"valid": False, "error": error}
 
     return {"valid": True, "error": None}
 

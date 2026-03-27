@@ -149,3 +149,28 @@ async def test_validator_sets_last_validation_error(tmp_codebase):
 def test_syntax_check_is_async():
     """Verify _syntax_check is a coroutine function after async conversion."""
     assert inspect.iscoroutinefunction(_syntax_check)
+
+
+# ---------------------------------------------------------------------------
+# Plan 02 Task 1: Python syntax checking tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_python_syntax_valid(tmp_path):
+    """Valid Python file passes syntax check."""
+    py_path = tmp_path / "valid.py"
+    py_path.write_text("def hello():\n    return 42\n")
+    result = await _syntax_check(str(py_path))
+    assert result["valid"] is True
+    assert result["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_python_syntax_error(tmp_path):
+    """Invalid Python file is caught by ast.parse."""
+    py_path = tmp_path / "invalid.py"
+    py_path.write_text("def foo(\n    x = \n")
+    result = await _syntax_check(str(py_path))
+    assert result["valid"] is False
+    assert "Line" in result["error"]
