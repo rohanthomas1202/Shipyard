@@ -25,6 +25,55 @@ HEARTBEAT_INTERVAL = 15
 logger = logging.getLogger(__name__)
 
 
+async def _resume_from_checkpoint(run_id: str) -> None:
+    """Resume a single interrupted run from its last LangGraph checkpoint."""
+    store = app.state.store
+    router = app.state.router
+    graph = app.state.graph
+
+    run = await store.get_run(run_id)
+    if run is None:
+        logger.warning("Cannot resume run %s: not found in store", run_id)
+        return
+
+    runs[run_id] = {"status": "running", "result": None}
+    try:
+        config = {
+            "configurable": {
+                "store": store,
+                "router": router,
+                "approval_manager": app.state.approval_manager,
+                "run_id": run_id,
+                "thread_id": run_id,
+            }
+        }
+        result = await graph.ainvoke(None, config=config)
+        if result.get("error_state") is None:
+            runs[run_id] = {"status": "completed", "result": result}
+            run.status = "completed"
+        else:
+            runs[run_id] = {"status": "failed", "result": result}
+            run.status = "failed"
+        await store.update_run(run)
+    except Exception as e:
+        logger.exception("Failed to resume run %s", run_id)
+        runs[run_id] = {"status": "error", "result": str(e)}
+        run.status = "error"
+        await store.update_run(run)
+
+
+async def _resume_interrupted_runs() -> None:
+    """Find runs with status 'running' in DB (interrupted by crash) and resume them."""
+    store = app.state.store
+    interrupted = await store.list_runs_by_status("running")
+    if not interrupted:
+        return
+    logger.info("Found %d interrupted runs to resume", len(interrupted))
+    for run in interrupted:
+        logger.info("Resuming interrupted run %s", run.id)
+        asyncio.create_task(_resume_from_checkpoint(run.id))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -55,6 +104,7 @@ async def lifespan(app: FastAPI):
         app.state.approval_manager = approval_manager
 
         heartbeat_task = asyncio.create_task(_heartbeat_loop(conn_manager))
+        asyncio.create_task(_resume_interrupted_runs())
         yield
         heartbeat_task.cancel()
         try:
