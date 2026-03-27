@@ -19,6 +19,7 @@ class AgentState(TypedDict):
     parallel_batches: list[list[int]]
     sequential_first: list[int]
     has_conflicts: bool
+    parallel_results: list[dict]
     model_usage: dict[str, int]
     autonomy_mode: str  # "supervised" | "autonomous"
     # ast-grep integration fields

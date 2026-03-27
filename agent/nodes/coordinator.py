@@ -1,5 +1,8 @@
+"""Coordinator node -- decides parallel vs sequential execution and executes parallel batches."""
+import logging
 from agent.tracing import TraceLogger
 
+logger = logging.getLogger(__name__)
 tracer = TraceLogger()
 
 
@@ -63,3 +66,22 @@ def coordinator_node(state: dict) -> dict:
         "parallel_batches": parallel_batch,
         "sequential_first": sequential_first,
     }
+
+
+async def parallel_executor_node(state: dict, config: dict) -> dict:
+    """Execute parallel batches using separate graph invocations."""
+    from agent.parallel import run_parallel_batches
+    from agent.graph import build_graph
+    from agent.nodes.merger import merge_batch_results
+
+    batches = state.get("parallel_batches", [])
+    if not batches:
+        return {}
+
+    # Build a sub-graph without checkpointer for batch execution
+    sub_graph = build_graph(checkpointer=None)
+    results = await run_parallel_batches(sub_graph, batches, state, config)
+
+    # Merge results
+    merged = merge_batch_results(results)
+    return merged
