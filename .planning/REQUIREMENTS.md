@@ -36,7 +36,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 ### Run Lifecycle
 
 - [ ] **LIFE-01**: User can gracefully cancel a running agent mid-execution with clean state rollback (no partial writes, no corrupted files)
-- [ ] **LIFE-02**: Each LLM call tracks token usage (input/output) and aggregates cost per run, surfaced in traces and UI
+- [x] **LIFE-02**: Each LLM call tracks token usage (input/output) and aggregates cost per run, surfaced in traces and UI
 - [ ] **LIFE-03**: LangSmith tracing captures complete structured traces with at least two shared trace links showing different execution paths (normal run + error recovery)
 
 ### Agent Core (from PDF)
@@ -107,7 +107,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | INFRA-03 | Phase 1 | Complete |
 | INFRA-04 | Phase 4 | Pending |
 | LIFE-01 | Phase 4 | Pending |
-| LIFE-02 | Phase 3 | Pending |
+| LIFE-02 | Phase 3 | Complete |
 | LIFE-03 | Phase 4 | Pending |
 | CORE-01 | Phase 5 | Pending |
 | CORE-02 | Phase 5 | Pending |

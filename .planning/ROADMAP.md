@@ -64,7 +64,7 @@ Plans:
   3. Each run surfaces total token usage (input/output) and estimated cost in traces and UI
 **Plans**: 3 plans
 Plans:
-- [ ] 03-01-PLAN.md — LLMResult dataclasses, TokenTracker, router usage accumulation (LIFE-02)
+- [x] 03-01-PLAN.md — LLMResult dataclasses, TokenTracker, router usage accumulation (LIFE-02)
 - [x] 03-02-PLAN.md — Line-range reads for large files in reader_node (CTX-02)
 - [ ] 03-03-PLAN.md — Wire ContextAssembler into planner/editor, reporter token summary (CTX-01, LIFE-02)
 
