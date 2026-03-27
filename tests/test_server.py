@@ -191,3 +191,132 @@ async def test_list_projects_excludes_github_pat(client):
     projects = response.json()
     for p in projects:
         assert "github_pat" not in p
+
+
+# ---------------------------------------------------------------------------
+# /browse endpoint tests (enhanced with files, filtering, project scoping)
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture
+async def browse_project(client, tmp_path):
+    """Create a project with a known filesystem layout for browse tests."""
+    # Create directory structure
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    (src_dir / "main.py").write_text("print('hello')")
+    (tmp_path / "README.md").write_text("# Test")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text("[core]")
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "pkg").mkdir()
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / ".venv").mkdir()
+
+    # Create project pointing to tmp_path
+    resp = await client.post("/projects", json={
+        "name": "BrowseTest",
+        "path": str(tmp_path),
+    })
+    assert resp.status_code == 201
+    return resp.json()
+
+
+@pytest.mark.asyncio
+async def test_browse_returns_files(client, browse_project):
+    """GET /browse returns both files and directories."""
+    pid = browse_project["id"]
+    resp = await client.get(f"/browse?project_id={pid}")
+    assert resp.status_code == 200
+    data = resp.json()
+    entries = data["entries"]
+    names = {e["name"] for e in entries}
+    assert "src" in names  # directory
+    assert "README.md" in names  # file
+    # Check both types present
+    dir_entries = [e for e in entries if e["is_dir"]]
+    file_entries = [e for e in entries if not e["is_dir"]]
+    assert len(dir_entries) >= 1
+    assert len(file_entries) >= 1
+
+
+@pytest.mark.asyncio
+async def test_browse_subdir(client, browse_project):
+    """GET /browse with path=subdir returns children of that subdir."""
+    pid = browse_project["id"]
+    resp = await client.get(f"/browse?project_id={pid}&path=src")
+    assert resp.status_code == 200
+    data = resp.json()
+    entries = data["entries"]
+    names = {e["name"] for e in entries}
+    assert "main.py" in names
+
+
+@pytest.mark.asyncio
+async def test_browse_filters_ignored(client, browse_project):
+    """Entries named .git, node_modules, __pycache__, .venv are excluded."""
+    pid = browse_project["id"]
+    resp = await client.get(f"/browse?project_id={pid}")
+    assert resp.status_code == 200
+    data = resp.json()
+    names = {e["name"] for e in data["entries"]}
+    assert ".git" not in names
+    assert "node_modules" not in names
+    assert "__pycache__" not in names
+    assert ".venv" not in names
+
+
+@pytest.mark.asyncio
+async def test_browse_path_traversal(client, browse_project):
+    """Path traversal attempts return 403."""
+    pid = browse_project["id"]
+    resp = await client.get(f"/browse?project_id={pid}&path=../../etc")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_browse_nonexistent_project(client):
+    """Nonexistent project_id returns 404."""
+    resp = await client.get("/browse?project_id=nonexistent")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_browse_file_entry_has_size(client, browse_project):
+    """File entries include size field as integer bytes."""
+    pid = browse_project["id"]
+    resp = await client.get(f"/browse?project_id={pid}")
+    assert resp.status_code == 200
+    file_entries = [e for e in resp.json()["entries"] if not e["is_dir"]]
+    assert len(file_entries) >= 1
+    for entry in file_entries:
+        assert "size" in entry
+        assert isinstance(entry["size"], int)
+
+
+@pytest.mark.asyncio
+async def test_browse_dir_entry_has_children(client, browse_project):
+    """Directory entries include has_children boolean."""
+    pid = browse_project["id"]
+    resp = await client.get(f"/browse?project_id={pid}")
+    assert resp.status_code == 200
+    dir_entries = [e for e in resp.json()["entries"] if e["is_dir"]]
+    assert len(dir_entries) >= 1
+    for entry in dir_entries:
+        assert "has_children" in entry
+        assert isinstance(entry["has_children"], bool)
+
+
+@pytest.mark.asyncio
+async def test_browse_sorted_dirs_first(client, browse_project):
+    """Entries sorted: directories first, then files, alphabetically."""
+    pid = browse_project["id"]
+    resp = await client.get(f"/browse?project_id={pid}")
+    assert resp.status_code == 200
+    entries = resp.json()["entries"]
+    # All dirs should come before all files
+    saw_file = False
+    for entry in entries:
+        if entry["is_dir"]:
+            assert not saw_file, "Directory appeared after a file"
+        else:
+            saw_file = True
