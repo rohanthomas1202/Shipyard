@@ -56,6 +56,31 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
         }
       }
 
+      // Handle run errors from backend
+      if (event.type === 'error' && event.run_id && event.data?.error) {
+        store.setRunError(event.run_id, event.data.error)
+      }
+
+      // Track active node from status events
+      if (event.type === 'status' && event.node) {
+        store.setActiveNode(event.node)
+      }
+
+      // Track plan steps from planner
+      if (event.type === 'plan_ready' && Array.isArray(event.data?.steps)) {
+        const steps = (event.data.steps as Array<{ kind: string; label: string }>).map((s, i) => ({
+          kind: s.kind,
+          label: s.label || `Step ${i + 1}`,
+          status: 'pending' as const,
+        }))
+        store.setPlanSteps(steps)
+      }
+
+      // Handle run lifecycle events
+      if (event.type === 'run_completed' || event.type === 'run_failed' || event.type === 'run_cancelled') {
+        store.setActiveNode(null)
+      }
+
       // All non-snapshot events go to agentEvents
       store.appendAgentEvent(event)
     })

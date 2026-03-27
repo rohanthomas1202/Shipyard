@@ -20,9 +20,21 @@ interface WSStore {
   setFileChanged: (path: string, status: 'modified' | 'added' | 'deleted') => void
   clearChangedFiles: () => void
 
+  // Run error (set when backend emits error event)
+  runError: { runId: string; error: string } | null
+  setRunError: (runId: string, error: string) => void
+  clearRunError: () => void
+
   // Last sequence per run
   lastSeq: Record<string, number>
   setLastSeq: (runId: string, seq: number) => void
+
+  // Active node and plan step tracking
+  activeNode: string | null
+  setActiveNode: (node: string | null) => void
+  planSteps: Array<{ kind: string; label: string; status: 'pending' | 'active' | 'done' }>
+  setPlanSteps: (steps: Array<{ kind: string; label: string; status: 'pending' | 'active' | 'done' }>) => void
+  updateStepStatus: (index: number, status: 'pending' | 'active' | 'done') => void
 }
 
 export const useWsStore = create<WSStore>()((set) => ({
@@ -44,8 +56,21 @@ export const useWsStore = create<WSStore>()((set) => ({
   })),
   clearChangedFiles: () => set({ changedFiles: {} }),
 
+  runError: null,
+  setRunError: (runId, error) => set({ runError: { runId, error } }),
+  clearRunError: () => set({ runError: null }),
+
   lastSeq: {},
   setLastSeq: (runId, seq) => set((s) => ({
     lastSeq: { ...s.lastSeq, [runId]: seq },
+  })),
+
+  activeNode: null,
+  setActiveNode: (node) => set({ activeNode: node }),
+
+  planSteps: [],
+  setPlanSteps: (steps) => set({ planSteps: steps }),
+  updateStepStatus: (index, status) => set((s) => ({
+    planSteps: s.planSteps.map((step, i) => i === index ? { ...step, status } : step),
   })),
 }))

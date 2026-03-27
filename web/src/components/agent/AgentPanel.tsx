@@ -7,16 +7,24 @@ import { AutonomyToggle } from './AutonomyToggle'
 
 export function AgentPanel() {
   const status = useWsStore((s) => s.status)
-  const { currentRun, currentProject } = useProjectContext()
+  const runError = useWsStore((s) => s.runError)
+  const activeNode = useWsStore((s) => s.activeNode)
+  const wsPlanSteps = useWsStore((s) => s.planSteps)
+  const { currentRun, currentProject, setCurrentRun } = useProjectContext()
 
-  const isWorking = currentRun?.status === 'running'
+  const hasError = runError && currentRun && runError.runId === currentRun.id
+  const isWorking = currentRun?.status === 'running' && !hasError
 
-  // Build step timeline from run plan if available
-  const planSteps = Array.isArray(currentRun?.plan) ? currentRun.plan as Array<{ label?: string; status?: string }> : []
-  const timelineSteps = planSteps.map((step, i) => ({
-    label: step.label || `Step ${i + 1}`,
-    status: (step.status === 'done' ? 'done' : step.status === 'active' ? 'active' : 'pending') as 'done' | 'active' | 'pending',
-  }))
+  // Build timeline from live WS plan steps (or fall back to run plan)
+  const timelineSteps = wsPlanSteps.length > 0
+    ? wsPlanSteps.map((step, i) => ({
+        label: step.label || `Step ${i + 1}`,
+        status: step.status,
+      }))
+    : (Array.isArray(currentRun?.plan) ? currentRun.plan as Array<{ label?: string; status?: string }> : []).map((step, i) => ({
+        label: step.label || `Step ${i + 1}`,
+        status: (step.status === 'done' ? 'done' : step.status === 'active' ? 'active' : 'pending') as 'done' | 'active' | 'pending',
+      }))
 
   return (
     <>
@@ -42,7 +50,46 @@ export function AgentPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-        {isWorking ? (
+        {hasError ? (
+          /* Error state */
+          <div className="flex flex-col items-center gap-3 py-6">
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 40, color: 'var(--color-error, #EF4444)' }}
+            >
+              error
+            </span>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+              Run Failed
+            </h3>
+            <div
+              className="w-full p-3 rounded-lg text-xs"
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: 'rgba(239, 68, 68, 0.9)',
+                fontFamily: 'var(--font-code)',
+                wordBreak: 'break-word',
+              }}
+            >
+              {runError.error}
+            </div>
+            <button
+              onClick={() => {
+                setCurrentRun(null)
+                useWsStore.getState().clearRunError()
+              }}
+              className="flex items-center gap-1.5 h-8 px-4 rounded-lg text-xs font-semibold transition-colors"
+              style={{
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+              }}
+            >
+              <span className="material-symbols-outlined text-[14px]">refresh</span>
+              Dismiss
+            </button>
+          </div>
+        ) : isWorking ? (
           /* Active run: streaming UI */
           <>
             {timelineSteps.length > 0 && <StepTimeline steps={timelineSteps} />}
@@ -139,6 +186,7 @@ export function AgentPanel() {
             style={{
               background: !currentProject ? 'var(--color-muted)'
                 : status === 'disconnected' ? 'var(--color-warning)'
+                : hasError ? 'var(--color-error, #EF4444)'
                 : isWorking ? 'var(--color-warning)'
                 : 'var(--color-primary)',
             }}
@@ -148,6 +196,7 @@ export function AgentPanel() {
             style={{
               background: !currentProject ? 'var(--color-muted)'
                 : status === 'disconnected' ? 'var(--color-warning)'
+                : hasError ? 'var(--color-error, #EF4444)'
                 : isWorking ? 'var(--color-warning)'
                 : 'var(--color-primary)',
             }}
@@ -160,8 +209,10 @@ export function AgentPanel() {
             ? 'Disconnected — reconnecting...'
             : status === 'connecting'
             ? 'Connecting...'
+            : hasError
+            ? 'Error'
             : isWorking
-            ? 'Agent Working'
+            ? `Agent Working${activeNode ? ` — ${activeNode}` : ''}`
             : 'Agent Idle'}
         </span>
       </div>
