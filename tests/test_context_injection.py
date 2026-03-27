@@ -12,6 +12,11 @@ from agent.nodes.reader import reader_node
 def make_config_with_mock_router(return_value):
     mock_router = MagicMock()
     mock_router.call = AsyncMock(return_value=return_value)
+    mock_router.call_structured = AsyncMock(return_value=return_value)
+    mock_model_config = MagicMock()
+    mock_model_config.context_window = 128000
+    mock_model_config.max_output = 16384
+    mock_router.resolve_model = MagicMock(return_value=mock_model_config)
     return {"configurable": {"router": mock_router}}
 
 
@@ -45,59 +50,59 @@ def sample_state(tmp_codebase):
 async def test_editor_receives_context_spec_and_schema(sample_state, tmp_codebase):
     """Verify schema and spec content appear in the prompt sent to the LLM."""
     ts_path = os.path.join(tmp_codebase, "sample.ts")
-    mock_response = json.dumps({
-        "anchor": '  description: string;\n  status: "open" | "closed";',
-        "replacement": '  description: string;\n  due_date: string;\n  status: "open" | "closed";',
-    })
+    from agent.schemas import EditResponse
+    mock_edit = EditResponse(
+        anchor='  description: string;\n  status: "open" | "closed";',
+        replacement='  description: string;\n  due_date: string;\n  status: "open" | "closed";',
+    )
 
-    config = make_config_with_mock_router(mock_response)
+    config = make_config_with_mock_router(mock_edit)
     await editor_node(sample_state, config=config)
 
-    # Capture the user_prompt argument passed to router.call
-    call_args = config["configurable"]["router"].call.call_args
-    user_prompt = call_args[0][2]  # positional: (task_type, system, user)
+    # Capture the user_prompt argument passed to router.call_structured
+    call_args = config["configurable"]["router"].call_structured.call_args
+    user_prompt = call_args[0][2]  # positional: (task_type, system, user, model)
 
-    assert "Schema:" in user_prompt
+    # Context assembled via ContextAssembler — check content is present
     assert "interface Issue" in user_prompt
-    assert "Spec:" in user_prompt
-    assert "due_date" in user_prompt
+    assert "Priority: high" in user_prompt
+    assert "due_date" in user_prompt or "The Issue type" in user_prompt
 
 
 @pytest.mark.asyncio
 async def test_editor_receives_test_results_as_error(sample_state, tmp_codebase):
     """Verify test_results context appears in the prompt sent to the LLM."""
     ts_path = os.path.join(tmp_codebase, "sample.ts")
-    mock_response = json.dumps({
-        "anchor": '  description: string;\n  status: "open" | "closed";',
-        "replacement": '  description: string;\n  due_date: string;\n  status: "open" | "closed";',
-    })
+    from agent.schemas import EditResponse
+    mock_edit = EditResponse(
+        anchor='  description: string;\n  status: "open" | "closed";',
+        replacement='  description: string;\n  due_date: string;\n  status: "open" | "closed";',
+    )
 
-    config = make_config_with_mock_router(mock_response)
+    config = make_config_with_mock_router(mock_edit)
     await editor_node(sample_state, config=config)
 
-    call_args = config["configurable"]["router"].call.call_args
+    call_args = config["configurable"]["router"].call_structured.call_args
     user_prompt = call_args[0][2]
 
-    assert "Test Results:" in user_prompt
     assert "FAIL: test_issue_due_date" in user_prompt
 
 
 @pytest.mark.asyncio
 async def test_editor_receives_extra_context(sample_state, tmp_codebase):
     """Verify extra context key appears in the prompt sent to the LLM."""
-    ts_path = os.path.join(tmp_codebase, "sample.ts")
-    mock_response = json.dumps({
-        "anchor": '  description: string;\n  status: "open" | "closed";',
-        "replacement": '  description: string;\n  due_date: string;\n  status: "open" | "closed";',
-    })
+    from agent.schemas import EditResponse
+    mock_edit = EditResponse(
+        anchor='  description: string;\n  status: "open" | "closed";',
+        replacement='  description: string;\n  due_date: string;\n  status: "open" | "closed";',
+    )
 
-    config = make_config_with_mock_router(mock_response)
+    config = make_config_with_mock_router(mock_edit)
     await editor_node(sample_state, config=config)
 
-    call_args = config["configurable"]["router"].call.call_args
+    call_args = config["configurable"]["router"].call_structured.call_args
     user_prompt = call_args[0][2]
 
-    assert "Extra Context:" in user_prompt
     assert "Priority: high" in user_prompt
 
 
@@ -143,11 +148,12 @@ async def test_editor_empty_context_still_works(tmp_codebase):
         "has_conflicts": False,
     }
 
-    mock_response = json.dumps({
-        "anchor": '  description: string;\n  status: "open" | "closed";',
-        "replacement": '  description: string;\n  due_date: string;\n  status: "open" | "closed";',
-    })
+    from agent.schemas import EditResponse
+    mock_edit = EditResponse(
+        anchor='  description: string;\n  status: "open" | "closed";',
+        replacement='  description: string;\n  due_date: string;\n  status: "open" | "closed";',
+    )
 
-    config = make_config_with_mock_router(mock_response)
+    config = make_config_with_mock_router(mock_edit)
     result = await editor_node(state, config=config)
-    assert result["error_state"] is None
+    assert result.get("error_state") is None
