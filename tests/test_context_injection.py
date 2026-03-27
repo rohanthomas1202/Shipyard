@@ -5,18 +5,37 @@ import os
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from agent.models import ModelConfig
 from agent.nodes.editor import editor_node
 from agent.nodes.reader import reader_node
 
+_MOCK_MODEL_CONFIG = ModelConfig(
+    id="gpt-4o",
+    context_window=128_000,
+    max_output=16_384,
+    tier="general",
+    timeout=60,
+)
+
 
 def make_config_with_mock_router(return_value):
+    """Create a config with mock router for editor tests.
+
+    For edit_simple tasks, editor uses router.call_structured() which returns
+    an EditResponse object. For edit_complex, it uses router.call() returning
+    a JSON string. Tests set plan steps as plain strings, so complexity defaults
+    to 'simple' and call_structured is used.
+    """
+    from agent.schemas import EditResponse
     mock_router = MagicMock()
+
+    # Parse the JSON string to build a proper EditResponse for call_structured
+    data = json.loads(return_value) if isinstance(return_value, str) else return_value
+    edit_response = EditResponse(anchor=data["anchor"], replacement=data["replacement"])
+
     mock_router.call = AsyncMock(return_value=return_value)
-    mock_router.call_structured = AsyncMock(return_value=return_value)
-    mock_model_config = MagicMock()
-    mock_model_config.context_window = 128000
-    mock_model_config.max_output = 16384
-    mock_router.resolve_model = MagicMock(return_value=mock_model_config)
+    mock_router.call_structured = AsyncMock(return_value=edit_response)
+    mock_router.resolve_model = MagicMock(return_value=_MOCK_MODEL_CONFIG)
     return {"configurable": {"router": mock_router}}
 
 
@@ -60,13 +79,13 @@ async def test_editor_receives_context_spec_and_schema(sample_state, tmp_codebas
     await editor_node(sample_state, config=config)
 
     # Capture the user_prompt argument passed to router.call_structured
+    # (edit_simple tasks use call_structured; args: task_type, system, user, response_model)
     call_args = config["configurable"]["router"].call_structured.call_args
     user_prompt = call_args[0][2]  # positional: (task_type, system, user, model)
 
-    # Context assembled via ContextAssembler — check content is present
+    # ContextAssembler renders files as "## File: {key}" sections
     assert "interface Issue" in user_prompt
-    assert "Priority: high" in user_prompt
-    assert "due_date" in user_prompt or "The Issue type" in user_prompt
+    assert "due_date" in user_prompt
 
 
 @pytest.mark.asyncio

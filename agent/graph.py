@@ -203,6 +203,7 @@ def _build_graph_nodes(graph: StateGraph):
     # Plan-step git_ops continues the plan loop
     graph.add_edge("git_ops", "advance")
 
+    # Refactor goes through validation
     graph.add_edge("refactor", "validator")
 
     # Reporter routes to auto_git when edits exist, otherwise END
