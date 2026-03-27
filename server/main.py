@@ -443,6 +443,43 @@ async def continue_run(run_id: str, req: InstructionRequest):
     return {"run_id": run_id, "status": "running"}
 
 
+@app.get("/browse")
+async def browse_directory(path: str = "~"):
+    """List directories at the given path for the folder picker UI."""
+    import pathlib
+    target = pathlib.Path(path).expanduser().resolve()
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=f"Path not found: {target}")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {target}")
+    entries = []
+    try:
+        for entry in sorted(target.iterdir()):
+            if entry.name.startswith('.'):
+                continue
+            try:
+                if entry.is_dir():
+                    try:
+                        has_kids = any(c.is_dir() for c in entry.iterdir() if not c.name.startswith('.'))
+                    except (PermissionError, OSError):
+                        has_kids = False
+                    entries.append({
+                        "name": entry.name,
+                        "path": str(entry),
+                        "is_dir": True,
+                        "has_children": has_kids,
+                    })
+            except (PermissionError, OSError):
+                continue
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Permission denied: {target}")
+    return {
+        "current": str(target),
+        "parent": str(target.parent) if target != target.parent else None,
+        "entries": entries,
+    }
+
+
 @app.get("/projects")
 async def list_projects():
     store: SQLiteSessionStore = app.state.store

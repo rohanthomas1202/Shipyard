@@ -28,6 +28,12 @@ export const api = {
   // Health
   healthCheck: () => request<{ status: string }>('/health'),
 
+  // Browse filesystem
+  browse: (path?: string) =>
+    request<{ current: string; parent: string | null; entries: { name: string; path: string; is_dir: boolean; has_children: boolean }[] }>(
+      `/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`
+    ),
+
   // Projects
   getProjects: () => request<Project[]>('/projects'),
   createProject: (name: string, path: string) =>
