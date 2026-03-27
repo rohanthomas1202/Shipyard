@@ -120,6 +120,10 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
 
     tracer.log("validator", {"file": file_path, "syntax_valid": check["valid"], "error": check["error"]})
 
+    context = state.get("context", {})
+    if context.get("test_results"):
+        tracer.log("validator_context", {"test_results_available": True})
+
     if not check["valid"]:
         _rollback(last_edit)
         error_msg = f"Syntax check failed for {file_path}: {check['error']}. Edit rolled back."

@@ -178,6 +178,12 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
     context = state.get("context", {})
     if context.get("spec"):
         assembler.add_file("spec", context["spec"], priority="reference")
+    if context.get("schema"):
+        assembler.add_file("schema", context["schema"], priority="reference")
+    if context.get("test_results"):
+        assembler.add_file("test_results", context["test_results"], priority="reference")
+    if context.get("extra"):
+        assembler.add_file("extra_context", context["extra"], priority="reference")
 
     context_section = assembler.build()
 
