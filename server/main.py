@@ -14,7 +14,7 @@ from agent.approval import ApprovalManager, InvalidTransitionError
 from store.sqlite import SQLiteSessionStore
 from agent.git import GitManager
 from agent.github import GitHubClient
-from store.models import Project, Run, GitOperation
+from store.models import Project, Run, GitOperation, Event
 from server.websocket import ConnectionManager
 
 
@@ -284,7 +284,23 @@ async def _resume_run(run_id: str) -> None:
         runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
         logger.info("Run %s cancelled by user (resume)", run_id)
     except Exception as e:
+        logger.exception("Run %s failed (resume): %s", run_id, e)
         runs[run_id] = {"status": "error", "result": str(e)}
+        try:
+            event_bus: EventBus = app.state.event_bus
+            # Get project_id from state if available
+            state = runs[run_id].get("result", {})
+            resume_project_id = state.get("project_id", "default") if isinstance(state, dict) else "default"
+            error_event = Event(
+                project_id=resume_project_id,
+                run_id=run_id,
+                type="error",
+                node="system",
+                data={"error": str(e), "status": "error"},
+            )
+            await event_bus.emit(error_event)
+        except Exception:
+            logger.exception("Failed to emit error event for run %s", run_id)
 
 
 @app.get("/health")
@@ -344,16 +360,47 @@ async def submit_instruction(req: InstructionRequest):
                         "run_id": run_id,
                         "lsp_manager": lsp_mgr,
                         "thread_id": run_id,
+                        "event_bus": app.state.event_bus,
+                        "project_id": project_id,
                     },
                     "tags": [f"run_id:{run_id}"],
                 }
+                event_bus: EventBus = app.state.event_bus
+                await event_bus.emit(Event(
+                    project_id=project_id,
+                    run_id=run_id,
+                    type="run_started",
+                    node="system",
+                    data={"instruction": req.instruction},
+                ))
                 result = await graph.ainvoke(initial_state, config=config)
                 if result.get("waiting_for_human"):
                     runs[run_id] = {"status": "waiting_for_human", "result": result}
+                    await event_bus.emit(Event(
+                        project_id=project_id,
+                        run_id=run_id,
+                        type="run_waiting",
+                        node="system",
+                        data={"status": "waiting_for_human"},
+                    ))
                 elif result.get("error_state") is None:
                     runs[run_id] = {"status": "completed", "result": result}
+                    await event_bus.emit(Event(
+                        project_id=project_id,
+                        run_id=run_id,
+                        type="run_completed",
+                        node="system",
+                        data={"status": "completed"},
+                    ))
                 else:
                     runs[run_id] = {"status": "failed", "result": result}
+                    await event_bus.emit(Event(
+                        project_id=project_id,
+                        run_id=run_id,
+                        type="run_failed",
+                        node="system",
+                        data={"status": "failed", "error": str(result.get("error_state", ""))},
+                    ))
 
                 # Capture LangSmith trace link
                 from agent.tracing import share_trace_link
@@ -372,6 +419,17 @@ async def submit_instruction(req: InstructionRequest):
             runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
             logger.info("Run %s cancelled by user", run_id)
             try:
+                event_bus: EventBus = app.state.event_bus
+                await event_bus.emit(Event(
+                    project_id=project_id,
+                    run_id=run_id,
+                    type="run_cancelled",
+                    node="system",
+                    data={"status": "cancelled"},
+                ))
+            except Exception:
+                logger.exception("Failed to emit run_cancelled event for run %s", run_id)
+            try:
                 db_run = await store.get_run(run_id)
                 if db_run:
                     db_run.status = "cancelled"
@@ -379,7 +437,20 @@ async def submit_instruction(req: InstructionRequest):
             except Exception:
                 logger.exception("Failed to update cancelled run %s in store", run_id)
         except Exception as e:
+            logger.exception("Run %s failed: %s", run_id, e)
             runs[run_id] = {"status": "error", "result": str(e)}
+            try:
+                event_bus: EventBus = app.state.event_bus
+                error_event = Event(
+                    project_id=project_id,
+                    run_id=run_id,
+                    type="error",
+                    node="system",
+                    data={"error": str(e), "status": "error"},
+                )
+                await event_bus.emit(error_event)
+            except Exception:
+                logger.exception("Failed to emit error event for run %s", run_id)
 
     task = asyncio.create_task(execute())
     runs[run_id]["task"] = task
@@ -424,6 +495,7 @@ async def continue_run(run_id: str, req: InstructionRequest):
     store: SQLiteSessionStore = app.state.store
     router: ModelRouter = app.state.router
     runs[run_id]["status"] = "running"
+    project_id = req.project_id or "default"
 
     async def execute():
         try:
@@ -445,16 +517,47 @@ async def continue_run(run_id: str, req: InstructionRequest):
                         "run_id": run_id,
                         "lsp_manager": lsp_mgr,
                         "thread_id": run_id,
+                        "event_bus": app.state.event_bus,
+                        "project_id": project_id,
                     },
                     "tags": [f"run_id:{run_id}"],
                 }
+                event_bus: EventBus = app.state.event_bus
+                await event_bus.emit(Event(
+                    project_id=project_id,
+                    run_id=run_id,
+                    type="run_started",
+                    node="system",
+                    data={"instruction": req.instruction},
+                ))
                 result = await graph.ainvoke(state, config=config)
                 if result.get("waiting_for_human"):
                     runs[run_id] = {"status": "waiting_for_human", "result": result}
+                    await event_bus.emit(Event(
+                        project_id=project_id,
+                        run_id=run_id,
+                        type="run_waiting",
+                        node="system",
+                        data={"status": "waiting_for_human"},
+                    ))
                 elif result.get("error_state") is None:
                     runs[run_id] = {"status": "completed", "result": result}
+                    await event_bus.emit(Event(
+                        project_id=project_id,
+                        run_id=run_id,
+                        type="run_completed",
+                        node="system",
+                        data={"status": "completed"},
+                    ))
                 else:
                     runs[run_id] = {"status": "failed", "result": result}
+                    await event_bus.emit(Event(
+                        project_id=project_id,
+                        run_id=run_id,
+                        type="run_failed",
+                        node="system",
+                        data={"status": "failed", "error": str(result.get("error_state", ""))},
+                    ))
 
                 # Capture LangSmith trace link
                 from agent.tracing import share_trace_link
@@ -465,8 +568,32 @@ async def continue_run(run_id: str, req: InstructionRequest):
             _rollback_edits(run_id)
             runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
             logger.info("Run %s cancelled by user (continue)", run_id)
+            try:
+                event_bus: EventBus = app.state.event_bus
+                await event_bus.emit(Event(
+                    project_id=project_id,
+                    run_id=run_id,
+                    type="run_cancelled",
+                    node="system",
+                    data={"status": "cancelled"},
+                ))
+            except Exception:
+                logger.exception("Failed to emit run_cancelled event for run %s", run_id)
         except Exception as e:
+            logger.exception("Run %s failed (continue): %s", run_id, e)
             runs[run_id] = {"status": "error", "result": str(e)}
+            try:
+                event_bus: EventBus = app.state.event_bus
+                error_event = Event(
+                    project_id=project_id,
+                    run_id=run_id,
+                    type="error",
+                    node="system",
+                    data={"error": str(e), "status": "error"},
+                )
+                await event_bus.emit(error_event)
+            except Exception:
+                logger.exception("Failed to emit error event for run %s", run_id)
 
     task = asyncio.create_task(execute())
     runs[run_id]["task"] = task
