@@ -59,7 +59,12 @@ Plans:
   3. During an agent run, files the agent modifies show live M (modified), A (added), or D (deleted) indicators that appear without page refresh
   4. User can click a file in the explorer to open it in the editor area (content loads from the backend)
   5. /browse endpoint cannot be used to read files outside the project directory (path traversal returns an error)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Enhance /browse to return files with filtering, add /files endpoint with path traversal security
+- [ ] 09-02-PLAN.md — Lazy-loaded FileTree with TreeNode component, M/A/D change indicators, file click to open
+
 **UI hint**: yes
 
 ### Phase 10: Code & Diff Viewing
@@ -100,7 +105,7 @@ Note: Phase 11 depends on Phase 8 (not 10) and can overlap with Phases 9-10 if n
 | 6. Ship Rebuild | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 7. Deliverables & Deployment | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 8. Foundation — Layout, State Architecture, TopBar | v1.1 | 0/2 | In progress | - |
-| 9. File Explorer & Backend APIs | v1.1 | 0/0 | Not started | - |
+| 9. File Explorer & Backend APIs | v1.1 | 0/2 | Not started | - |
 | 10. Code & Diff Viewing | v1.1 | 0/0 | Not started | - |
 | 11. Agent Activity Stream | v1.1 | 0/0 | Not started | - |
 
