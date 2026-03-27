@@ -9,9 +9,18 @@ in the project are ignored.
 import asyncio
 import json
 import os
+import re
 from langgraph.types import RunnableConfig
 from agent.tools.shell import run_command_async
 from agent.tracing import TraceLogger
+
+
+def _normalize_error_msg(msg: str) -> str:
+    """Strip line/col numbers and paths for error dedup comparison."""
+    normalized = re.sub(r'[Ll]ine \d+', 'Line N', msg)
+    normalized = re.sub(r'col \d+|column \d+|offset \d+', 'col N', normalized)
+    normalized = re.sub(r'/[^\s:]+/', '/', normalized)
+    return normalized.strip()
 
 tracer = TraceLogger()
 
@@ -114,6 +123,12 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
     if not check["valid"]:
         _rollback(last_edit)
         error_msg = f"Syntax check failed for {file_path}: {check['error']}. Edit rolled back."
+        error_history = list(state.get("validation_error_history", []))
+        error_history.append({
+            "step": state.get("current_step", 0),
+            "file_path": file_path,
+            "normalized_error": _normalize_error_msg(check["error"]),
+        })
         return {
             "error_state": error_msg,
             "last_validation_error": {
@@ -121,6 +136,7 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
                 "error_message": check["error"],
                 "validator_type": "syntax_check",
             },
+            "validation_error_history": error_history,
         }
 
     return {"error_state": None}
@@ -175,6 +191,7 @@ async def _lsp_validate(client, file_path: str, edit_entry: dict) -> dict | None
                 "error_message": error_msgs,
                 "validator_type": "lsp",
             },
+            "validation_error_history": error_history,
         }
 
     return {"error_state": None}

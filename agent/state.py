@@ -13,6 +13,7 @@ class AgentState(TypedDict):
     edit_history: list[dict]
     error_state: Optional[str]
     last_validation_error: Optional[dict]
+    validation_error_history: list[dict]
     # Multi-agent coordination fields
     is_parallel: bool
     parallel_batches: list[list[int]]

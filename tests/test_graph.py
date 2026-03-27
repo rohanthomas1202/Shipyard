@@ -1,5 +1,5 @@
 import pytest
-from agent.graph import build_graph
+from agent.graph import build_graph, should_continue, _normalize_error, _has_repeated_error
 
 def test_graph_compiles():
     graph = build_graph()
@@ -25,6 +25,77 @@ def test_classify_step_routes_refactor():
     }
     result = classify_step(state)
     assert result == "refactor"
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker tests
+# ---------------------------------------------------------------------------
+
+def _make_state(current_step=0, plan_len=3, error_state="some error",
+                last_validation_error=None, validation_error_history=None):
+    """Helper to build a minimal state dict for should_continue tests."""
+    return {
+        "error_state": error_state,
+        "plan": [f"step{i}" for i in range(plan_len)],
+        "current_step": current_step,
+        "edit_history": [],
+        "last_validation_error": last_validation_error,
+        "validation_error_history": validation_error_history or [],
+    }
+
+
+def test_circuit_breaker_triggers_on_repeated_errors():
+    """After 2 identical errors on same step, should_continue returns 'advance'."""
+    norm_err = "SyntaxError: invalid syntax"
+    state = _make_state(
+        current_step=0,
+        plan_len=3,
+        error_state="Syntax check failed",
+        last_validation_error={"error_message": norm_err, "file_path": "foo.py", "validator_type": "syntax_check"},
+        validation_error_history=[
+            {"step": 0, "file_path": "foo.py", "normalized_error": norm_err},
+            {"step": 0, "file_path": "foo.py", "normalized_error": norm_err},
+        ],
+    )
+    assert should_continue(state) == "advance"
+
+
+def test_circuit_breaker_does_not_trigger_on_different_errors():
+    """Different errors on the same step should retry normally."""
+    state = _make_state(
+        current_step=0,
+        plan_len=3,
+        error_state="Syntax check failed",
+        last_validation_error={"error_message": "SyntaxError: invalid syntax", "file_path": "foo.py", "validator_type": "syntax_check"},
+        validation_error_history=[
+            {"step": 0, "file_path": "foo.py", "normalized_error": "SyntaxError: invalid syntax"},
+            {"step": 0, "file_path": "foo.py", "normalized_error": "NameError: name 'x' is not defined"},
+        ],
+    )
+    assert should_continue(state) == "reader"
+
+
+def test_circuit_breaker_reporter_on_last_step():
+    """On the last step, circuit breaker should route to reporter instead of advance."""
+    norm_err = "SyntaxError: invalid syntax"
+    state = _make_state(
+        current_step=2,
+        plan_len=3,
+        error_state="Syntax check failed",
+        last_validation_error={"error_message": norm_err, "file_path": "foo.py", "validator_type": "syntax_check"},
+        validation_error_history=[
+            {"step": 2, "file_path": "foo.py", "normalized_error": norm_err},
+            {"step": 2, "file_path": "foo.py", "normalized_error": norm_err},
+        ],
+    )
+    assert should_continue(state) == "reporter"
+
+
+def test_normalize_error_strips_line_numbers():
+    """Error normalization makes line/col-differing messages compare equal."""
+    a = _normalize_error("Line 42, col 5: invalid syntax")
+    b = _normalize_error("Line 99, col 12: invalid syntax")
+    assert a == b
 
 
 import os

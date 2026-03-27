@@ -1,3 +1,5 @@
+import re
+
 from langgraph.graph import StateGraph, END
 from agent.state import AgentState
 from agent.nodes.receive import receive_instruction_node
@@ -11,6 +13,30 @@ from agent.nodes.merger import merger_node
 from agent.nodes.reporter import reporter_node
 from agent.nodes.git_ops import git_ops_node
 from agent.nodes.refactor import refactor_node
+
+
+def _normalize_error(msg: str) -> str:
+    """Strip line/col numbers and paths for error dedup comparison."""
+    normalized = re.sub(r'[Ll]ine \d+', 'Line N', msg)
+    normalized = re.sub(r'col \d+|column \d+|offset \d+', 'col N', normalized)
+    normalized = re.sub(r'/[^\s:]+/', '/', normalized)
+    return normalized.strip()
+
+
+def _has_repeated_error(state: dict, threshold: int = 2) -> bool:
+    """Check if the same normalized error has occurred threshold+ times for current step."""
+    history = state.get("validation_error_history", [])
+    current_step = state.get("current_step", 0)
+    lve = state.get("last_validation_error")
+    if not lve:
+        return False
+
+    current_normalized = _normalize_error(lve.get("error_message", ""))
+    count = 0
+    for entry in history:
+        if entry.get("step") == current_step and entry.get("normalized_error") == current_normalized:
+            count += 1
+    return count >= threshold
 
 
 def _retry_count(state: dict) -> int:
@@ -31,6 +57,8 @@ def should_continue(state: dict) -> str:
     if error:
         if _retry_count(state) >= 3:
             return "reporter"
+        if _has_repeated_error(state, threshold=2):
+            return "advance" if step + 1 < len(plan) else "reporter"
         return "reader"
 
     if step + 1 < len(plan):
