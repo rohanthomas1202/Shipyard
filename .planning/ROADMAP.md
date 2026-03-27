@@ -50,7 +50,7 @@ Plans:
   5. SQLite handles concurrent reads and writes without lock contention errors
 **Plans**: 3 plans
 Plans:
-- [ ] 02-01-PLAN.md — Async subprocess conversion and SQLite WAL mode (INFRA-01, INFRA-02)
+- [x] 02-01-PLAN.md — Async subprocess conversion and SQLite WAL mode (INFRA-01, INFRA-02)
 - [ ] 02-02-PLAN.md — Python syntax checking and LSP fallback hardening (VALID-02, VALID-03)
 - [ ] 02-03-PLAN.md — Circuit breaker for repeated validation errors (VALID-04)
 
