@@ -75,7 +75,11 @@ def mock_router():
         mock_response.replacement = "  updated_at: string;\n  status: 'active' | 'archived';\n}"
         return mock_response
 
+    async def mock_call_streaming(task_type, system, user, **kwargs):
+        return await mock_call(task_type, system, user)
+
     router.call = AsyncMock(side_effect=mock_call)
+    router.call_streaming = AsyncMock(side_effect=mock_call_streaming)
     router.call_structured = AsyncMock(side_effect=mock_call_structured)
     return router
 

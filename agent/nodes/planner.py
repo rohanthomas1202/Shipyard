@@ -52,7 +52,19 @@ async def planner_node(state: dict, config: RunnableConfig) -> dict:
         file_listing="",
     )
 
-    raw = await router.call("plan", PLANNER_SYSTEM, user_prompt)
+    event_bus = config["configurable"].get("event_bus")
+    project_id = config["configurable"].get("project_id", "")
+    run_id = config["configurable"].get("run_id", "")
+
+    raw = await router.call_streaming(
+        "plan",
+        PLANNER_SYSTEM,
+        user_prompt,
+        event_bus=event_bus,
+        project_id=project_id,
+        run_id=run_id,
+        node="planner",
+    )
     steps = parse_plan_steps(raw)
 
     tracer.log("planner", {"steps": len(steps), "instruction": instruction[:100]})
