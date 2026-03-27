@@ -19,6 +19,26 @@ from server.websocket import ConnectionManager
 
 runs: dict[str, dict] = {}
 
+
+def _rollback_edits(run_id: str) -> None:
+    """Roll back in-progress edits for a cancelled run using snapshots."""
+    run_entry = runs.get(run_id, {})
+    result = run_entry.get("result")
+    if not isinstance(result, dict):
+        return
+    edit_history = result.get("edit_history", [])
+    for entry in edit_history:
+        snapshot = entry.get("snapshot")
+        file_path = entry.get("file_path")
+        if snapshot and file_path:
+            try:
+                with open(file_path, "w") as f:
+                    f.write(snapshot)
+                logger.info("Rolled back %s during cancellation", file_path)
+            except OSError:
+                logger.exception("Failed to rollback %s", file_path)
+
+
 DB_PATH = os.environ.get("SHIPYARD_DB_PATH", "shipyard.db")
 
 HEARTBEAT_INTERVAL = 15
@@ -47,6 +67,9 @@ async def _resume_from_checkpoint(run_id: str) -> None:
                 "thread_id": run_id,
             }
         }
+        task = asyncio.current_task()
+        if task:
+            runs[run_id]["task"] = task
         result = await graph.ainvoke(None, config=config)
         if result.get("error_state") is None:
             runs[run_id] = {"status": "completed", "result": result}
@@ -55,6 +78,12 @@ async def _resume_from_checkpoint(run_id: str) -> None:
             runs[run_id] = {"status": "failed", "result": result}
             run.status = "failed"
         await store.update_run(run)
+    except asyncio.CancelledError:
+        _rollback_edits(run_id)
+        runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
+        run.status = "cancelled"
+        await store.update_run(run)
+        logger.info("Run %s cancelled by user (checkpoint resume)", run_id)
     except Exception as e:
         logger.exception("Failed to resume run %s", run_id)
         runs[run_id] = {"status": "error", "result": str(e)}
@@ -194,6 +223,9 @@ async def _resume_run(run_id: str) -> None:
                     "thread_id": run_id,
                 }
             }
+            task = asyncio.current_task()
+            if task:
+                runs[run_id]["task"] = task
             result = await graph.ainvoke(state, config=config)
             if result.get("waiting_for_human"):
                 runs[run_id] = {"status": "waiting_for_human", "result": result}
@@ -201,6 +233,10 @@ async def _resume_run(run_id: str) -> None:
                 runs[run_id] = {"status": "completed", "result": result}
             else:
                 runs[run_id] = {"status": "failed", "result": result}
+    except asyncio.CancelledError:
+        _rollback_edits(run_id)
+        runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
+        logger.info("Run %s cancelled by user (resume)", run_id)
     except Exception as e:
         runs[run_id] = {"status": "error", "result": str(e)}
 
@@ -271,10 +307,22 @@ async def submit_instruction(req: InstructionRequest):
                     runs[run_id] = {"status": "completed", "result": result}
                 else:
                     runs[run_id] = {"status": "failed", "result": result}
+        except asyncio.CancelledError:
+            _rollback_edits(run_id)
+            runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
+            logger.info("Run %s cancelled by user", run_id)
+            try:
+                db_run = await store.get_run(run_id)
+                if db_run:
+                    db_run.status = "cancelled"
+                    await store.update_run(db_run)
+            except Exception:
+                logger.exception("Failed to update cancelled run %s in store", run_id)
         except Exception as e:
             runs[run_id] = {"status": "error", "result": str(e)}
 
-    asyncio.create_task(execute())
+    task = asyncio.create_task(execute())
+    runs[run_id]["task"] = task
     return InstructionResponse(run_id=run_id, status="running")
 
 
@@ -284,6 +332,24 @@ async def get_status(run_id: str):
         raise HTTPException(status_code=404, detail="Run not found")
     run = runs[run_id]
     return {"run_id": run_id, "status": run["status"], "result": run.get("result")}
+
+
+@app.post("/runs/{run_id}/cancel")
+async def cancel_run(run_id: str):
+    """Cancel a running agent run."""
+    if run_id not in runs:
+        raise HTTPException(status_code=404, detail="Run not found")
+    run_entry = runs[run_id]
+    if run_entry["status"] not in ("running",):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot cancel run in state: {run_entry['status']}",
+        )
+    run_entry["status"] = "cancelling"
+    task = run_entry.get("task")
+    if task and not task.done():
+        task.cancel()
+    return {"run_id": run_id, "status": "cancelling"}
 
 
 @app.post("/instruction/{run_id}")
@@ -323,10 +389,15 @@ async def continue_run(run_id: str, req: InstructionRequest):
                     runs[run_id] = {"status": "completed", "result": result}
                 else:
                     runs[run_id] = {"status": "failed", "result": result}
+        except asyncio.CancelledError:
+            _rollback_edits(run_id)
+            runs[run_id] = {"status": "cancelled", "result": "Cancelled by user"}
+            logger.info("Run %s cancelled by user (continue)", run_id)
         except Exception as e:
             runs[run_id] = {"status": "error", "result": str(e)}
 
-    asyncio.create_task(execute())
+    task = asyncio.create_task(execute())
+    runs[run_id]["task"] = task
     return {"run_id": run_id, "status": "running"}
 
 
