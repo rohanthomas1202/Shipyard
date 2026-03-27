@@ -139,4 +139,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 4. Crash Recovery & Run Lifecycle | 0/3 | Planned | - |
 | 5. Agent Core Features | 0/3 | Planned | - |
 | 6. Ship Rebuild | 1/3 | Executing | - |
-| 7. Deliverables & Deployment | 0/TBD | Not started | - |
+| 7. Deliverables & Deployment | 0/3 | Planned | - |
