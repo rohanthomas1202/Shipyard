@@ -26,6 +26,29 @@ _IGNORED_NAMES = {
     ".next", ".nuxt", "dist", "build", ".DS_Store",
 }
 
+_EXT_TO_LANG: dict[str, str] = {
+    ".py": "python", ".js": "javascript", ".jsx": "javascript",
+    ".ts": "typescript", ".tsx": "typescript",
+    ".html": "html", ".htm": "html",
+    ".css": "css", ".scss": "scss", ".less": "less",
+    ".json": "json", ".yaml": "yaml", ".yml": "yaml",
+    ".md": "markdown", ".mdx": "markdown",
+    ".sql": "sql", ".sh": "shell", ".bash": "shell",
+    ".rs": "rust", ".go": "go", ".java": "java",
+    ".rb": "ruby", ".php": "php", ".swift": "swift",
+    ".kt": "kotlin", ".c": "c", ".cpp": "cpp", ".h": "c",
+    ".xml": "xml", ".svg": "xml", ".toml": "toml",
+    ".ini": "ini", ".cfg": "ini", ".env": "shell",
+    ".txt": "plaintext", ".log": "plaintext",
+    ".dockerfile": "dockerfile",
+}
+
+_BINARY_EXTS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".bmp",
+    ".pdf", ".zip", ".tar", ".gz", ".woff", ".woff2", ".ttf",
+    ".eot", ".mp3", ".mp4", ".wav", ".avi", ".mov", ".pyc", ".so", ".dll",
+}
+
 
 def _rollback_edits(run_id: str) -> None:
     """Roll back in-progress edits for a cancelled run using snapshots."""
@@ -511,6 +534,47 @@ async def browse_directory(project_id: str, path: str = ""):
         "current": str(target.relative_to(project_root)),
         "entries": entries,
     }
+
+
+@app.get("/files")
+async def read_file(project_id: str, path: str):
+    """Read file content with language detection. Validates path is within project root."""
+    store: SQLiteSessionStore = app.state.store
+    project = await store.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    project_root = pathlib.Path(project.path).resolve()
+    target = (project_root / path).resolve()
+
+    if not target.is_relative_to(project_root):
+        raise HTTPException(status_code=403, detail="Path traversal not allowed")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    if target.is_dir():
+        raise HTTPException(status_code=400, detail=f"Path is a directory: {path}")
+
+    ext = target.suffix.lower()
+    size = target.stat().st_size
+
+    if ext in _BINARY_EXTS:
+        return {"content": None, "language": "binary", "size": size, "binary": True, "path": path}
+
+    # Detect language from extension, fallback based on filename
+    language = _EXT_TO_LANG.get(ext, "plaintext")
+    if target.name == "Dockerfile":
+        language = "dockerfile"
+    elif target.name == "Makefile":
+        language = "makefile"
+    elif target.name == "Procfile":
+        language = "yaml"
+
+    try:
+        content = target.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return {"content": None, "language": "binary", "size": size, "binary": True, "path": path}
+
+    return {"content": content, "language": language, "size": size, "binary": False, "path": path}
 
 
 @app.get("/projects")
