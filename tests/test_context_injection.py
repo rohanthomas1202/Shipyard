@@ -5,13 +5,37 @@ import os
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from agent.models import ModelConfig
 from agent.nodes.editor import editor_node
 from agent.nodes.reader import reader_node
 
+_MOCK_MODEL_CONFIG = ModelConfig(
+    id="gpt-4o",
+    context_window=128_000,
+    max_output=16_384,
+    tier="general",
+    timeout=60,
+)
+
 
 def make_config_with_mock_router(return_value):
+    """Create a config with mock router for editor tests.
+
+    For edit_simple tasks, editor uses router.call_structured() which returns
+    an EditResponse object. For edit_complex, it uses router.call() returning
+    a JSON string. Tests set plan steps as plain strings, so complexity defaults
+    to 'simple' and call_structured is used.
+    """
+    from agent.schemas import EditResponse
     mock_router = MagicMock()
+
+    # Parse the JSON string to build a proper EditResponse for call_structured
+    data = json.loads(return_value) if isinstance(return_value, str) else return_value
+    edit_response = EditResponse(anchor=data["anchor"], replacement=data["replacement"])
+
     mock_router.call = AsyncMock(return_value=return_value)
+    mock_router.call_structured = AsyncMock(return_value=edit_response)
+    mock_router.resolve_model = MagicMock(return_value=_MOCK_MODEL_CONFIG)
     return {"configurable": {"router": mock_router}}
 
 
@@ -53,13 +77,15 @@ async def test_editor_receives_context_spec_and_schema(sample_state, tmp_codebas
     config = make_config_with_mock_router(mock_response)
     await editor_node(sample_state, config=config)
 
-    # Capture the user_prompt argument passed to router.call
-    call_args = config["configurable"]["router"].call.call_args
-    user_prompt = call_args[0][2]  # positional: (task_type, system, user)
+    # Capture the user_prompt argument passed to router.call_structured
+    # (edit_simple tasks use call_structured; args: task_type, system, user, response_model)
+    call_args = config["configurable"]["router"].call_structured.call_args
+    user_prompt = call_args[0][2]  # positional: (task_type, system, user, model)
 
-    assert "Schema:" in user_prompt
+    # ContextAssembler renders files as "## File: {key}" sections
+    assert "## File: schema" in user_prompt
     assert "interface Issue" in user_prompt
-    assert "Spec:" in user_prompt
+    assert "## File: spec" in user_prompt
     assert "due_date" in user_prompt
 
 
@@ -75,10 +101,11 @@ async def test_editor_receives_test_results_as_error(sample_state, tmp_codebase)
     config = make_config_with_mock_router(mock_response)
     await editor_node(sample_state, config=config)
 
-    call_args = config["configurable"]["router"].call.call_args
+    call_args = config["configurable"]["router"].call_structured.call_args
     user_prompt = call_args[0][2]
 
-    assert "Test Results:" in user_prompt
+    # test_results are added via assembler.add_file, rendered in "## File: test_results"
+    assert "## File: test_results" in user_prompt
     assert "FAIL: test_issue_due_date" in user_prompt
 
 
@@ -94,10 +121,11 @@ async def test_editor_receives_extra_context(sample_state, tmp_codebase):
     config = make_config_with_mock_router(mock_response)
     await editor_node(sample_state, config=config)
 
-    call_args = config["configurable"]["router"].call.call_args
+    call_args = config["configurable"]["router"].call_structured.call_args
     user_prompt = call_args[0][2]
 
-    assert "Extra Context:" in user_prompt
+    # extra context rendered as "## File: extra_context"
+    assert "## File: extra_context" in user_prompt
     assert "Priority: high" in user_prompt
 
 

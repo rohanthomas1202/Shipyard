@@ -31,6 +31,7 @@ async def client(tmp_path):
     app.state.router = ModelRouter()
     app.state.event_bus = event_bus
     app.state.conn_manager = conn_manager
+    app.state.approval_manager = None
 
     # Mock graph to avoid real LLM calls
     mock_graph = MagicMock()
@@ -57,8 +58,23 @@ async def client(tmp_path):
     app.state.graph = mock_graph
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
+
+    # Mock LspManager to avoid lsprotocol/pygls import issues in test env
+    mock_lsp_mgr = MagicMock()
+    mock_lsp_mgr.__aenter__ = AsyncMock(return_value=mock_lsp_mgr)
+    mock_lsp_mgr.__aexit__ = AsyncMock(return_value=None)
+    mock_lsp_mgr.get_client = MagicMock(return_value=None)
+
+    mock_lsp_module = MagicMock()
+    mock_lsp_module.LspManager = MagicMock(return_value=mock_lsp_mgr)
+
+    import sys
+    with (
+        patch.dict(sys.modules, {"agent.tools.lsp_manager": mock_lsp_module}),
+        patch("agent.tracing.share_trace_link", new_callable=AsyncMock, return_value=None),
+    ):
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c
 
     await event_bus.shutdown()
     await store.close()

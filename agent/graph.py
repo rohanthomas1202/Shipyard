@@ -12,7 +12,6 @@ from agent.nodes.coordinator import coordinator_node
 from agent.nodes.merger import merger_node
 from agent.nodes.reporter import reporter_node
 from agent.nodes.git_ops import git_ops_node
-<<<<<<< HEAD
 from agent.nodes.refactor import refactor_node
 
 
@@ -38,8 +37,6 @@ def _has_repeated_error(state: dict, threshold: int = 2) -> bool:
         if entry.get("step") == current_step and entry.get("normalized_error") == current_normalized:
             count += 1
     return count >= threshold
-=======
->>>>>>> worktree-agent-ac97db43
 
 
 def _retry_count(state: dict) -> int:
@@ -94,11 +91,8 @@ def classify_step(state: dict) -> str:
             return "reader_then_edit"
         if kind == "git":
             return "git_ops"
-<<<<<<< HEAD
         if kind == "refactor":
             return "refactor"
-=======
->>>>>>> worktree-agent-ac97db43
         return "reader_then_edit"
 
     # Fallback: legacy string-based step (backward compat)
@@ -148,11 +142,8 @@ def _build_graph_nodes(graph: StateGraph):
     graph.add_node("merger", merger_node)
     graph.add_node("reporter", reporter_node)
     graph.add_node("git_ops", git_ops_node)
-<<<<<<< HEAD
     graph.add_node("refactor", refactor_node)
-=======
     graph.add_node("auto_git", git_ops_node)
->>>>>>> worktree-agent-ac97db43
     graph.add_node("advance", advance_step)
     graph.add_node("classify", lambda _: {})
 
@@ -169,7 +160,6 @@ def _build_graph_nodes(graph: StateGraph):
         "git_ops": "git_ops",
         "refactor": "refactor",
         "reporter": "reporter",
-        "git_ops": "git_ops",
     })
 
     graph.add_conditional_edges("reader", after_reader, {
@@ -192,14 +182,12 @@ def _build_graph_nodes(graph: StateGraph):
     })
 
     graph.add_edge("advance", "classify")
-<<<<<<< HEAD
-    graph.add_edge("git_ops", "reporter")
-    graph.add_edge("refactor", "validator")
-    graph.add_edge("reporter", END)
-=======
 
     # Plan-step git_ops continues the plan loop
     graph.add_edge("git_ops", "advance")
+
+    # Refactor goes through validation
+    graph.add_edge("refactor", "validator")
 
     # Reporter routes to auto_git when edits exist, otherwise END
     graph.add_conditional_edges("reporter", after_reporter, {
@@ -207,7 +195,6 @@ def _build_graph_nodes(graph: StateGraph):
         "end": END,
     })
     graph.add_edge("auto_git", END)
->>>>>>> worktree-agent-ac97db43
 
 
 def build_graph(checkpointer=None):

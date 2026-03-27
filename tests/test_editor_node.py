@@ -3,6 +3,7 @@ import os
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+from agent.models import ModelConfig
 from agent.nodes.editor import editor_node, _build_error_feedback
 from agent.schemas import EditResponse
 from agent.state import AgentState
@@ -13,6 +14,14 @@ from store.sqlite import SQLiteSessionStore
 from agent.approval import ApprovalManager
 from agent.events import EventBus
 
+_MOCK_MODEL_CONFIG = ModelConfig(
+    id="gpt-4o",
+    context_window=128_000,
+    max_output=16_384,
+    tier="general",
+    timeout=60,
+)
+
 
 def make_config_with_mock_router(return_value):
     """Legacy helper: mocks both router.call (string) and router.call_structured.
@@ -22,6 +31,7 @@ def make_config_with_mock_router(return_value):
     """
     mock_router = MagicMock()
     mock_router.call = AsyncMock(return_value=return_value)
+    mock_router.resolve_model = MagicMock(return_value=_MOCK_MODEL_CONFIG)
     # Also provide call_structured that returns an EditResponse
     try:
         data = json.loads(return_value)
@@ -37,6 +47,7 @@ def make_config_with_structured_router(edit_response: EditResponse):
     mock_router = MagicMock()
     mock_router.call = AsyncMock(return_value=json.dumps({"anchor": edit_response.anchor, "replacement": edit_response.replacement}))
     mock_router.call_structured = AsyncMock(return_value=edit_response)
+    mock_router.resolve_model = MagicMock(return_value=_MOCK_MODEL_CONFIG)
     return {"configurable": {"router": mock_router}}
 
 
@@ -147,6 +158,7 @@ async def test_editor_node_supervised_mode_returns_waiting(
     mock_router = MagicMock()
     mock_router.call = AsyncMock(return_value=mock_response)
     mock_router.call_structured = AsyncMock(return_value=edit_resp)
+    mock_router.resolve_model = MagicMock(return_value=_MOCK_MODEL_CONFIG)
     config = {
         "configurable": {
             "router": mock_router,
@@ -182,6 +194,7 @@ async def test_editor_node_autonomous_mode_applies_edit(
     mock_router = MagicMock()
     mock_router.call = AsyncMock(return_value=mock_response)
     mock_router.call_structured = AsyncMock(return_value=edit_resp)
+    mock_router.resolve_model = MagicMock(return_value=_MOCK_MODEL_CONFIG)
     config = {
         "configurable": {
             "router": mock_router,
@@ -511,6 +524,7 @@ async def test_editor_fallback_to_string_call_on_reasoning_tier(tmp_codebase):
     mock_router = MagicMock()
     mock_router.call = AsyncMock(return_value=mock_response)
     mock_router.call_structured = AsyncMock()
+    mock_router.resolve_model = MagicMock(return_value=_MOCK_MODEL_CONFIG)
     config = {"configurable": {"router": mock_router}}
 
     state = {
