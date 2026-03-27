@@ -41,7 +41,12 @@
   3. User can collapse and expand any panel by clicking its header or drag handle
   4. User sees a persistent top bar with instruction input field, project selector dropdown, and run status indicator visible on every screen
   5. WebSocket messages during an agent run do not cause visible lag or jank in panels that are not consuming the message (no render storms)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Zustand stores (wsStore, workspaceStore) and WebSocketContext refactor to Zustand bridge
+- [ ] 08-02-PLAN.md — Three-panel IDE shell with TopBar, layout components, App.tsx wiring, E2E test updates
+
 **UI hint**: yes
 
 ### Phase 9: File Explorer & Backend APIs
@@ -94,7 +99,7 @@ Note: Phase 11 depends on Phase 8 (not 10) and can overlap with Phases 9-10 if n
 | 5. Agent Core Features | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 6. Ship Rebuild | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 7. Deliverables & Deployment | v1.0 | 3/3 | Complete | 2026-03-27 |
-| 8. Foundation — Layout, State Architecture, TopBar | v1.1 | 0/0 | Not started | - |
+| 8. Foundation — Layout, State Architecture, TopBar | v1.1 | 0/2 | In progress | - |
 | 9. File Explorer & Backend APIs | v1.1 | 0/0 | Not started | - |
 | 10. Code & Diff Viewing | v1.1 | 0/0 | Not started | - |
 | 11. Agent Activity Stream | v1.1 | 0/0 | Not started | - |
