@@ -31,7 +31,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 - [x] **INFRA-01**: All subprocess calls in executor and validator nodes are async (non-blocking), preventing event loop stalls that kill WebSocket connections
 - [x] **INFRA-02**: SQLite database runs in WAL mode for concurrent read/write access
 - [x] **INFRA-03**: All LLM calls use OpenAI structured outputs with strict: true to eliminate JSON parse failures
-- [ ] **INFRA-04**: LangGraph uses AsyncSqliteSaver for persistent checkpointing, enabling crash recovery and run resumption
+- [x] **INFRA-04**: LangGraph uses AsyncSqliteSaver for persistent checkpointing, enabling crash recovery and run resumption
 
 ### Run Lifecycle
 
@@ -105,7 +105,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | INFRA-01 | Phase 2 | Complete |
 | INFRA-02 | Phase 2 | Complete |
 | INFRA-03 | Phase 1 | Complete |
-| INFRA-04 | Phase 4 | Pending |
+| INFRA-04 | Phase 4 | Complete |
 | LIFE-01 | Phase 4 | Pending |
 | LIFE-02 | Phase 3 | Complete |
 | LIFE-03 | Phase 4 | Pending |

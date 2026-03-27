@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-03-27T00:52:09.909Z"
+status: executing
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-27T01:14:03.091Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 8
+  total_plans: 12
+  completed_plans: 9
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 03 — context-token-management
+**Current focus:** Phase 04 — crash-recovery-run-lifecycle
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 04 (crash-recovery-run-lifecycle) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-03-27
 
 Progress: [░░░░░░░░░░] 0%
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P02 | 3min | 1 tasks | 3 files |
 | Phase 03 P01 | 4min | 2 tasks | 6 files |
 | Phase 03 P03 | 3min | 2 tasks | 5 files |
+| Phase 04 P01 | 5min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Router external API unchanged (str/BaseModel) — no breaking changes to node callers
 - [Phase 03]: system_prompt_reserve default 500 tokens for ContextAssembler budget accuracy
 - [Phase 03]: Assembler build() output replaces inline context; template wraps it
+- [Phase 04]: AsyncSqliteSaver uses separate shipyard_checkpoints.db to isolate checkpoint data
+- [Phase 04]: Resume passes None to ainvoke() to trigger LangGraph checkpoint resume
+- [Phase 04]: trace_url added to Run model proactively to prevent schema conflicts with Plan 03
 
 ### Pending Todos
 
@@ -97,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T00:49:49.175Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-03-27T01:14:03.087Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None

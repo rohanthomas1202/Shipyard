@@ -78,7 +78,7 @@ Plans:
   3. LangSmith traces capture complete structured execution paths, with at least two shared trace links showing different paths (normal run and error recovery)
 **Plans**: 3 plans
 Plans:
-- [ ] 04-01-PLAN.md — AsyncSqliteSaver checkpointing and crash recovery resume (INFRA-04)
+- [x] 04-01-PLAN.md — AsyncSqliteSaver checkpointing and crash recovery resume (INFRA-04)
 - [ ] 04-02-PLAN.md — Graceful cancellation with edit rollback (LIFE-01)
 - [ ] 04-03-PLAN.md — LangSmith tracing with shared trace links (LIFE-03)
 
