@@ -1,0 +1,33 @@
+{
+  "name": "shipyard",
+  "description": "Autonomous AI coding agent with surgical file editing, multi-agent coordination, and full observability",
+  "keywords": ["ai", "coding-agent", "langgraph", "fastapi"],
+  "env": {
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for agent LLM calls",
+      "required": true
+    },
+    "LANGCHAIN_TRACING_V2": {
+      "description": "Enable LangSmith tracing",
+      "value": "true"
+    },
+    "LANGCHAIN_API_KEY": {
+      "description": "LangSmith API key for trace export",
+      "required": false
+    },
+    "LANGCHAIN_PROJECT": {
+      "description": "LangSmith project name",
+      "value": "shipyard"
+    }
+  },
+  "buildpacks": [
+    { "url": "heroku/nodejs" },
+    { "url": "heroku/python" }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  }
+}

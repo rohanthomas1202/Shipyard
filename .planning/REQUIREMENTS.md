@@ -59,6 +59,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 - [ ] **DELIV-03**: AI Development Log submitted (Tools & Workflow, Effective Prompts, Code Analysis, Strengths & Limitations, Key Learnings)
 - [ ] **DELIV-04**: AI Cost Analysis with actual dev spend and production cost projections at 100/1K/10K users
 - [ ] **DELIV-05**: Demo video (3-5 min) showing surgical edit, multi-agent task, and Ship rebuild example
+<<<<<<< HEAD
 =======
 - [ ] **DELIV-01**: CODEAGENT.md complete with all 8 sections (Agent Architecture, File Editing Strategy, Multi-Agent Design, Trace Links, Architecture Decisions, Ship Rebuild Log, Comparative Analysis, Cost Analysis)
 - [ ] **DELIV-02**: Comparative analysis covers all 7 required sections (Executive Summary, Architectural Comparison, Performance Benchmarks, Shortcomings, Advances, Trade-off Analysis, If You Built It Again)
@@ -67,6 +68,9 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 - [x] **DELIV-05**: Demo video (3-5 min) showing surgical edit, multi-agent task, and Ship rebuild example
 >>>>>>> worktree-agent-a11bd631
 - [ ] **DELIV-06**: Agent and agent-built Ship app both deployed and publicly accessible on Heroku/Railway
+=======
+- [x] **DELIV-06**: Agent and agent-built Ship app both deployed and publicly accessible on Heroku/Railway
+>>>>>>> worktree-agent-a66e7cb9
 
 ## v2 Requirements
 
@@ -136,12 +140,16 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | DELIV-03 | Phase 7 | Pending |
 | DELIV-04 | Phase 7 | Pending |
 | DELIV-05 | Phase 7 | Pending |
+<<<<<<< HEAD
 =======
 | DELIV-03 | Phase 7 | Complete |
 | DELIV-04 | Phase 7 | Complete |
 | DELIV-05 | Phase 7 | Complete |
 >>>>>>> worktree-agent-a11bd631
 | DELIV-06 | Phase 7 | Pending |
+=======
+| DELIV-06 | Phase 7 | Complete |
+>>>>>>> worktree-agent-a66e7cb9
 
 **Coverage:**
 - v1 requirements: 29 total
