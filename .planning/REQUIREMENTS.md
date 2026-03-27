@@ -1,161 +1,115 @@
 # Requirements: Shipyard
 
-**Defined:** 2026-03-26
+**Defined:** 2026-03-27
 **Core Value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
 
-## v1 Requirements
+## v1.1 Requirements
 
-Requirements for reliability hardening milestone. Each maps to roadmap phases.
+Requirements for IDE UI Rebuild milestone. Each maps to roadmap phases.
 
-### Edit Precision
+### Layout & Infrastructure
 
-- [x] **EDIT-01**: Editor implements layered anchor matching with fuzzy fallbacks (exact -> whitespace-normalized -> fuzzy Levenshtein) so edits succeed despite trivial formatting differences
-- [x] **EDIT-02**: Editor provides actionable error feedback when anchor matching fails (which anchor, what was found instead, similarity score) and feeds this into retry prompts
-- [x] **EDIT-03**: Editor preserves indentation style of surrounding code when applying replacements (detect tabs vs spaces, indentation level)
-- [x] **EDIT-04**: Editor checks file freshness via content checksums before applying edits, re-reads file if content has changed since last read
+- [ ] **LAYOUT-01**: User sees a VS Code-style three-panel resizable layout (file explorer | editor | agent stream)
+- [ ] **LAYOUT-02**: User can drag panel borders to resize, with sizes persisted across sessions
+- [ ] **LAYOUT-03**: User can collapse/expand any panel
+- [ ] **LAYOUT-04**: User sees a persistent top bar with instruction input, project selector, and run status
+- [ ] **LAYOUT-05**: High-frequency WebSocket state uses Zustand stores to prevent render storms across panels
 
-### Validation
+### File Explorer
 
-- [x] **VALID-01**: Validator feeds specific error details (file, line, error message, validator output) into the retry prompt so retries are informed, not blind
-- [x] **VALID-02**: Validator checks Python file syntax via py_compile or ast.parse after edits
-- [x] **VALID-03**: LSP diagnostic diffing reliably detects only NEW errors introduced by edits (baseline vs post-edit comparison), with graceful fallback when LSP is unavailable
-- [x] **VALID-04**: Validator implements circuit breaker — after 2 identical errors on same file/step, escalates model tier or skips step instead of retrying same approach
+- [ ] **FILES-01**: User sees a lazy-loaded directory tree of the selected project's files
+- [ ] **FILES-02**: User can expand/collapse directories to browse the file structure
+- [ ] **FILES-03**: User sees live M/A/D indicators on files the agent modifies during a run
+- [ ] **FILES-04**: File tree filters out .git, node_modules, __pycache__, and other gitignored paths
+- [ ] **FILES-05**: User can click a file in the explorer to open it in the editor area
 
-### Context Management
+### Code & Diff Viewing
 
-- [x] **CTX-01**: ContextAssembler is wired into all LLM-calling nodes (planner, editor, reader, validator, refactor) with token-budgeted prompt construction using ranked priorities
-- [x] **CTX-02**: Reader supports line-range reads for files >200 lines, loading only relevant sections to save tokens and reduce noise
+- [ ] **DIFF-01**: User sees a side-by-side diff view with proper line-level diff algorithm for agent edits
+- [ ] **DIFF-02**: User sees syntax-highlighted code when viewing any file in the editor area
+- [ ] **DIFF-03**: User can open multiple files and diffs in tabs with close functionality
+- [ ] **DIFF-04**: Diff view shows context lines around changes (not just changed lines)
 
-### Infrastructure
+### Agent Activity Stream
 
-- [x] **INFRA-01**: All subprocess calls in executor and validator nodes are async (non-blocking), preventing event loop stalls that kill WebSocket connections
-- [x] **INFRA-02**: SQLite database runs in WAL mode for concurrent read/write access
-- [x] **INFRA-03**: All LLM calls use OpenAI structured outputs with strict: true to eliminate JSON parse failures
-- [x] **INFRA-04**: LangGraph uses AsyncSqliteSaver for persistent checkpointing, enabling crash recovery and run resumption
+- [ ] **STREAM-01**: User sees a real-time step timeline of agent activity (planning, reading, editing, validating)
+- [ ] **STREAM-02**: Stream auto-scrolls when user is at the bottom, shows "N new events" badge when scrolled up
 
-### Run Lifecycle
+### Backend
 
-- [x] **LIFE-01**: User can gracefully cancel a running agent mid-execution with clean state rollback (no partial writes, no corrupted files)
-- [x] **LIFE-02**: Each LLM call tracks token usage (input/output) and aggregates cost per run, surfaced in traces and UI
-- [x] **LIFE-03**: LangSmith tracing captures complete structured traces with at least two shared trace links showing different execution paths (normal run + error recovery)
+- [ ] **API-01**: /browse endpoint returns files in addition to directories
+- [ ] **API-02**: New /files endpoint returns file content with language detection
+- [ ] **API-03**: /browse validates paths are within the project directory (no path traversal)
 
-### Agent Core (from PDF)
+## Future Requirements
 
-- [x] **CORE-01**: Agent runs in a persistent loop accepting new instructions without restarting
-- [x] **CORE-02**: Agent accepts injected external context (specs, schemas, test results, previous outputs) at runtime and uses it in LLM generation
-- [x] **CORE-03**: Multi-agent coordination — system can spawn at least two agents working in parallel or sequence, merge their outputs correctly
-- [x] **CORE-04**: Git operations work end-to-end — branch creation, staging, commit, push, PR creation via GitHub API
+Deferred beyond v1.1. Tracked but not in current roadmap.
 
-### Ship Rebuild
+### Enhanced Navigation
 
-- [x] **SHIP-01**: Agent successfully rebuilds the Ship app from scratch using natural language instructions with minimal human intervention
-- [x] **SHIP-02**: Every human intervention during the rebuild is documented in the rebuild log with what broke, what was done, and what it reveals
+- **NAV-01**: User can search files by name with fuzzy matching (Ctrl+P)
+- **NAV-02**: User can use keyboard shortcuts for all panel operations
 
-### Deliverables
+### Run History
 
-<<<<<<< HEAD
-- [x] **DELIV-01**: CODEAGENT.md complete with all 8 sections (Agent Architecture, File Editing Strategy, Multi-Agent Design, Trace Links, Architecture Decisions, Ship Rebuild Log, Comparative Analysis, Cost Analysis)
-- [x] **DELIV-02**: Comparative analysis covers all 7 required sections (Executive Summary, Architectural Comparison, Performance Benchmarks, Shortcomings, Advances, Trade-off Analysis, If You Built It Again)
-- [ ] **DELIV-03**: AI Development Log submitted (Tools & Workflow, Effective Prompts, Code Analysis, Strengths & Limitations, Key Learnings)
-- [ ] **DELIV-04**: AI Cost Analysis with actual dev spend and production cost projections at 100/1K/10K users
-- [ ] **DELIV-05**: Demo video (3-5 min) showing surgical edit, multi-agent task, and Ship rebuild example
-<<<<<<< HEAD
-=======
-- [ ] **DELIV-01**: CODEAGENT.md complete with all 8 sections (Agent Architecture, File Editing Strategy, Multi-Agent Design, Trace Links, Architecture Decisions, Ship Rebuild Log, Comparative Analysis, Cost Analysis)
-- [ ] **DELIV-02**: Comparative analysis covers all 7 required sections (Executive Summary, Architectural Comparison, Performance Benchmarks, Shortcomings, Advances, Trade-off Analysis, If You Built It Again)
-- [x] **DELIV-03**: AI Development Log submitted (Tools & Workflow, Effective Prompts, Code Analysis, Strengths & Limitations, Key Learnings)
-- [x] **DELIV-04**: AI Cost Analysis with actual dev spend and production cost projections at 100/1K/10K users
-- [x] **DELIV-05**: Demo video (3-5 min) showing surgical edit, multi-agent task, and Ship rebuild example
->>>>>>> worktree-agent-a11bd631
-- [ ] **DELIV-06**: Agent and agent-built Ship app both deployed and publicly accessible on Heroku/Railway
-=======
-- [x] **DELIV-06**: Agent and agent-built Ship app both deployed and publicly accessible on Heroku/Railway
->>>>>>> worktree-agent-a66e7cb9
+- **HIST-01**: User can browse past runs in a dropdown and review what happened
+- **HIST-02**: User can compare diffs across multiple runs
 
-## v2 Requirements
+### Advanced Diff
 
-### Advanced Reliability
+- **ADIFF-01**: User can toggle between side-by-side and unified diff views
+- **ADIFF-02**: User can see inline approval actions in the activity stream
 
-- **ADV-01**: Context summarization on long runs (5+ steps) to prevent context rot
-- **ADV-02**: Self-generated regression tests before/after edits for higher precision
-- **ADV-03**: Multi-file transactional edits (all-or-nothing across related files)
-- **ADV-04**: Edit confidence scoring with automatic routing to supervised mode
+### Agent Intelligence
 
-### Advanced Context
-
-- **ADV-05**: Conversation memory across runs within the same project
-- **ADV-06**: Smart file discovery (find relevant files without user specifying them)
+- **AGENT-01**: Expandable LLM output per agent step (click to see full prompt/response)
+- **AGENT-02**: Auto-open diff tab when agent requests edit approval
 
 ## Out of Scope
 
+Explicitly excluded. Documented to prevent scope creep.
+
 | Feature | Reason |
 |---------|--------|
-| Authentication/authorization | Single-user tool, unnecessary for v1 |
-| Claude/Anthropic SDK support | Unlimited OpenAI tokens, no business need |
-| Mobile UI | Desktop browser only target |
-| Real-time collaboration | Single-user agent |
-| Plugin/extension system | Hardcoded pipeline sufficient for v1 |
-| Natural language code search (RAG/embeddings) | Grep + ast-grep is faster and more reliable |
-| Streaming edit application | Too complex, requires separate apply model |
-| Automatic conflict resolution | Serialize edits to same file instead |
-| Whole-file rewriting | Anchor-based replacement is the committed strategy |
+| In-browser code editing (Monaco/CodeMirror) | Users don't edit code; the agent does. Read-only Shiki viewer sufficient. |
+| Git graph/history visualization | Agent handles git operations. Out of scope for UI rebuild. |
+| Terminal/console panel | Agent runs commands internally. Security risk, unnecessary. |
+| Minimap (code overview) | Requires full editor engine. Not needed for read-only viewing. |
+| Multi-tab diff comparison | Comparing diffs across edits is complex and niche. One diff at a time. |
+| Breadcrumb navigation | Adds complexity with minimal value for agent review workflows. |
+| Mobile/responsive layout | Desktop browser is the only target. |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EDIT-01 | Phase 1 | Complete |
-| EDIT-02 | Phase 1 | Complete |
-| EDIT-03 | Phase 1 | Complete |
-| EDIT-04 | Phase 1 | Complete |
-| VALID-01 | Phase 1 | Complete |
-| VALID-02 | Phase 2 | Complete |
-| VALID-03 | Phase 2 | Complete |
-| VALID-04 | Phase 2 | Complete |
-| CTX-01 | Phase 3 | Complete |
-| CTX-02 | Phase 3 | Complete |
-| INFRA-01 | Phase 2 | Complete |
-| INFRA-02 | Phase 2 | Complete |
-| INFRA-03 | Phase 1 | Complete |
-| INFRA-04 | Phase 4 | Complete |
-| LIFE-01 | Phase 4 | Complete |
-| LIFE-02 | Phase 3 | Complete |
-| LIFE-03 | Phase 4 | Complete |
-| CORE-01 | Phase 5 | Complete |
-| CORE-02 | Phase 5 | Complete |
-| CORE-03 | Phase 5 | Complete |
-| CORE-04 | Phase 5 | Complete |
-<<<<<<< HEAD
-| SHIP-01 | Phase 6 | Complete |
-| SHIP-02 | Phase 6 | Complete |
-| DELIV-01 | Phase 7 | Pending |
-| DELIV-02 | Phase 7 | Pending |
-<<<<<<< HEAD
-=======
-| SHIP-01 | Phase 6 | Pending |
-| SHIP-02 | Phase 6 | Pending |
-| DELIV-01 | Phase 7 | Complete |
-| DELIV-02 | Phase 7 | Complete |
->>>>>>> worktree-agent-a8f9600d
-| DELIV-03 | Phase 7 | Pending |
-| DELIV-04 | Phase 7 | Pending |
-| DELIV-05 | Phase 7 | Pending |
-<<<<<<< HEAD
-=======
-| DELIV-03 | Phase 7 | Complete |
-| DELIV-04 | Phase 7 | Complete |
-| DELIV-05 | Phase 7 | Complete |
->>>>>>> worktree-agent-a11bd631
-| DELIV-06 | Phase 7 | Pending |
-=======
-| DELIV-06 | Phase 7 | Complete |
->>>>>>> worktree-agent-a66e7cb9
+| LAYOUT-01 | — | Pending |
+| LAYOUT-02 | — | Pending |
+| LAYOUT-03 | — | Pending |
+| LAYOUT-04 | — | Pending |
+| LAYOUT-05 | — | Pending |
+| FILES-01 | — | Pending |
+| FILES-02 | — | Pending |
+| FILES-03 | — | Pending |
+| FILES-04 | — | Pending |
+| FILES-05 | — | Pending |
+| DIFF-01 | — | Pending |
+| DIFF-02 | — | Pending |
+| DIFF-03 | — | Pending |
+| DIFF-04 | — | Pending |
+| STREAM-01 | — | Pending |
+| STREAM-02 | — | Pending |
+| API-01 | — | Pending |
+| API-02 | — | Pending |
+| API-03 | — | Pending |
 
 **Coverage:**
-- v1 requirements: 29 total
-- Mapped to phases: 29
-- Unmapped: 0
+- v1.1 requirements: 19 total
+- Mapped to phases: 0
+- Unmapped: 19
 
 ---
-*Requirements defined: 2026-03-26*
-*Last updated: 2026-03-26 after roadmap creation*
+*Requirements defined: 2026-03-27*
+*Last updated: 2026-03-27 after initial definition*
