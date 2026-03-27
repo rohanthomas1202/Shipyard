@@ -19,28 +19,33 @@ export function FileTree({ onCollapse }: FileTreeProps) {
 
   // Load root entries when project changes
   useEffect(() => {
-    if (!currentProject) {
-      setRootEntries([])
-      return
-    }
+    if (!currentProject) return
 
     // Clear changed files on project change
     useWsStore.getState().clearChangedFiles()
 
-    setLoading(true)
-    setError(null)
-    api.browseProject(currentProject.id)
-      .then((res) => {
-        setRootEntries(res.entries)
-      })
-      .catch((err) => {
-        setError(err.message || 'Failed to load files')
-        setRootEntries([])
-      })
-      .finally(() => {
-        setLoading(false)
-      })
-  }, [currentProject?.id])
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await api.browseProject(currentProject.id)
+        if (!cancelled) setRootEntries(res.entries)
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load files')
+          setRootEntries([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [currentProject])
+
+  // Derive displayed entries — empty when no project selected
+  const displayEntries = currentProject ? rootEntries : []
 
   return (
     <>
@@ -158,7 +163,7 @@ export function FileTree({ onCollapse }: FileTreeProps) {
             {/* Tree */}
             {!loading && !error && (
               <div role="tree">
-                {rootEntries.map((entry) => (
+                {displayEntries.map((entry) => (
                   <TreeNode
                     key={entry.path}
                     entry={entry}
