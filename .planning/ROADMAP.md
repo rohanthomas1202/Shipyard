@@ -93,8 +93,8 @@ Plans:
   4. Agent can branch, stage, commit, push, and create a PR via GitHub API in a single end-to-end flow
 **Plans**: 3 plans
 Plans:
-- [ ] 05-01-PLAN.md — Context injection to all LLM nodes, persistent loop state isolation (CORE-01, CORE-02)
-- [ ] 05-02-PLAN.md — Automatic git_ops after reporter, end-to-end git flow (CORE-04)
+- [x] 05-01-PLAN.md — Context injection to all LLM nodes, persistent loop state isolation (CORE-01, CORE-02)
+- [x] 05-02-PLAN.md — Automatic git_ops after reporter, end-to-end git flow (CORE-04)
 - [ ] 05-03-PLAN.md — Parallel agent execution via asyncio.gather with result merging (CORE-03)
 
 ### Phase 6: Ship Rebuild

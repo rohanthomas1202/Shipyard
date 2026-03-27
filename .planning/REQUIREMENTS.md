@@ -41,10 +41,10 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 
 ### Agent Core (from PDF)
 
-- [ ] **CORE-01**: Agent runs in a persistent loop accepting new instructions without restarting
-- [ ] **CORE-02**: Agent accepts injected external context (specs, schemas, test results, previous outputs) at runtime and uses it in LLM generation
+- [x] **CORE-01**: Agent runs in a persistent loop accepting new instructions without restarting
+- [x] **CORE-02**: Agent accepts injected external context (specs, schemas, test results, previous outputs) at runtime and uses it in LLM generation
 - [ ] **CORE-03**: Multi-agent coordination — system can spawn at least two agents working in parallel or sequence, merge their outputs correctly
-- [ ] **CORE-04**: Git operations work end-to-end — branch creation, staging, commit, push, PR creation via GitHub API
+- [x] **CORE-04**: Git operations work end-to-end — branch creation, staging, commit, push, PR creation via GitHub API
 
 ### Ship Rebuild
 
@@ -109,10 +109,10 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | LIFE-01 | Phase 4 | Complete |
 | LIFE-02 | Phase 3 | Complete |
 | LIFE-03 | Phase 4 | Complete |
-| CORE-01 | Phase 5 | Pending |
-| CORE-02 | Phase 5 | Pending |
+| CORE-01 | Phase 5 | Complete |
+| CORE-02 | Phase 5 | Complete |
 | CORE-03 | Phase 5 | Pending |
-| CORE-04 | Phase 5 | Pending |
+| CORE-04 | Phase 5 | Complete |
 | SHIP-01 | Phase 6 | Pending |
 | SHIP-02 | Phase 6 | Pending |
 | DELIV-01 | Phase 7 | Pending |
