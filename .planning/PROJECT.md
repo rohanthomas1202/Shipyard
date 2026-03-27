@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Shipyard is an autonomous AI coding agent that takes natural language instructions and plans, edits, validates, and commits code changes across multiple files without human intervention. Built as a Python/LangGraph agent with a FastAPI server and React frontend, it features surgical anchor-based editing, 3-tier fuzzy matching, circuit-breaker validation, crash recovery, and parallel agent execution. Proven by rebuilding the Ship app from scratch.
+Shipyard is an autonomous AI coding agent that takes natural language instructions and plans, edits, validates, and commits code changes across multiple files without human intervention. Built as a Python/LangGraph agent with a FastAPI server and React frontend, it features surgical anchor-based editing, 3-tier fuzzy matching, circuit-breaker validation, crash recovery, and parallel agent execution. The frontend is a VS Code-style three-panel IDE with live file explorer, syntax-highlighted diff viewer, and real-time agent activity stream. Proven by rebuilding the Ship app from scratch.
 
 ## Core Value
 
@@ -41,12 +41,19 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 
 ### Active
 
-- [x] VS Code-style three-panel IDE layout (file explorer | code/diff | agent stream) — Validated in Phase 8: Foundation Layout
-- [x] Top bar with instruction input, run history dropdown, project selector — Validated in Phase 8: Foundation Layout
-- [x] Live file explorer with real-time modified/added/deleted indicators — Validated in Phase 9: File Explorer & Backend APIs
-- [ ] Side-by-side diff view showing old vs new code for agent edits
-- [ ] Agent activity stream with high-level steps, expandable to full LLM output
-- [ ] Real-time WebSocket-driven updates across all panels
+(No active requirements — next milestone not yet defined)
+
+### Validated in v1.1
+
+- ✓ VS Code-style three-panel IDE layout (file explorer | code/diff | agent stream) — v1.1 (Phase 8)
+- ✓ Top bar with instruction input, project selector, run status indicator — v1.1 (Phase 8)
+- ✓ Zustand state architecture preventing WebSocket render storms — v1.1 (Phase 8)
+- ✓ Live file explorer with real-time M/A/D indicators — v1.1 (Phase 9)
+- ✓ Lazy-loaded directory tree with gitignore filtering — v1.1 (Phase 9)
+- ✓ Backend /browse and /files endpoints with path traversal protection — v1.1 (Phase 9)
+- ✓ Side-by-side diff view with jsdiff line-level algorithm and Shiki highlighting — v1.1 (Phase 10)
+- ✓ Tabbed editor with VS Code-style preview/pin behavior — v1.1 (Phase 10)
+- ✓ Real-time agent activity stream with auto-scroll and new-event badge — v1.1 (Phase 11)
 
 ### Out of Scope
 
@@ -56,26 +63,23 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 - Real-time collaboration — single-user agent
 - Custom plugin/extension system — hardcoded pipeline sufficient for v1
 
-## Current Milestone: v1.1 IDE UI Rebuild
+## Current State
 
-**Goal:** Rebuild the frontend as a VS Code-style three-panel IDE with live agent feedback, file explorer, and side-by-side diff views.
-
-**Target features:**
-- VS Code-style three-panel layout (file explorer | code/diff | agent stream)
-- Top bar with instruction input, run history dropdown, project selector
-- Live file explorer with real-time modified/added/deleted indicators
-- Side-by-side diff view showing old vs new code for agent edits
-- Agent activity stream with high-level steps, expandable to full LLM output
-- Real-time WebSocket-driven updates across all panels
+Shipped v1.0 (agent core) and v1.1 (IDE UI rebuild) on 2026-03-27.
 
 ## Context
 
-Shipped v1.0 with 5,425 LOC Python + 2,846 LOC TypeScript.
-Tech stack: Python 3.11, LangGraph 1.1.3, FastAPI, React 19, SQLite, OpenAI.
-7 phases completed across 21 plans in 5 days (2026-03-23 → 2026-03-27).
-All agent core features working. Ship rebuild orchestration complete.
-v1.1 is a frontend-only milestone — no backend agent changes planned.
-Existing WebSocket infrastructure (P0/P1/P2 priority routing) supports streaming needs.
+Shipped with ~5,900 LOC Python + ~5,400 LOC TypeScript.
+Tech stack: Python 3.11, LangGraph 1.1.3, FastAPI, React 19, Zustand, SQLite, OpenAI.
+11 phases completed across 30 plans (2026-03-23 → 2026-03-27).
+v1.0 delivered agent core: edit reliability, validation, crash recovery, parallel execution.
+v1.1 delivered IDE frontend: three-panel layout, file explorer, diff viewer, activity stream.
+
+### Known Tech Debt (from v1.1 audit)
+- ProjectPicker filesystem browse broken (Phase 9 `/browse` requires `project_id`)
+- Dead code: `AppShell.tsx`, `DiffViewer.tsx` (replaced by `IDELayout`, `SideBySideDiff`)
+- ESLint warning in `FileTree.tsx`
+- Gitignore filtering uses static blocklist, not `.gitignore` parsing
 
 ## Constraints
 
@@ -120,4 +124,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after Phase 9 completion — file explorer with lazy-loaded tree, /browse and /files backend APIs*
+*Last updated: 2026-03-27 after v1.1 milestone — IDE UI Rebuild shipped*

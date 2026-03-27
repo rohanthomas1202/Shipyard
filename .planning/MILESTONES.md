@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.1 IDE UI Rebuild (Shipped: 2026-03-27)
+
+**Phases completed:** 4 phases, 9 plans, 17 tasks
+
+**Key accomplishments:**
+
+- Zustand state layer with wsStore for WebSocket events and workspaceStore for tab management, replacing React Context event distribution
+- Three-panel resizable IDE shell with react-resizable-panels v4, persistent TopBar with instruction input, project selector, and run status indicator, replacing CSS grid AppShell
+- Tabbed editor area with Shiki syntax highlighting, VS Code-style preview/pin tabs, and file viewer with line numbers
+- Side-by-side diff with jsdiff structuredPatch algorithm, Shiki syntax highlighting on both sides, 3-context-line hunks, and auto-open on edit proposals
+- Event rendering components (EventTypeBadge, EventCard, StreamingBlock, RunSection, NewEventBadge) with 11-type mapping, ref-based streaming, and CSS animations
+- Full AgentPanel rewrite with real-time activity stream, sticky-bottom auto-scroll, run grouping by run_id, and new-event badge
+- Cast `event.data.error` from `unknown` to `string` via `String()` wrapper, fixing the sole remaining TypeScript build error
+
+---
+
 ## v1.0 Agent Core MVP (Shipped: 2026-03-27)
 
 **Phases completed:** 7 phases, 21 plans, 37 tasks
