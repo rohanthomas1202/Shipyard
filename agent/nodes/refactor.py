@@ -113,6 +113,10 @@ async def refactor_node(state: dict, config: dict) -> dict:
         "status": "applied",
     })
 
+    context = state.get("context", {})
+    if context.get("spec"):
+        tracer.log("refactor_context", {"spec_available": True})
+
     return {
         "file_buffer": new_file_buffer,
         "edit_history": new_edit_history,
