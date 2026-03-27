@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { WebSocketProvider } from './context/WebSocketContext'
 import { ProjectProvider } from './context/ProjectContext'
-import { AppShell } from './components/layout/AppShell'
+import { IDELayout } from './components/layout/IDELayout'
 import { ErrorBoundary } from './components/layout/ErrorBoundary'
 
 function App() {
@@ -11,7 +11,7 @@ function App() {
     <ErrorBoundary>
       <WebSocketProvider projectId={projectId}>
         <ProjectProvider onProjectChange={setProjectId}>
-          <AppShell />
+          <IDELayout />
         </ProjectProvider>
       </WebSocketProvider>
     </ErrorBoundary>
