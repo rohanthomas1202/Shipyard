@@ -51,7 +51,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 02-01-PLAN.md — Async subprocess conversion and SQLite WAL mode (INFRA-01, INFRA-02)
-- [ ] 02-02-PLAN.md — Python syntax checking and LSP fallback hardening (VALID-02, VALID-03)
+- [x] 02-02-PLAN.md — Python syntax checking and LSP fallback hardening (VALID-02, VALID-03)
 - [x] 02-03-PLAN.md — Circuit breaker for repeated validation errors (VALID-04)
 
 ### Phase 3: Context & Token Management
@@ -134,7 +134,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Edit Reliability | 3/3 | Complete | - |
-| 2. Validation & Infrastructure | 0/3 | Planning | - |
+| 2. Validation & Infrastructure | 2/3 | In Progress|  |
 | 3. Context & Token Management | 0/3 | Planning | - |
 | 4. Crash Recovery & Run Lifecycle | 0/3 | Planned | - |
 | 5. Agent Core Features | 0/3 | Planned | - |
