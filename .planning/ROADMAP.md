@@ -86,11 +86,12 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User sees a real-time timeline of agent steps (planning, reading, editing, validating) that updates live during a run without page refresh
   2. When the user is scrolled to the bottom of the stream, new events auto-scroll into view; when the user scrolls up to review past events, auto-scroll stops and a "N new events" badge appears
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [ ] 11-01-PLAN.md — Event rendering primitives: EventTypeBadge, EventCard, StreamingBlock, RunSection, NewEventBadge, CSS animations
 - [ ] 11-02-PLAN.md — AgentPanel rewrite with ActivityStream assembly, auto-scroll, run grouping, e2e test updates
+- [ ] 11-03-PLAN.md — Gap closure: fix TypeScript build error in WebSocketContext.tsx (event.data.error type mismatch)
 
 **UI hint**: yes
 
@@ -112,7 +113,7 @@ Note: Phase 11 depends on Phase 8 (not 10) and can overlap with Phases 9-10 if n
 | 8. Foundation — Layout, State Architecture, TopBar | v1.1 | 0/2 | In progress | - |
 | 9. File Explorer & Backend APIs | v1.1 | 2/2 | Complete   | 2026-03-27 |
 | 10. Code & Diff Viewing | v1.1 | 1/2 | In Progress|  |
-| 11. Agent Activity Stream | v1.1 | 0/2 | Not started | - |
+| 11. Agent Activity Stream | v1.1 | 0/3 | Not started | - |
 
 ---
 *Full v1.0 details archived in `.planning/milestones/v1.0-ROADMAP.md`*

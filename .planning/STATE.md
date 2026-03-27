@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: verifying
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-03-27T20:52:36.346Z"
-last_activity: 2026-03-27
+milestone: v1.1
+milestone_name: IDE UI Rebuild
+status: executing
+stopped_at: Phase 11 plans verified
+last_updated: "2026-03-27T20:35:04.454Z"
+last_activity: 2026-03-27 -- Phase 11 execution started
 progress:
-  total_phases: 7
+  total_phases: 4
   completed_phases: 3
-  total_plans: 15
-  completed_plans: 11
+  total_plans: 8
+  completed_plans: 6
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 05 — agent-core-features
+**Current focus:** Phase 11 — agent-activity-stream
 
 ## Current Position
 
-Phase: 05 (agent-core-features) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-03-27
+Phase: 11 (agent-activity-stream) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 11
+Last activity: 2026-03-27 -- Phase 11 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -65,7 +65,10 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P03 | 9min | 1 tasks | 3 files |
 | Phase 05 P01 | 3min | 2 tasks | 4 files |
 | Phase 05 P02 | 5min | 2 tasks | 3 files |
-| Phase 11 P02 | 5min | 2 tasks | 2 files |
+| Phase 08 P02 | 8min | 2 tasks | 17 files |
+| Phase 09 P01 | 4min | 2 tasks | 2 files |
+| Phase 09 P02 | 6min | 2 tasks | 5 files |
+| Phase 10 P02 | 4min | 1 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -103,8 +106,14 @@ Recent decisions affecting current work:
 - [Phase 05]: Editor context uses list-join pattern matching planner_node for consistency
 - [Phase 05]: Separate auto_git node from plan-step git_ops to avoid cycle; both call git_ops_node but wire differently
 - [Phase 05]: project_id resolved from config first, state context fallback in git_ops_node
-- [Phase 11]: Removed duplicate header from AgentPanel -- IDELayout PanelHeader renders AGENT title
-- [Phase 11]: Switched AgentPanel from useWebSocketContext to useWsStore for status and events
+- [Phase 08]: react-resizable-panels v4 uses panelRef prop, PanelSize object in onResize, orientation not direction
+- [Phase 08]: WebSocketContext kept as dual-write bridge to Zustand for backward compatibility
+- [Phase 09]: Language detection via static extension map, not runtime analysis
+- [Phase 09]: pathlib.Path.is_relative_to() for path traversal security on /browse and /files
+- [Phase 09]: Children cached on collapse -- only fetched once per directory expand
+- [Phase 10]: structuredPatch over diffLines for hunk-based diffing with context control
+- [Phase 10]: Synchronized scroll via onScroll handlers with requestAnimationFrame guard
+- [Phase 10]: Edit data fetched on-demand in EditorArea and cached in component state
 
 ### Pending Todos
 
@@ -116,6 +125,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T20:52:36.341Z
-Stopped at: Completed 11-02-PLAN.md
-Resume file: None
+Last session: 2026-03-27T20:34:18.562Z
+Stopped at: Phase 11 plans verified
+Resume file: .planning/phases/11-agent-activity-stream/11-01-PLAN.md
