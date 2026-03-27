@@ -106,7 +106,7 @@ Note: Phase 11 depends on Phase 8 (not 10) and can overlap with Phases 9-10 if n
 | 7. Deliverables & Deployment | v1.0 | 3/3 | Complete | 2026-03-27 |
 | 8. Foundation — Layout, State Architecture, TopBar | v1.1 | 0/2 | In progress | - |
 | 9. File Explorer & Backend APIs | v1.1 | 2/2 | Complete   | 2026-03-27 |
-| 10. Code & Diff Viewing | v1.1 | 0/0 | Not started | - |
+| 10. Code & Diff Viewing | v1.1 | 1/2 | In Progress|  |
 | 11. Agent Activity Stream | v1.1 | 0/0 | Not started | - |
 
 ---
