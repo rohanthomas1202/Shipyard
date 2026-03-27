@@ -58,7 +58,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 - [ ] **DELIV-03**: AI Development Log submitted (Tools & Workflow, Effective Prompts, Code Analysis, Strengths & Limitations, Key Learnings)
 - [ ] **DELIV-04**: AI Cost Analysis with actual dev spend and production cost projections at 100/1K/10K users
 - [ ] **DELIV-05**: Demo video (3-5 min) showing surgical edit, multi-agent task, and Ship rebuild example
-- [ ] **DELIV-06**: Agent and agent-built Ship app both deployed and publicly accessible on Heroku/Railway
+- [x] **DELIV-06**: Agent and agent-built Ship app both deployed and publicly accessible on Heroku/Railway
 
 ## v2 Requirements
 
@@ -120,7 +120,7 @@ Requirements for reliability hardening milestone. Each maps to roadmap phases.
 | DELIV-03 | Phase 7 | Pending |
 | DELIV-04 | Phase 7 | Pending |
 | DELIV-05 | Phase 7 | Pending |
-| DELIV-06 | Phase 7 | Pending |
+| DELIV-06 | Phase 7 | Complete |
 
 **Coverage:**
 - v1 requirements: 29 total
