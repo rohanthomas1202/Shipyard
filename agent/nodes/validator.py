@@ -6,6 +6,7 @@ syntax checks. Rolls back edits that introduce errors.
 Diagnostic diffing: only NEW errors trigger rollback. Pre-existing errors
 in the project are ignored.
 """
+import ast
 import asyncio
 import json
 import os
@@ -58,6 +59,18 @@ async def _syntax_check(file_path: str) -> dict:
         except Exception as e:
             return {"valid": False, "error": str(e)}
 
+    if ext == ".py":
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                source = f.read()
+            ast.parse(source, filename=file_path)
+            return {"valid": True, "error": None}
+        except SyntaxError as e:
+            error = f"Line {e.lineno}, col {e.offset}: {e.msg}"
+            if e.text:
+                error += f" | {e.text.strip()}"
+            return {"valid": False, "error": error}
+
     return {"valid": True, "error": None}
 
 
@@ -109,11 +122,19 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
             client = lsp_manager.get_client(language)
             if client is not None:
                 try:
-                    result = await _lsp_validate(client, file_path, last_edit)
+                    result = await asyncio.wait_for(
+                        _lsp_validate(client, file_path, last_edit),
+                        timeout=30.0,
+                    )
                     if result is not None:
                         return result
-                except Exception as e:
-                    tracer.log("validator", {"file": file_path, "lsp_error": str(e), "fallback": "syntax_check"})
+                except (Exception, asyncio.TimeoutError) as e:
+                    tracer.log("validator", {
+                        "file": file_path,
+                        "lsp_error": str(e),
+                        "lsp_error_type": type(e).__name__,
+                        "fallback": "syntax_check",
+                    })
 
     # Fallback: async syntax check
     check = await _syntax_check(file_path)
@@ -164,11 +185,17 @@ async def _lsp_validate(client, file_path: str, edit_entry: dict) -> dict | None
     # Get baseline diagnostics (pre-edit content from snapshot)
     baseline_content = edit_entry.get("snapshot")
     baseline_diags = []
-    if baseline_content:
-        baseline_diags = await client.get_diagnostics(file_path, baseline_content)
+    try:
+        if baseline_content:
+            baseline_diags = await client.get_diagnostics(file_path, baseline_content)
+    except Exception:
+        return None  # Fall back to syntax check
 
     # Get post-edit diagnostics
-    post_diags = await client.get_diagnostics(file_path, post_content)
+    try:
+        post_diags = await client.get_diagnostics(file_path, post_content)
+    except Exception:
+        return None  # Fall back to syntax check
 
     # Diff: only new errors trigger rollback
     new_errors = diff_diagnostics(baseline_diags, post_diags)
