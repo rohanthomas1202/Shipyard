@@ -1,5 +1,6 @@
 """git_ops node -- handles branch, commit, push, PR after all edits are done."""
 from __future__ import annotations
+from langgraph.types import RunnableConfig
 import logging
 import re
 from agent.git import GitManager
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 tracer = TraceLogger()
 
 
-async def git_ops_node(state: dict, config: dict = None) -> dict:
+async def git_ops_node(state: dict, config: RunnableConfig = None) -> dict:
     """Execute git operations: branch, stage, commit, push, PR.
 
     Reads edited file paths from edit_history. Resolves project_id from

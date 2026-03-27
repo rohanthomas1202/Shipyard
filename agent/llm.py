@@ -58,7 +58,7 @@ async def call_llm(
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        max_tokens=max_tokens,
+        max_completion_tokens=max_tokens,
         timeout=timeout,
     )
     content = response.choices[0].message.content or ""
@@ -83,7 +83,7 @@ async def call_llm_structured(
             {"role": "user", "content": user},
         ],
         response_format=response_model,
-        max_tokens=max_tokens,
+        max_completion_tokens=max_tokens,
         timeout=timeout,
     )
     parsed = response.choices[0].message.parsed

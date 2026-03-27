@@ -6,13 +6,14 @@ Refactor steps are always sequential (never parallelized by the coordinator).
 from __future__ import annotations
 
 import uuid
+from langgraph.types import RunnableConfig
 from agent.tracing import TraceLogger
 from agent.tools.ast_ops import apply_rule
 
 tracer = TraceLogger()
 
 
-async def refactor_node(state: dict, config: dict) -> dict:
+async def refactor_node(state: dict, config: RunnableConfig) -> dict:
     """Execute a codebase-wide refactoring step."""
     approval_manager = config["configurable"].get("approval_manager")
     supervised = config["configurable"].get("supervised", False)

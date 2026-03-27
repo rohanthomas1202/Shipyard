@@ -2,6 +2,7 @@
 
 Uses ContextAssembler for model-aware context budget management.
 """
+from langgraph.types import RunnableConfig
 from agent.context import ContextAssembler
 from agent.prompts.planner import PLANNER_SYSTEM, PLANNER_USER
 from agent.steps import parse_plan_steps
@@ -11,7 +12,7 @@ from agent.tools.file_ops import list_files
 tracer = TraceLogger()
 
 
-async def planner_node(state: dict, config: dict) -> dict:
+async def planner_node(state: dict, config: RunnableConfig) -> dict:
     router = config["configurable"]["router"]
     instruction = state["instruction"]
     working_dir = state["working_directory"]
