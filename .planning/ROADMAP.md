@@ -93,9 +93,9 @@ Plans:
   4. Agent can branch, stage, commit, push, and create a PR via GitHub API in a single end-to-end flow
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Fuzzy anchor matching, indentation preservation, content hashing (EDIT-01, EDIT-03, EDIT-04)
-- [ ] 01-02-PLAN.md — Structured LLM outputs via OpenAI parse() API (INFRA-03)
-- [ ] 01-03-PLAN.md — Error feedback in retries, file freshness, validator error details (EDIT-02, EDIT-04, VALID-01)
+- [ ] 05-01-PLAN.md — Context injection to all LLM nodes, persistent loop state isolation (CORE-01, CORE-02)
+- [ ] 05-02-PLAN.md — Automatic git_ops after reporter, end-to-end git flow (CORE-04)
+- [ ] 05-03-PLAN.md — Parallel agent execution via asyncio.gather with result merging (CORE-03)
 
 ### Phase 6: Ship Rebuild
 **Goal**: The agent proves itself by rebuilding the Ship app from scratch — the ultimate integration test
@@ -137,6 +137,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 2. Validation & Infrastructure | 0/3 | Planning | - |
 | 3. Context & Token Management | 0/3 | Planning | - |
 | 4. Crash Recovery & Run Lifecycle | 0/3 | Planned | - |
-| 5. Agent Core Features | 0/TBD | Not started | - |
+| 5. Agent Core Features | 0/3 | Planned | - |
 | 6. Ship Rebuild | 0/TBD | Not started | - |
 | 7. Deliverables & Deployment | 0/TBD | Not started | - |
