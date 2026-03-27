@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { DiffHeader } from './DiffHeader'
 import { DiffLine } from './DiffLine'
-import { useWebSocketContext } from '../../context/WebSocketContext'
+import { useWsStore } from '../../stores/wsStore'
 import { useProjectContext } from '../../context/ProjectContext'
 import { api } from '../../lib/api'
 import type { Edit } from '../../types'
@@ -10,19 +10,20 @@ export function DiffViewer() {
   const [edits, setEdits] = useState<Edit[]>([])
   const [currentEditIndex, setCurrentEditIndex] = useState(0)
   const [loading, setLoading] = useState(false)
-  const { subscribe } = useWebSocketContext()
+  const agentEvents = useWsStore((s) => s.agentEvents)
   const { currentRun } = useProjectContext()
+  const lastIndexRef = useRef(0)
 
-  // Listen for diff events
+  // Listen for approval events from Zustand
   useEffect(() => {
-    const unsub = subscribe('approval', (event) => {
-      if (event.data.event === 'edit.proposed' && currentRun) {
-        // Refresh edits from API
+    const newEvents = agentEvents.slice(lastIndexRef.current)
+    for (const event of newEvents) {
+      if (event.type === 'approval' && event.data.event === 'edit.proposed' && currentRun) {
         api.getEdits(currentRun.id, 'proposed').then(setEdits).catch(() => {})
       }
-    })
-    return unsub
-  }, [subscribe, currentRun])
+    }
+    lastIndexRef.current = agentEvents.length
+  }, [agentEvents, currentRun])
 
   // Load edits on mount
   useEffect(() => {

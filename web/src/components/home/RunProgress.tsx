@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useProjectContext } from '../../context/ProjectContext'
-import { useWebSocketContext } from '../../context/WebSocketContext'
+import { useWsStore } from '../../stores/wsStore'
 import { api } from '../../lib/api'
-import type { WSEvent } from '../../types'
 
 export function RunProgress() {
   const { currentRun, setCurrentRun } = useProjectContext()
-  const { subscribe } = useWebSocketContext()
+  const agentEvents = useWsStore((s) => s.agentEvents)
   const [statusText, setStatusText] = useState('Starting...')
   const [events, setEvents] = useState<string[]>([])
+  const lastIndexRef = useRef(0)
 
   // Poll for run completion
   useEffect(() => {
@@ -31,9 +31,10 @@ export function RunProgress() {
     return () => clearInterval(interval)
   }, [currentRun, setCurrentRun])
 
-  // Listen for WebSocket events
+  // Process new agent events from Zustand
   useEffect(() => {
-    const unsub = subscribe('*', (event: WSEvent) => {
+    const newEvents = agentEvents.slice(lastIndexRef.current)
+    for (const event of newEvents) {
       if (event.type === 'status') {
         setStatusText(`Step: ${event.node || 'processing'}`)
       }
@@ -41,9 +42,9 @@ export function RunProgress() {
         ...prev.slice(-20),
         `[${event.type}] ${event.node || ''} ${JSON.stringify(event.data).slice(0, 80)}`,
       ])
-    })
-    return unsub
-  }, [subscribe])
+    }
+    lastIndexRef.current = agentEvents.length
+  }, [agentEvents])
 
   if (!currentRun) return null
 

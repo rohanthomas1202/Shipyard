@@ -1,18 +1,22 @@
 import { useRef, useEffect } from 'react'
-import { useWebSocketContext } from '../../context/WebSocketContext'
+import { useWsStore } from '../../stores/wsStore'
 
 export function StreamingText() {
   const textRef = useRef<HTMLSpanElement>(null)
-  const { subscribe } = useWebSocketContext()
+  const agentEvents = useWsStore((s) => s.agentEvents)
+  const lastIndexRef = useRef(0)
 
   useEffect(() => {
-    const unsub = subscribe('stream', (event) => {
-      if (textRef.current && event.data.token) {
-        textRef.current.textContent += event.data.token
+    if (!textRef.current) return
+    // Process only new events since last render
+    const newEvents = agentEvents.slice(lastIndexRef.current)
+    for (const event of newEvents) {
+      if (event.type === 'stream' && event.data.token) {
+        textRef.current.textContent += event.data.token as string
       }
-    })
-    return unsub
-  }, [subscribe])
+    }
+    lastIndexRef.current = agentEvents.length
+  }, [agentEvents])
 
   return (
     <div

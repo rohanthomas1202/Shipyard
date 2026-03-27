@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from 'react-resizable-panels'
+import type { PanelSize } from 'react-resizable-panels'
 import { MeshBackground } from './MeshBackground'
 import { TopBar } from './TopBar'
 import { PanelHeader } from './PanelHeader'
@@ -25,19 +26,18 @@ export function IDELayout() {
 
   const leftPanelRef = usePanelRef()
   const rightPanelRef = usePanelRef()
-  const instructionRef = useRef<HTMLTextAreaElement>(null)
 
   const { defaultLayout, onLayoutChange } = useDefaultLayout({
     groupId: 'shipyard-ide-panels',
     storage: localStorage,
   })
 
-  const handleLeftResize = useCallback((size: number) => {
-    setLeftCollapsed(size <= LEFT_COLLAPSED_SIZE)
+  const handleLeftResize = useCallback((panelSize: PanelSize) => {
+    setLeftCollapsed(panelSize.asPercentage <= LEFT_COLLAPSED_SIZE)
   }, [])
 
-  const handleRightResize = useCallback((size: number) => {
-    setRightCollapsed(size <= RIGHT_COLLAPSED_SIZE)
+  const handleRightResize = useCallback((panelSize: PanelSize) => {
+    setRightCollapsed(panelSize.asPercentage <= RIGHT_COLLAPSED_SIZE)
   }, [])
 
   const toggleLeft = useCallback(() => {
@@ -94,7 +94,7 @@ export function IDELayout() {
           >
             {/* Left Panel: Explorer */}
             <Panel
-              ref={leftPanelRef}
+              panelRef={leftPanelRef}
               defaultSize={20}
               minSize={10}
               collapsible
@@ -209,7 +209,7 @@ export function IDELayout() {
 
             {/* Right Panel: Agent */}
             <Panel
-              ref={rightPanelRef}
+              panelRef={rightPanelRef}
               defaultSize={30}
               minSize={12}
               collapsible

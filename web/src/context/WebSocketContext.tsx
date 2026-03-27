@@ -1,5 +1,6 @@
 import { createContext, useContext, useCallback, useRef, useEffect, useState, type ReactNode } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
+import { useWsStore } from '../stores/wsStore'
 import type { WSEvent, RunSnapshot } from '../types'
 
 interface WebSocketContextValue {
@@ -18,26 +19,41 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
   const lastSeqRef = useRef<Map<string, number>>(new Map())
   const subscribersRef = useRef<Map<string, Set<(event: WSEvent) => void>>>(new Map())
 
+  // Bridge connection status to Zustand
+  useEffect(() => {
+    useWsStore.getState().setStatus(status)
+  }, [status])
+
   useEffect(() => {
     const unsub = onMessage((event: WSEvent) => {
+      const store = useWsStore.getState()
+
       // Track seq per run
       if (event.seq && event.run_id) {
         lastSeqRef.current.set(event.run_id, event.seq)
+        store.setLastSeq(event.run_id, event.seq)
       }
 
       // Handle snapshot
       if (event.type === 'snapshot') {
         setSnapshot(event as unknown as RunSnapshot)
+        store.setSnapshot(event as unknown as RunSnapshot)
         return
       }
 
-      // Distribute to type-based subscribers
+      // Push to Zustand store
+      store.appendAgentEvent(event)
+      if (event.type === 'diff' && event.data.file_path) {
+        store.setFileChanged(event.data.file_path as string, 'modified')
+      }
+
+      // Distribute to type-based subscribers (legacy)
       const handlers = subscribersRef.current.get(event.type)
       if (handlers) {
         handlers.forEach((handler) => handler(event))
       }
 
-      // Also notify wildcard subscribers
+      // Also notify wildcard subscribers (legacy)
       const wildcardHandlers = subscribersRef.current.get('*')
       if (wildcardHandlers) {
         wildcardHandlers.forEach((handler) => handler(event))
@@ -63,8 +79,15 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
   )
 }
 
+/** @deprecated Use useWsStore selectors for state. Use useWebSocketSend() for send. */
 export function useWebSocketContext() {
   const context = useContext(WebSocketContext)
   if (!context) throw new Error('useWebSocketContext must be used within WebSocketProvider')
   return context
+}
+
+export function useWebSocketSend(): (data: object) => void {
+  const context = useContext(WebSocketContext)
+  if (!context) throw new Error('useWebSocketSend must be used within WebSocketProvider')
+  return context.send
 }
