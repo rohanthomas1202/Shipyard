@@ -9,6 +9,7 @@ from agent.nodes.validator import validator_node
 from agent.nodes.coordinator import coordinator_node
 from agent.nodes.merger import merger_node
 from agent.nodes.reporter import reporter_node
+from agent.nodes.git_ops import git_ops_node
 
 
 def _retry_count(state: dict) -> int:
@@ -60,7 +61,7 @@ def classify_step(state: dict) -> str:
         if kind == "edit":
             return "reader_then_edit"
         if kind == "git":
-            return "reporter"  # git_ops deferred to Phase 2
+            return "git_ops"
         return "reader_then_edit"
 
     # Fallback: legacy string-based step (backward compat)
@@ -72,6 +73,14 @@ def classify_step(state: dict) -> str:
             return "reader_only"
 
     return "reader_then_edit"
+
+
+def after_reporter(state: dict) -> str:
+    """Route to auto_git if edits were made, otherwise end."""
+    edit_history = state.get("edit_history", [])
+    if edit_history:
+        return "auto_git"
+    return "end"
 
 
 def after_reader(state: dict) -> str:
@@ -95,6 +104,8 @@ def _build_graph_nodes(graph: StateGraph):
     graph.add_node("validator", validator_node)
     graph.add_node("merger", merger_node)
     graph.add_node("reporter", reporter_node)
+    graph.add_node("git_ops", git_ops_node)
+    graph.add_node("auto_git", git_ops_node)
     graph.add_node("advance", advance_step)
     graph.add_node("classify", lambda s: {})
 
@@ -109,6 +120,7 @@ def _build_graph_nodes(graph: StateGraph):
         "reader_only": "reader",
         "reader_then_edit": "reader",
         "reporter": "reporter",
+        "git_ops": "git_ops",
     })
 
     graph.add_conditional_edges("reader", after_reader, {
@@ -131,7 +143,16 @@ def _build_graph_nodes(graph: StateGraph):
     })
 
     graph.add_edge("advance", "classify")
-    graph.add_edge("reporter", END)
+
+    # Plan-step git_ops continues the plan loop
+    graph.add_edge("git_ops", "advance")
+
+    # Reporter routes to auto_git when edits exist, otherwise END
+    graph.add_conditional_edges("reporter", after_reporter, {
+        "auto_git": "auto_git",
+        "end": END,
+    })
+    graph.add_edge("auto_git", END)
 
 
 def build_graph():
