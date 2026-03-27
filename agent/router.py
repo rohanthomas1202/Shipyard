@@ -102,6 +102,56 @@ class ModelRouter:
             self._tracker.record(result.model, result.usage)
             return result.parsed
 
+    async def call_streaming(
+        self,
+        task_type: str,
+        system: str,
+        user: str,
+        event_bus=None,
+        project_id: str = "",
+        run_id: str = "",
+        node: str = "",
+    ) -> str:
+        """Route an LLM call with token streaming via event_bus. Returns full text."""
+        from agent.llm import call_llm_streaming_iter
+        model = self.resolve_model(task_type)
+        content = ""
+        try:
+            async for token, result in call_llm_streaming_iter(
+                system=system,
+                user=user,
+                model=model.id,
+                max_tokens=model.max_output,
+                timeout=model.timeout,
+            ):
+                if token and event_bus is not None:
+                    from store.models import Event
+                    await event_bus.emit(Event(
+                        project_id=project_id,
+                        run_id=run_id,
+                        type="stream",
+                        node=node,
+                        data={"token": token},
+                    ))
+                if result is not None:
+                    content = result.content
+                    self._tracker.record(result.model, result.usage)
+            return content
+        except Exception:
+            escalated = self.resolve_escalation(task_type)
+            if escalated is None:
+                raise
+            # Fall back to non-streaming for escalation
+            result = await call_llm(
+                system=system,
+                user=user,
+                model=escalated.id,
+                max_tokens=escalated.max_output,
+                timeout=escalated.timeout,
+            )
+            self._tracker.record(result.model, result.usage)
+            return result.content
+
     def reset_usage(self) -> None:
         """Clear all accumulated usage data."""
         self._tracker = TokenTracker()

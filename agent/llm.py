@@ -89,3 +89,76 @@ async def call_llm_structured(
     parsed = response.choices[0].message.parsed
     usage = _extract_usage(response)
     return LLMStructuredResult(parsed=parsed, usage=usage, model=model)
+
+
+async def call_llm_streaming(
+    system: str,
+    user: str,
+    model: str = "gpt-4o",
+    max_tokens: int = 16_384,
+    timeout: int = 60,
+) -> LLMResult:
+    """Call OpenAI with streaming, collecting all chunks. Returns final LLMResult."""
+    client = _get_client()
+    stream = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        max_completion_tokens=max_tokens,
+        timeout=timeout,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    content_parts: list[str] = []
+    usage: dict = {}
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            content_parts.append(chunk.choices[0].delta.content)
+        if chunk.usage is not None:
+            usage = {
+                "prompt_tokens": chunk.usage.prompt_tokens,
+                "completion_tokens": chunk.usage.completion_tokens,
+                "total_tokens": chunk.usage.total_tokens,
+            }
+    content = "".join(content_parts)
+    return LLMResult(content=content, usage=usage, model=model)
+
+
+async def call_llm_streaming_iter(
+    system: str,
+    user: str,
+    model: str = "gpt-4o",
+    max_tokens: int = 16_384,
+    timeout: int = 60,
+):
+    """Async generator that yields (token_chunk, None) for each chunk,
+    then yields ("", LLMResult) as the final item with full content and usage."""
+    client = _get_client()
+    stream = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        max_completion_tokens=max_tokens,
+        timeout=timeout,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    content_parts: list[str] = []
+    usage: dict = {}
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            token = chunk.choices[0].delta.content
+            content_parts.append(token)
+            yield token, None
+        if chunk.usage is not None:
+            usage = {
+                "prompt_tokens": chunk.usage.prompt_tokens,
+                "completion_tokens": chunk.usage.completion_tokens,
+                "total_tokens": chunk.usage.total_tokens,
+            }
+    content = "".join(content_parts)
+    yield "", LLMResult(content=content, usage=usage, model=model)
