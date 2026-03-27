@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Heroku post-compile hook: build React frontend after Python install
+set -eo pipefail
+
+echo "-----> Building frontend..."
+cd web
+npm ci
+npm run build
+cd ..
+echo "-----> Frontend build complete (web/dist/)"
