@@ -1,286 +1,350 @@
-# Domain Pitfalls: Autonomous AI Coding Agents
+# Pitfalls Research
 
-**Domain:** Autonomous coding agent (plan-read-edit-validate-commit pipeline)
-**Researched:** 2026-03-26
-**Applies to:** Shipyard -- LangGraph agent with anchor-based editing, LSP validation, FastAPI/WebSocket server
-
----
+**Domain:** VS Code-style IDE UI in React with WebSocket streaming (v1.1 frontend rebuild for existing Shipyard agent)
+**Researched:** 2026-03-27
+**Confidence:** HIGH (patterns well-documented across multiple sources, verified against Shipyard codebase)
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, data loss, or fundamentally broken agent behavior.
+### Pitfall 1: WebSocket Message Floods Causing Render Storms
 
-### Pitfall 1: Anchor Mismatch Cascade (Edit Reliability)
+**What goes wrong:**
+During active agent runs, the Shipyard backend emits high-volume WebSocket events -- P1 `stream` events fire continuously during LLM token streaming, `diff` events fire per edit, and P2 `status`/`file` events batch-flush at node boundaries. The existing `WebSocketContext` dispatches each message via `handlersRef.current.forEach(handler => handler(data))`. If consuming components store events in React state via `useState`, each `setState` triggers a render cycle. WebSocket `onmessage` fires once per message on separate event loop ticks, so React 18's automatic batching does NOT collapse them -- each message gets its own render. At 20-50 messages/second during active streaming, every subscribed panel re-renders 20-50 times per second.
 
-**What goes wrong:** The LLM generates an anchor string that does not exactly match the file content. Whitespace differences (tabs vs spaces, trailing whitespace, line endings), encoding issues, or the LLM hallucinating slightly different code all cause `str.replace()` to find zero matches. The edit fails, triggers a retry, and the retry often produces the *same wrong anchor* because the LLM sees the same numbered content and makes the same mistake.
+**Why it happens:**
+Developers build the first panel (agent stream), wire it to `subscribe('stream', handler)`, and it works fine in isolation. Then they add the file explorer subscribing to `file` events and the diff view subscribing to `diff` events. Since the WebSocket context dispatches to all handlers on every message, and React cannot batch across separate `onmessage` callbacks, render frequency scales with message volume times subscriber count.
 
-**Why it happens:** LLMs are probabilistic text generators, not byte-level text matchers. When shown numbered file content, they frequently: (a) normalize whitespace in their output, (b) drop trailing spaces, (c) reformat slightly based on their training data conventions, (d) hallucinate minor differences in long code blocks. The longer the anchor, the more likely a mismatch.
-
-**Consequences in Shipyard:** `edit_file()` in `file_ops.py:21-25` rejects zero-match and multi-match anchors. The retry loop (`_retry_count` in `graph.py:16-23`) caps at 3 retries then routes to reporter, meaning the step fails entirely. Three wasted LLM calls with no edit applied.
+**How to avoid:**
+1. Buffer incoming WebSocket messages in a mutable ref and flush on `requestAnimationFrame` cadence. This collapses N messages/frame into 1 render per 16ms. Implement in the WebSocket hook layer, not individual components.
+2. Replace `WebSocketContext` event distribution with a Zustand store. Each panel selects only its relevant slice: `useStore(s => s.agentEvents)` vs `useStore(s => s.fileStatuses)`. Zustand's selector-based subscriptions mean only components reading changed slices re-render.
+3. Wrap each panel component in `React.memo` with stable props.
 
 **Warning signs:**
-- High retry rates (>20% of edits need retries)
-- Trace logs showing identical anchor text across retry attempts
-- Anchors that are very long (>10 lines) or contain lots of whitespace
+- React DevTools Profiler shows >30 renders/sec on any component during agent runs
+- CPU above 50% in browser during streaming with no user interaction
+- Typing in the instruction input lags while agent is running
 
-**Prevention:**
-1. **Implement layered fuzzy matching.** After exact match fails, try: (a) strip trailing whitespace from both anchor and file lines, (b) normalize indentation (tabs to spaces), (c) Levenshtein-based fuzzy match with a similarity threshold (>0.95). RooCode and Aider both use this pattern -- it recovers 10-30% of failed edits without false positives.
-2. **Return the current file content in the error message** so the retry LLM call sees the actual bytes, not just the numbered display. This breaks the "same mistake twice" loop.
-3. **Prefer shorter anchors.** Prompt engineering should instruct the LLM to use the minimum unique anchor (3-5 lines of distinctive context), not copy half the file.
-4. **Normalize the numbered content display** to use consistent whitespace before showing it to the LLM, so what the LLM sees matches what `str.replace()` will search.
-
-**Phase mapping:** Phase 1 -- this is the single highest-impact reliability improvement.
+**Phase to address:**
+Phase 1 (layout/infrastructure) -- the WebSocket-to-state bridge must be designed correctly from the start. Retrofitting batching onto naive `useState` handlers requires touching every consumer.
 
 ---
 
-### Pitfall 2: State Bloat and Context Rot
+### Pitfall 2: React Context Propagation Penalty Across All Panels
 
-**What goes wrong:** The `edit_history` list in `AgentState` accumulates every edit (including snapshots of full file content in the `snapshot` field) across all steps. The `file_buffer` holds full content of every read file. For a 20-step plan editing files >200 lines, state can balloon to hundreds of KB of text. LangGraph serializes the full state at every node boundary. Worse, if `messages` uses the `add_messages` reducer, conversation history grows unboundedly across the graph execution.
+**What goes wrong:**
+The existing `WebSocketContext` bundles `status`, `snapshot`, `subscribe`, `send`, and `lastSeqRef` in one value object. Any component calling `useWebSocketContext()` re-renders when ANY of these change -- even if it only uses `subscribe`. When the IDE adds three panels all consuming this context, a snapshot update (every few seconds during runs) re-renders the file explorer, code view, AND agent stream simultaneously. React Context sets a "propagation bit" on every consumer fiber, bypassing `React.memo` bailout.
 
-**Why it happens:** LangGraph's state model is "accumulate everything by default." The `Annotated[list, add_messages]` reducer on `messages` appends, never trims. The `edit_history` list grows linearly with edits. Snapshots store the *entire file content* before each edit for rollback -- necessary but expensive.
+**Why it happens:**
+React Context has no selector mechanism. You subscribe to the entire value object. The current `WebSocketContext` mixes stable refs (`subscribe`, `send`, `lastSeqRef`) with frequently-changing values (`snapshot`, `status`). Every consumer gets the propagation penalty even if it only needs the stable parts.
 
-**Consequences in Shipyard:** (a) LangGraph checkpointing (if enabled) serializes increasingly large state blobs. (b) If state is ever passed to an LLM (e.g., for context), token costs explode. (c) Memory usage grows monotonically during a run -- no eviction. (d) The `runs` dict in `server/main.py:20` holds this state in memory indefinitely with no cleanup.
+**How to avoid:**
+1. Migrate high-frequency state (events, file statuses, snapshot) to Zustand stores with fine-grained selectors. Keep React Context only for truly static data (project config, theme).
+2. The WebSocket connection itself stays as a hook/ref, but event distribution and derived state must go through Zustand.
+3. If keeping any Context, split aggressively: `WSConnectionContext` (send + status, changes rarely) vs nothing else. Put everything dynamic in Zustand.
+4. Use `useSyncExternalStore` for external data sources to avoid Context propagation entirely.
 
 **Warning signs:**
-- Runs slow down noticeably after step 8-10
-- Memory usage climbs linearly during long runs
-- LLM calls get slower (if state is included in context)
+- React DevTools "Highlight updates" shows all panels flashing on every WebSocket message
+- Adding a new Context consumer in one panel causes performance regression in another
+- Panel resize feels sluggish because unrelated components re-render
 
-**Prevention:**
-1. **Separate rollback snapshots from display state.** Store snapshots in SQLite (keyed by edit_id), not in the graph state. The state should only hold a reference.
-2. **Cap edit_history to the last N entries** (e.g., 5) in the state reducer. Older entries go to the database.
-3. **Evict files from file_buffer** once their steps are complete. Only keep files relevant to the current and next step.
-4. **Do not pass full state to LLM calls.** The editor and validator should only see the relevant file content, not the accumulated history.
-5. **Add TTL-based eviction** to the `runs` dict to prevent unbounded memory growth.
-
-**Phase mapping:** Phase 1 (snapshot externalization) and Phase 2 (state trimming, memory management).
+**Phase to address:**
+Phase 1 (layout/infrastructure) -- state management architecture must be decided before building panel components. Migrating from Context to Zustand after panels exist requires changing every consumer file.
 
 ---
 
-### Pitfall 3: Validation Theater (False Confidence)
+### Pitfall 3: Diff View Freezing the Main Thread on Large Files
 
-**What goes wrong:** The validator reports "pass" but the edit actually broke something. Two failure modes: (a) **False negatives** -- the validator does not check for the class of error introduced (e.g., `esbuild` catches syntax errors but not type errors, runtime errors, or logic errors). (b) **False positives** -- the validator flags pre-existing errors as edit failures, causing unnecessary rollbacks of correct edits.
+**What goes wrong:**
+Side-by-side diff for agent edits renders old and new file content. The existing `DiffViewer.tsx` uses a `buildDiffLines` function that naively marks every old line as removed and every new line as added (confirmed in codebase audit). Beyond producing unreadable output, for files over 500 lines, rendering thousands of DOM nodes with syntax highlighting spans blocks the main thread for 1-3 seconds. During active runs where multiple files are edited in sequence, the diff view re-mounts repeatedly.
 
-**Why it happens:** Shipyard's validator has a narrow check surface: JSON parse, esbuild compile, node --check, yaml parse. These catch syntax-level issues only. The LSP diagnostic diffing (recent addition) helps with type errors for TypeScript but: (a) only works when the LSP server is running, (b) depends on `tsconfig.json` being correct, (c) is not wired for Python, Rust, Go, etc. Meanwhile, esbuild does *bundling* -- it can produce false positives from missing dependencies that have nothing to do with the edit.
+**Why it happens:**
+Two compounding issues: (a) The current diff algorithm is wrong -- it does not compute actual line-level differences, making every line appear changed. (b) Most React diff libraries render the entire diff without virtualization, producing 5000-10000 DOM nodes for a 1000-line file with highlighting.
 
-**Consequences in Shipyard:** Agent appears to work (all validations pass) but produces code that fails at runtime. During the Ship app rebuild, this would surface as "agent said it succeeded, but the app crashes." Alternatively, good edits get rolled back because of pre-existing lint errors, wasting all three retry attempts.
+**How to avoid:**
+1. Replace the naive diff with `diff.diffLines()` from jsdiff. Show context lines (unchanged), additions (green), and removals (red). Include 3 lines of surrounding context per hunk.
+2. Use a virtualized diff renderer. Best options: `@git-diff-view/react` (built-in virtualization, GitHub-style UI, split/unified) or CodeMirror 6 merge extension (handles massive files natively).
+3. Compute diffs once on arrival, memoize by `edit_id` in the store. Never recompute on re-render.
+4. For large files (>2000 lines), compute diffs in a Web Worker.
+5. Lazy-load diff view -- show summary line ("Modified 15 lines in file_ops.py") until user clicks to expand.
 
 **Warning signs:**
-- Agent reports "success" but manual testing reveals broken code
-- High rollback rate on files that already had errors before the edit
-- Validator only triggers on syntax errors, never on type or logic errors
+- Diff view shows entire file as removed then entire file as added (naive diff)
+- Clicking an edit takes >500ms before diff appears
+- Chrome DevTools shows "Recalculate Style" or "Layout" entries >100ms
 
-**Prevention:**
-1. **Layer validation checks** in order of speed and specificity: syntax check (fast, catches gross errors) -> type check via LSP (medium, catches type errors) -> targeted test execution (slow, catches logic errors). Each layer is optional but the agent should know which layers ran.
-2. **Always use diagnostic diffing**, not absolute error counts. The LSP baseline comparison pattern already exists in Shipyard -- make sure it is the *only* validation path for TS/TSX, not a fallback.
-3. **Run relevant tests when available.** If the plan step specifies affected test files, run them as part of validation. This catches logic errors that static analysis misses.
-4. **Report validation coverage** in the edit result: "validated: syntax=true, types=true, tests=false" so the human/reporter knows what was actually checked.
-5. **Handle LSP server crashes gracefully.** If the TypeScript server dies mid-run, fall back to esbuild but log a warning. Never silently skip validation.
-
-**Phase mapping:** Phase 1 (fix false positives via consistent diffing), Phase 2 (layer in test execution).
+**Phase to address:**
+Phase 3 (diff view) -- must choose virtualized approach from the start. Non-virtualized diff components cannot be incrementally improved; they require a complete rewrite.
 
 ---
 
-### Pitfall 4: Retry Loop Without Learning
+### Pitfall 4: File Tree Collapse with Real Project Directories
 
-**What goes wrong:** When an edit fails validation and gets rolled back, the agent retries by going back to the reader node, re-reading the same file (now restored to its pre-edit state), and asking the LLM to try again. But the retry prompt contains no information about *why the previous attempt failed*. The LLM makes the same mistake or a similar one. Three retries burn, then the step fails.
+**What goes wrong:**
+The file explorer renders the target project's directory tree. The existing `/browse` endpoint does not filter node_modules, .git, __pycache__, or build artifacts. Real projects have hundreds to thousands of files. Without virtualization, expanding a directory with 200+ children creates 200+ DOM nodes instantly. With real-time status indicators from WebSocket events, each status change can re-render the entire tree.
 
-**Why it happens:** The `should_continue` function in `graph.py:26-38` routes errors back to `reader`, which re-reads the file. But the error message from the validator is stored in `error_state`, which gets passed through the state but is *not included* in the editor's prompt. The editor prompt template (`EDITOR_USER`) takes `file_path`, `numbered_content`, `edit_instruction`, and `context_section` -- there is no field for "previous attempt feedback."
+**Why it happens:**
+Naive tree implementations render all nodes in expanded subtrees. The `/browse` endpoint returns all entries without gitignore filtering. Each tree node subscribes to the same status state object, so one file status change propagates to every rendered node.
 
-**Consequences in Shipyard:** Wasted LLM calls (3x cost for the same failed edit), frustrated users watching the same error repeat, and ultimately a failed step that might have succeeded if the LLM knew what went wrong.
+**How to avoid:**
+1. Backend: filter `/browse` results using `git ls-files` or exclude node_modules, .git, __pycache__, dist, build, .next, vendor. Add a `limit` parameter (default 500 per directory).
+2. Use a virtualized tree from day one. React Arborist is purpose-built for file explorers (renders only visible ~30 rows). Alternative: headless-tree + TanStack Virtual.
+3. File status state: flat Map keyed by path in Zustand. Each tree node selects only its own status: `useStore(s => s.fileStatuses.get(path))`.
+4. Lazy-load directory contents on expand, not upfront.
+5. Debounce file status updates -- batch WebSocket `file` events within 100ms.
 
 **Warning signs:**
-- Same or very similar error messages across all 3 retry attempts
-- Retry success rate below 30%
-- Error messages that describe the exact fix needed but the LLM does not receive them
+- Expanding any directory causes visible freeze (>100ms)
+- Opening a project with node_modules freezes the browser tab
+- Tree scroll stutters while agent is running
 
-**Prevention:**
-1. **Feed the error back to the editor prompt.** Add a `previous_error` field to the editor prompt template. On retry, populate it with the validator's error message and the failed anchor/replacement pair.
-2. **Escalate model tier on retry.** If gpt-4o-mini fails twice, escalate to gpt-4o. If gpt-4o fails, escalate to o3. The router's tiered model system already supports this -- add retry-count-based escalation.
-3. **Vary the approach.** On retry 2, instruct the LLM to use a different anchor (shorter/longer) or a different edit strategy. Break the deterministic loop.
-4. **Add a "reflection" step** between validator failure and editor retry that asks a cheap model "why did this edit fail and what should be different next time?"
-
-**Phase mapping:** Phase 1 -- this is the second highest-impact reliability improvement after fuzzy matching.
+**Phase to address:**
+Phase 2 (file explorer) -- virtualization must be the foundation. React Arborist has a fundamentally different API than recursive `<TreeNode>` rendering.
 
 ---
 
-### Pitfall 5: Synchronous Operations Blocking the Event Loop
+### Pitfall 5: Syntax Highlighting Bloating Bundle and Blocking Renders
 
-**What goes wrong:** The asyncio event loop gets blocked by synchronous subprocess calls, causing WebSocket heartbeats to stop, connections to drop, and the frontend to show the run as "disconnected" even though the agent is still working. When the blocking call finishes, the WebSocket is dead, events are lost, and the UI is stale.
+**What goes wrong:**
+Loading a full editor engine on initial page load blocks time-to-interactive. Monaco: 2MB+ bundle, 50-100MB memory per instance. Even Shiki's `codeToHtml()` is synchronous and takes 50-200ms on large files (1000+ lines), causing visible jank on tab switch. Developers forget to dispose editor instances when closing tabs, leaking memory.
 
-**Why it happens:** `executor_node` calls `run_command()` (sync `subprocess.run` with `shell=True`) instead of `run_command_async()`. The validator's `_syntax_check` uses sync `subprocess.run` (though it is wrapped in `asyncio.to_thread` now). Any sync I/O in a LangGraph node blocks the entire uvicorn event loop because LangGraph runs nodes as coroutines on the main event loop.
+**Why it happens:**
+Monaco loads the complete VS Code editor engine including TypeScript workers. Shiki's TextMate grammar tokenization is CPU-intensive when run synchronously during React render. For Shipyard v1.1 where users view agent edits read-only, full editor engines are overkill.
 
-**Consequences in Shipyard:** (a) WebSocket connections silently die during long `npm install` or test suite runs. (b) Heartbeats stop, causing the frontend to enter reconnection mode. (c) The reconnection replay may race with new events. (d) `shell=True` in `run_command` is also a security risk (shell injection from LLM-generated commands).
+**How to avoid:**
+1. Use Shiki for read-only display and diffs. It produces pre-rendered HTML with no editor overhead. Vercel's AI Elements switched to Shiki for a "huge initial rendering boost."
+2. Lazy-load Shiki with `await createHighlighter()` -- never import at module level. Show plain text first via `useEffect`, then swap in highlighted version.
+3. For files >2000 lines, only highlight the visible viewport plus buffer. Use CodeMirror 6 (viewport-aware lazy highlighting) only if full-file highlighting proves too slow.
+4. Load language grammars dynamically -- only fetch the grammar for the detected language.
+5. Code-split the highlighting engine via `React.lazy()` + `import()`. Keep it out of the initial bundle.
+6. Build extension-to-language map with `'text'` fallback for unknown extensions.
+7. Never use Monaco unless v1.2 adds in-IDE editing with autocomplete.
 
 **Warning signs:**
-- Frontend shows "disconnected" during executor steps
-- Heartbeat gaps > 30 seconds in WebSocket logs
-- Commands > 5 seconds cause observable UI lag
+- Initial page load >3 seconds (check Network tab)
+- Memory grows 50MB+ per opened file tab (Chrome Task Manager)
+- Tab switching delay >200ms
+- Bundle analyzer shows a single chunk >500KB
 
-**Prevention:**
-1. **Convert all subprocess calls to async.** Use `asyncio.create_subprocess_exec` (not `shell=True`) everywhere. The `run_command_async` function already exists -- use it.
-2. **Set `--ws-ping-interval` on uvicorn** (e.g., 20 seconds) so stale connections are detected quickly.
-3. **Cancel background tasks on WebSocket disconnect.** The current code does not cancel the graph task when the client disconnects, leading to orphaned runs sending to dead connections.
-4. **Implement a command allowlist** for the executor node. Do not pass arbitrary LLM-generated strings to `shell=True`.
+**Phase to address:**
+Phase 3 (code/diff view) -- highlighting strategy is an architectural decision affecting bundle, memory, and component design.
 
-**Phase mapping:** Phase 1 (async conversion), Phase 2 (cancellation, allowlist).
+---
+
+### Pitfall 6: Panel Resize Jank from Layout Thrashing
+
+**What goes wrong:**
+Dragging a panel resize handle fires continuous pointer events. Components inside panels using `ResizeObserver` (TanStack Virtual needs container height, CodeMirror measures viewport) fire callbacks on every pixel of drag. Each callback triggers setState, re-render, layout, then ResizeObserver fires again. This cascade produces resize at <15fps.
+
+**Why it happens:**
+ResizeObserver is designed to fire on any dimension change. During active resize, dimensions change every 16ms. If each observation triggers a React re-render with layout-dependent content, you get a feedback loop: CSS resize -> observer fires -> setState -> render -> layout -> observer fires again.
+
+**How to avoid:**
+1. Use `react-resizable-panels` v4 (by bvaughn). Uses CSS `flex-grow` internally, is the industry standard, and is what shadcn/ui wraps. ~7KB gzipped.
+2. Set `autoSaveId` on PanelGroup for localStorage persistence.
+3. During active drag, throttle or defer re-measurements. Only recalculate virtual list heights on `onDragEnd`.
+4. Apply `contain: layout` CSS on panel containers.
+5. Never set React state from ResizeObserver during active drag. Track "resize in progress" via ref.
+
+**Warning signs:**
+- Resize handle lags behind cursor
+- CPU spikes to 100% during drag
+- Virtual lists show blank rows during resize
+
+**Phase to address:**
+Phase 1 (layout) -- the panel system is the structural foundation. `react-resizable-panels` prevents this entire class of issue.
+
+---
+
+### Pitfall 7: Agent Stream DOM Growing Without Bound
+
+**What goes wrong:**
+The agent stream receives hundreds of events per run (plan steps, file reads, edits, validations, token streams). Appending each as a React component creates an ever-growing DOM. After 500+ events (typical for multi-step runs), scrolling lags. Auto-scroll fights user scroll position.
+
+**Why it happens:**
+DOM grows linearly with events. Auto-scroll via `scrollIntoView()` triggers forced reflow. When user scrolls up to read earlier events, the next event's auto-scroll yanks them back to the bottom.
+
+**How to avoid:**
+1. Virtualize the event list from day one with TanStack Virtual (dynamic row heights).
+2. "Sticky scroll": auto-scroll only when user is at bottom. Show floating "N new events" badge when scrolled up.
+3. Collapse event content by default -- show one-line summaries ("Editing file_ops.py: updating parse function"). Expand to full LLM output on click.
+4. Cap rendered buffer at ~1000 events. Older events page in on scroll-up.
+5. `React.memo` on event row components -- most never change after initial render.
+
+**Warning signs:**
+- Stream scroll choppy after 10+ edited files
+- Memory grows continuously during long runs
+- DOM node count past 5000
+
+**Phase to address:**
+Phase 4 (agent stream) -- establish virtualization pattern in Phase 2 (file tree) and reuse.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 6: Planner Generates Unbounded or Mistyped Plans
+### Pitfall 8: Tab State Loss on Context Re-Render
 
-**What goes wrong:** The planner LLM generates too many steps (20+ for a simple change), steps with wrong `kind` values (causing misrouting in `classify_step`), or steps with vague `acceptance_criteria` that the editor cannot act on. The legacy string-based step format is still supported, causing dual code paths that behave differently.
+**What goes wrong:**
+If the workspace/tab provider re-renders due to a parent context update (WebSocket reconnection, project switch), all open tab state (scroll positions, expanded sections, unsaved selections) resets.
 
-**Prevention:**
-1. **Validate plan steps against the PlanStep schema** immediately after generation. Reject and re-plan if validation fails.
-2. **Cap plan length** (e.g., max 15 steps). If the LLM generates more, it is likely over-decomposing.
-3. **Remove legacy string step support.** The dual code paths in `graph.py:70-78`, `reader.py:20-33`, `executor.py:15-21` add complexity and behave differently. Force typed steps only.
-4. **Include examples in the planner prompt** showing good decomposition for common task types.
+**How to avoid:**
+Store tab state in `useRef` and sync to `useState` only on tab open/close. Keep workspace state independent of WebSocket state. Or use Zustand for tab state (not affected by Context re-renders).
 
-**Phase mapping:** Phase 1 (schema validation, cap), Phase 2 (remove legacy format).
+**Phase to address:** Phase 3 (editor area/tabs).
 
 ---
 
-### Pitfall 7: File Buffer Stale Reads
+### Pitfall 9: Stale File Content After Agent Edit
 
-**What goes wrong:** The `file_buffer` stores file content at the time the reader node ran. If the executor node modifies files (e.g., `npm install` updates `package-lock.json`, or a build step generates files), subsequent steps see stale content in the buffer. Edits based on stale content fail with anchor mismatches.
+**What goes wrong:**
+User opens a file in the code viewer. Agent edits that file. The viewer still shows old content.
 
-**Prevention:**
-1. **Invalidate file_buffer entries after executor steps.** The `invalidated_files` state field exists but is only checked for ast-grep cache clearing, not for buffer invalidation.
-2. **Re-read files at the start of each edit step**, not just at the reader node. The reader-then-edit flow should guarantee fresh content.
-3. **After executor steps that modify files** (install, build, codegen), clear the entire file_buffer and force re-reads.
+**How to avoid:**
+When a `diff` event arrives for an open file's path, show a "file changed externally" banner with a reload button. Don't auto-reload (user might be reading). Auto-reload only if the tab is not focused.
 
-**Phase mapping:** Phase 1 -- straightforward fix with high impact.
-
----
-
-### Pitfall 8: LLM Output Format Brittleness
-
-**What goes wrong:** The editor expects the LLM to return a JSON object with `anchor` and `replacement` keys. The current parsing strips markdown fences but fails on: nested fences, JSON preceded by commentary text, multiple JSON objects, or the LLM wrapping the response in an array. Any parse failure aborts the edit with no retry -- `error_state` is set but the retry loop counts it as an error that exhausts retries.
-
-**Prevention:**
-1. **Use structured output / function calling** instead of free-text JSON parsing. OpenAI's function calling API guarantees valid JSON matching a schema. This eliminates the entire parse failure category.
-2. **As a fallback**, implement regex-based JSON extraction: find the first `{...}` in the response that parses as valid JSON with the required keys.
-3. **Do not count parse failures as edit failures** for retry purposes. A parse failure should re-prompt with "please return valid JSON" without decrementing retry budget.
-
-**Phase mapping:** Phase 1 (function calling migration is high-value, low-risk).
+**Phase to address:** Phase 3 (editor area integration).
 
 ---
 
-### Pitfall 9: No Run Cancellation or Timeout
+### Pitfall 10: `/browse` Endpoint Path Traversal
 
-**What goes wrong:** A run enters a bad state (stuck waiting for approval that never comes, LLM taking forever to respond, infinite retry on a fundamentally impossible edit) and there is no way to stop it. The WebSocket `stop` action dispatches to `_stop_callback` which is never set. The only option is server restart, which loses all in-flight state.
+**What goes wrong:**
+The `/browse` endpoint accepts arbitrary paths. A request could read files outside the project directory.
 
-**Prevention:**
-1. **Wire up the stop callback** to cancel the asyncio task running the graph.
-2. **Add a global timeout** per run (e.g., 10 minutes). If the run exceeds this, force-terminate and report partial results.
-3. **Add per-step timeout** (e.g., 2 minutes per LLM call). The OpenAI SDK supports timeout parameters.
-4. **Persist run state to SQLite at node boundaries** using LangGraph's checkpointer, so restarts do not lose progress.
+**How to avoid:**
+Backend must validate the requested path is within the project directory: `os.path.commonpath([project_path, requested_path]) == project_path`. Reject requests outside the boundary with 403.
 
-**Phase mapping:** Phase 1 (stop callback, timeouts), Phase 2 (checkpointing).
+**Phase to address:** Phase 2 (file explorer backend changes).
 
 ---
 
-### Pitfall 10: WebSocket Reconnection Race Condition
+### Pitfall 11: Glassmorphic Styling Conflicts with Diff Colors
 
-**What goes wrong:** During reconnection, the server replays events from the store while new events may be generated by the running agent. The client can receive events out of order or miss events that were generated between the snapshot and the end of replay. There is no lock preventing concurrent sends during replay.
+**What goes wrong:**
+The frosted glassmorphic design system uses translucent backgrounds. Diff line backgrounds (red/green additions/removals) become nearly invisible against translucent panels.
 
-**Prevention:**
-1. **Buffer new events during replay.** When a reconnection is in progress, queue any new events for that run_id. After replay completes, flush the buffer.
-2. **Use sequence numbers strictly.** The client should discard any event with `seq <= last_received_seq` and request re-replay if gaps are detected.
-3. **Send a "replay_complete" sentinel** so the client knows when live events resume.
+**How to avoid:**
+Use higher-opacity backgrounds for diff lines (`rgba(239,68,68,0.25)` not `0.1`). Test diff visibility against actual panel backgrounds. Consider a solid dark background for the code/diff area specifically, even if surrounding chrome is glassmorphic.
 
-**Phase mapping:** Phase 2 (the current implementation mostly works, but edge cases surface under load).
-
----
-
-## Minor Pitfalls
-
-### Pitfall 11: Module-Level Singleton TraceLogger
-
-**What goes wrong:** Every node file creates `tracer = TraceLogger()` at module level. With concurrent runs, trace entries from different runs interleave. The `run_id` field gets overwritten, and `tracer.save()` writes a file mixing data from multiple runs.
-
-**Prevention:** Pass a per-run tracer via `config["configurable"]` instead of module-level singletons. This is already a known concern in CONCERNS.md.
-
-**Phase mapping:** Phase 2.
+**Phase to address:** Phase 3 (diff view styling).
 
 ---
 
-### Pitfall 12: Edit Produces Valid Syntax but Wrong Semantics
+## Technical Debt Patterns
 
-**What goes wrong:** The LLM generates an edit that is syntactically valid, passes type checking, but does the wrong thing (e.g., reverses a condition, deletes important logic, adds dead code). No amount of static validation catches this.
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| React Context for all shared state | Fast to implement, no new dependency | Re-render cascade across all panels; must refactor to Zustand later | Never for high-frequency state. OK for project config, theme |
+| Non-virtualized lists | Simpler code, no TanStack Virtual dependency | UI freezes at >200 items; complete rewrite to add virtualization | Never -- Shipyard targets real codebases with 500+ files |
+| Monaco for read-only display | "Looks like VS Code" immediately | 2MB bundle, 100MB per instance | Never for v1.1. Only if v1.2 adds in-IDE editing with autocomplete |
+| Inline `useState` per WebSocket event | Obvious data flow, easy to debug | Each setState = separate render, no batching | OK for Phase 1 prototype only; migrate to Zustand store by Phase 2 |
+| Single shared WebSocket subscriber for all panels | Simple architecture | Every message triggers every panel | Never -- each panel must subscribe to its own event types |
+| Naive diff algorithm (mark all old as removed, all new as added) | Trivial implementation | Diffs are unreadable, defeats the purpose of the view | Never |
 
-**Prevention:**
-1. **Include acceptance criteria in the validation step.** The planner generates `acceptance_criteria` per step -- the validator could pass these to a cheap LLM to verify the edit matches intent.
-2. **Run tests when available.** This is the only reliable way to catch semantic errors.
-3. **Log diffs to LangSmith** so human reviewers can audit what was changed during the run.
+## Integration Gotchas
 
-**Phase mapping:** Phase 3 (requires test execution infrastructure).
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Existing WebSocketContext + new panels | Adding more `useWebSocketContext()` calls, each re-rendering on snapshot/status change | Zustand store ingests WebSocket events. Panels subscribe to specific slices. WebSocket hook pushes into store, not Context |
+| Existing ProjectContext + file explorer | Putting file tree expanded/selected state inside ProjectContext | File tree state in its own Zustand store. ProjectContext only provides project path/id |
+| P0/P1/P2 event priorities + UI | Treating all events identically | P0 (approval, error): modal/overlay interruption. P1 (stream, diff): panel-specific immediate update. P2 (status, file): batch on rAF |
+| Backend absolute paths + display | Showing `/Users/rohanthomas/Shipyard/agent/graph.py` in UI | Strip project root. Display `agent/graph.py`. Either server sends relative paths or frontend computes from known root |
+| Edit old_content/new_content + diff | Recomputing diff from full strings on every render | Compute once on arrival, memoize by edit_id in store |
+| useHotkeys + new keyboard shortcuts | Hotkey conflicts between panels (arrow keys for tree vs diff scroll) | Scope hotkeys to focused panel. Track panel focus. Hotkey handler checks focus before firing |
+| react-resizable-panels + ResizeObserver | Observer fires every pixel of drag causing cascading re-renders | Debounce observer during active drag. Use `onLayout` (drag end) for expensive recalculations |
 
----
+## Performance Traps
 
-### Pitfall 13: Large File Listing Wastes Planner Context
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Every WS message triggers setState | CPU during streaming, input lag | rAF batching + Zustand selectors | >10 msg/sec (normal during runs) |
+| Rendering all file tree nodes | Expand directory freezes UI | React Arborist / TanStack Virtual | >100 children in directory |
+| Synchronous Shiki highlighting | Tab switch jank | Async highlight via useEffect, viewport-only for large files | Files >500 lines |
+| Full file content in React state | GC pressure, memory growth | Zustand store outside reconciliation; pass only visible ranges | >5 tabs, any file >500 lines |
+| Unthrottled ResizeObserver | Layout thrashing during resize | Throttle to 1 per rAF; defer during drag | Any panel with virtualized list |
+| Agent stream unbounded DOM | Scroll lag, memory growth | TanStack Virtual with dynamic heights | >300 events per run |
+| CSS-in-JS runtime for panel styling | Recalculation on resize | Tailwind (already in stack), zero runtime | During any high-frequency update |
 
-**What goes wrong:** `list_files(working_dir)` runs `glob.glob("**/*", recursive=True)` with no gitignore filtering. For a project with `node_modules/`, this returns thousands of files, consuming LLM tokens and degrading planner quality by burying signal in noise.
+## Security Mistakes
 
-**Prevention:**
-1. **Use `git ls-files`** instead of glob. This automatically respects `.gitignore`.
-2. **Limit depth and count** (e.g., max 200 files, max 3 levels deep for initial listing).
-3. **Filter by relevance** to the instruction (e.g., only show `.ts`/`.tsx` files for a "fix the React component" task).
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| `dangerouslySetInnerHTML` for syntax highlighting | XSS if file contains malicious HTML | Use Shiki's `codeToHast()` + `hast-util-to-jsx-runtime` for React elements, not raw HTML |
+| Full server paths in browser | Exposes filesystem structure | Strip to project-relative paths |
+| `/browse` without path validation | Directory traversal reads arbitrary files | Validate path is within project root (`os.path.commonpath` check) |
+| Raw LLM output rendered as HTML | XSS from model output | Render in `<pre>` or markdown renderer with HTML disabled |
 
-**Phase mapping:** Phase 1 -- simple fix, meaningful improvement.
+## UX Pitfalls
 
----
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Auto-scroll overrides user position | Cannot read earlier events during active run | Sticky scroll: auto only at bottom. "N new events" badge when scrolled up |
+| File tree shows node_modules, .git | Overwhelming, slow, signal buried | Respect .gitignore. Use `git ls-files`. Toggle for ignored files |
+| No loading state during diff computation | Click, nothing for 500ms, then sudden appearance | Skeleton/spinner immediately. Async diff computation |
+| Panel sizes not persisted | Resize, refresh, reset to defaults | `autoSaveId` on PanelGroup stores to localStorage |
+| Raw LLM output shown by default | Walls of text, impossible to follow | Summary lines by default. Expand on click |
+| Diff without context lines | Cannot orient where change occurred in file | 3 lines of context per hunk (git diff default) |
+| No visual connection between agent step and file | "Step 3: edit graph.py" but no way to navigate | Click file path in stream to select in explorer and open diff |
+| Missing keyboard navigation in tree | Mouse-only slows power users | Arrow keys, Enter, Escape following VS Code conventions |
 
-### Pitfall 14: Approval Manager In-Memory State Loss
+## "Looks Done But Isn't" Checklist
 
-**What goes wrong:** `ApprovalManager._batch_registry` is in-memory only. Server restart loses all pending approval state. Batch operations for refactor edits fail silently.
+- [ ] **File explorer:** Keyboard navigation (arrow keys, Enter, Escape) works without mouse
+- [ ] **Diff view:** Scroll sync between old/new panels in side-by-side mode
+- [ ] **Diff view:** Handles new files (old_content is null) and deleted files (new_content is null) gracefully
+- [ ] **Diff view:** Files >5000 lines show graceful fallback, not browser freeze
+- [ ] **Panel resize:** Minimum size constraints prevent collapsing to 0px
+- [ ] **Panel resize:** Sizes persist across page reload (check localStorage)
+- [ ] **Agent stream:** WebSocket reconnection replays missed events via `lastSeqRef`
+- [ ] **Agent stream:** Empty state before any run starts (not blank white space)
+- [ ] **File status indicators:** Rapid updates (10 in 100ms) don't cause flickering
+- [ ] **Tab bar:** 20+ open files show scroll/overflow, not broken layout
+- [ ] **Dark theme:** Syntax highlighting colors match IDE chrome (no jarring mismatch)
+- [ ] **WebSocket disconnect:** Clear visual indicator when disconnected/reconnecting
+- [ ] **Language detection:** Unknown file extensions fall back to plain text, not error
 
-**Prevention:** Query batch membership from the `edits` table (which already has a `batch_id` column) instead of the in-memory registry.
+## Recovery Strategies
 
-**Phase mapping:** Phase 2.
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| WebSocket render storms | MEDIUM | Add rAF batching between WS hook and stores. Modifies distribution path, not panels. ~1 day |
+| Context propagation cascade | HIGH | Migrate Context to Zustand. Touches every file using `useWebSocketContext()`. ~2-3 days |
+| Non-virtualized diff | HIGH | Complete rewrite -- virtualized components have different API/data flow. ~2 days |
+| Non-virtualized tree | HIGH | React Arborist rewrite -- fundamentally different API than recursive nodes. ~2 days |
+| Panel resize jank | LOW | Drop-in `react-resizable-panels` if no custom logic built yet. ~0.5 day |
+| Highlighting bloat | MEDIUM | Swap Monaco/heavy lib for Shiki. Wrapper can maintain same props. ~1-2 days |
+| Agent stream DOM growth | MEDIUM | Add TanStack Virtual. Dynamic row heights are the challenge. ~1 day |
 
----
+## Pitfall-to-Phase Mapping
 
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Mitigation | Priority |
-|-------------|---------------|------------|----------|
-| Edit reliability hardening | Anchor mismatch cascade (#1) | Fuzzy matching, shorter anchors, error feedback | P0 |
-| Edit reliability hardening | Retry without learning (#4) | Feed errors back to editor prompt | P0 |
-| Edit reliability hardening | LLM output format brittleness (#8) | Function calling / structured output | P0 |
-| Validation hardening | False confidence (#3) | Layered validation, diagnostic diffing everywhere | P0 |
-| Validation hardening | Stale file buffer (#7) | Invalidate buffer after executor steps | P1 |
-| Infrastructure stability | Event loop blocking (#5) | Async subprocess, ws-ping-interval | P0 |
-| Infrastructure stability | No cancellation/timeout (#9) | Wire stop callback, add timeouts | P1 |
-| Infrastructure stability | WebSocket reconnection race (#10) | Buffer events during replay | P2 |
-| State management | State bloat (#2) | Externalize snapshots, cap history | P1 |
-| Planner quality | Unbounded plans (#6) | Schema validation, cap length | P1 |
-| Planner quality | Large file listing (#13) | Use git ls-files | P1 |
-| Observability | Singleton tracer (#11) | Per-run tracer via config | P2 |
-| Semantic correctness | Wrong semantics (#12) | Test execution, acceptance criteria | P2 |
-| Approval flow | In-memory state loss (#14) | Persist to SQLite | P2 |
-
----
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| WebSocket render storms | Phase 1 (layout/infra) | Profiler: <10 renders/sec per panel during streaming |
+| Context propagation cascade | Phase 1 (layout/infra) | File selection change does NOT re-render agent stream (DevTools highlight) |
+| Diff rendering freeze | Phase 3 (diff view) | 2000-line file diff renders in <200ms |
+| File tree collapse | Phase 2 (file explorer) | 500-child directory expands without frame drops (60fps) |
+| Syntax highlighting bloat | Phase 3 (code/diff view) | No single bundle chunk >300KB; 10 tabs under 200MB |
+| Panel resize jank | Phase 1 (layout) | Resize drag at 60fps (Chrome FPS overlay) |
+| Agent stream DOM growth | Phase 4 (agent stream) | 1000 events, stream scroll at 60fps, constant DOM node count |
 
 ## Sources
 
-- [Code Surgery: How AI Assistants Make Precise Edits to Your Files](https://fabianhertwig.com/blog/coding-assistants-file-edits/) -- comprehensive survey of edit format reliability across major coding assistants
-- [The 80% Problem in Agentic Coding](https://addyo.substack.com/p/the-80-problem-in-agentic-coding) -- why agents confidently produce wrong results on complex tasks
-- [Where Autonomous Coding Agents Fail: A Forensic Audit of Real-World PRs](https://medium.com/@vivek.babu/where-autonomous-coding-agents-fail-a-forensic-audit-of-real-world-prs-59d66e33efe9) -- failure patterns in production agent PRs
-- [Are Bugs and Incidents Inevitable with AI Coding Agents?](https://stackoverflow.blog/2026/01/28/are-bugs-and-incidents-inevitable-with-ai-coding-agents/) -- Stack Overflow analysis of AI-generated code quality
-- [Optimizing LangGraph Cycles: Stopping the Infinite Loop](https://rajatpandit.com/optimizing-langgraph-cycles/) -- LangGraph-specific retry and loop management
-- [The Memory Leak in the Loop: Custom State Reducers in LangGraph](https://azguards.com/ai-engineering/the-memory-leak-in-the-loop-optimizing-custom-state-reducers-in-langgraph/) -- state bloat from `add_messages` reducer
-- [Fix File Editing Tool Reliability - Cline Issue #4384](https://github.com/cline/cline/issues/4384) -- community discussion of search/replace failure modes and fuzzy matching
-- [Diff Format Explained: Search-Replace Blocks](https://www.morphllm.com/edit-formats/diff-format-explained) -- edit format comparison with reliability data
-- [GPT Code Editing Benchmarks - Aider](https://aider.chat/docs/benchmarks.html) -- quantitative data on edit format success rates
-- [Unified Diffs Make GPT-4 Turbo 3X Less Lazy](https://aider.chat/docs/unified-diffs.html) -- Aider's lessons on edit format impact on LLM behavior
-- [Building Effective AI Coding Agents for the Terminal](https://arxiv.org/abs/2603.05344) -- arXiv paper on context engineering and safety controls
-- [Evaluating the Impact of LSP-based Code Intelligence on Coding Agents](https://www.nuanced.dev/blog/evaluating-lsp) -- LSP integration benefits and pitfalls for agents
-- [FastAPI WebSocket Disconnection Discussion #9031](https://github.com/fastapi/fastapi/discussions/9031) -- WebSocket disconnect propagation issues with uvicorn
+- [React Context Performance Trap: useSyncExternalStore](https://azguards.com/performance-optimization/the-propagation-penalty-bypassing-react-context-re-renders-via-usesyncexternalstore/)
+- [Streaming Backends & React: Controlling Re-render Chaos](https://www.sitepoint.com/streaming-backends-react-controlling-re-render-chaos/)
+- [React State Management: Context API vs Zustand](https://medium.com/@bloodturtle/react-state-management-why-context-api-might-be-causing-performance-issues-and-how-zustand-can-ec7718103a71)
+- [Handle large files - react-diff-viewer Issue #25](https://github.com/praneshr/react-diff-viewer/issues/25)
+- [Git Diff View - High-Performance Diff Component](https://mrwangjusttodo.github.io/git-diff-view/)
+- [Building High Performance Directory Components in React](https://dev.to/jdetle/memoization-generators-virtualization-oh-my-building-a-high-performance-directory-component-in-react-3efm)
+- [Monaco Editor Memory Use - Issue #132](https://github.com/react-monaco-editor/react-monaco-editor/issues/132)
+- [Shiki vs react-syntax-highlighter - Vercel AI Elements #14](https://github.com/vercel/ai-elements/issues/14)
+- [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels)
+- [TanStack Virtual](https://tanstack.com/virtual/latest)
+- Codebase audit: `DiffViewer.tsx` buildDiffLines (naive diff confirmed)
+- Codebase audit: `/browse` endpoint in `server/main.py` (no path validation)
+- Codebase audit: `WebSocketContext.tsx` (bundles stable refs with changing values)
+- Codebase audit: `useWebSocket.ts` (per-message dispatch, no batching)
 
 ---
-
-*Concerns audit: 2026-03-26*
+*Pitfalls research for: VS Code-style IDE UI in React with WebSocket streaming*
+*Researched: 2026-03-27*

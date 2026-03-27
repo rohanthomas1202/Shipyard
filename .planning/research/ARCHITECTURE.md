@@ -1,355 +1,364 @@
-# Architecture Patterns for Reliable Autonomous Coding Agents
+# Architecture Patterns: IDE UI Rebuild (v1.1)
 
-**Domain:** Autonomous AI coding agent (LangGraph-based, anchor-based editing)
-**Researched:** 2026-03-26
-**Focus:** Error recovery, state management, edit precision, context window management
+**Domain:** VS Code-style three-panel IDE UI for an AI coding agent
+**Researched:** 2026-03-27
+**Confidence:** HIGH (existing codebase fully audited, libraries verified)
+
+## Current Architecture (What Exists)
+
+The existing frontend is a React 19 SPA with this structure:
+
+```
+App
+  ErrorBoundary
+    WebSocketProvider (projectId)
+      ProjectProvider (onProjectChange)
+        AppShell
+          FileTree (left panel - currently shows project name + RunList)
+          Center (WorkspaceHome | DiffViewer | RunProgress - conditional)
+          AgentPanel (right panel)
+```
+
+### Current State Assessment
+
+| Component | Current Role | v1.1 Fate |
+|-----------|-------------|-----------|
+| `AppShell` | 3-column CSS grid layout with collapse | **Evolve** - replace CSS grid with react-resizable-panels |
+| `FileTree` | Shows project name + RunList, no actual file tree | **Replace** - needs real filesystem browsing via `/browse` API |
+| `DiffViewer` | Shows only during `waiting_for_human`, naive old-all-red/new-all-green diff | **Replace** - needs proper diff algorithm, side-by-side view, always-accessible |
+| `AgentPanel` | Right panel with StepTimeline + StreamingText | **Evolve** - keep core, add expandable LLM output sections |
+| `WorkspaceHome` | Center panel when no run active, has prompt textarea | **Evolve** - prompt moves to top bar, home becomes file viewer |
+| `RunProgress` | Center panel during active run, shows event log | **Absorb** - merge into ActivityStream, center panel shows files/diffs |
+| `WebSocketContext` | Type-based pub/sub with wildcard support | **Keep** - sufficient for new data flows |
+| `ProjectContext` | Project/run state, submitInstruction | **Evolve** - add run history fetching |
+
+### Backend APIs Already Available
+
+| Endpoint | Used By | Notes |
+|----------|---------|-------|
+| `GET /browse?path=` | ProjectPicker (directory only) | Returns `{current, parent, entries[{name, path, is_dir, has_children}]}`. Currently filters to directories only. Needs file support for file explorer. |
+| `GET /runs/{id}/edits` | DiffViewer | Returns `Edit[]` with `old_content`, `new_content`, `file_path`, `status` |
+| `PATCH /runs/{id}/edits/{id}` | DiffViewer | Approve/reject edits |
+| `WS /ws/{project_id}` | WebSocketContext | Event types: approval, error, stop, review (P0), stream, diff, git (P1), status, file, exec (P2) |
+
+### Backend Gaps
+
+| Need | Current State | Required Change |
+|------|--------------|-----------------|
+| File tree listing (files + dirs) | `/browse` returns dirs only (skips files) | Extend to include files with metadata (size, extension) |
+| File content reading | No endpoint exists | Add `GET /files?path=` returning file content with syntax hint |
+| Live file change notifications | Events exist for edits but not file-level | Agent already tracks `edit_history` in state; emit `file.changed` events |
 
 ## Recommended Architecture
 
-Shipyard already has a solid foundation: an 11-node LangGraph StateGraph with tiered LLM routing, anchor-based editing, LSP validation, and priority event streaming. The hardening work is not about restructuring -- it is about adding reliability layers to each existing component.
-
-The architecture should evolve from "happy-path pipeline" to "resilient pipeline with degradation paths" by adding five reliability layers:
+### Component Tree (Target)
 
 ```
-+------------------------------------------------------------------+
-|                    RELIABILITY LAYERS                              |
-|                                                                    |
-|  1. Checkpointed State (crash recovery, run resumption)           |
-|  2. Edit Integrity (stale detection, fuzzy matching, rollback)    |
-|  3. Loop Guards (progress detection, stuck-agent termination)     |
-|  4. Context Budget (window management, compaction, eviction)      |
-|  5. Validation Cascade (LSP -> syntax -> independent verify)      |
-+------------------------------------------------------------------+
+App
+  ErrorBoundary
+    WebSocketProvider
+      ProjectProvider
+        WorkspaceProvider (NEW - file/tab/diff selection state)
+          IDELayout (REPLACES AppShell)
+            TopBar (NEW - instruction input + run selector + project picker)
+            PanelGroup (react-resizable-panels)
+              Panel: FileExplorer (NEW - real file tree + change indicators)
+              PanelResizeHandle
+              Panel: EditorArea (NEW - tabbed file viewer + diff viewer)
+              PanelResizeHandle
+              Panel: ActivityStream (EVOLVES from AgentPanel)
 ```
 
 ### Component Boundaries
 
-| Component | Responsibility | Communicates With | Hardening Needed |
-|-----------|---------------|-------------------|------------------|
-| **Graph Runner** (graph.py) | Orchestrate node execution, manage state transitions | All nodes, checkpointer, event bus | Checkpointing, crash recovery, timeout enforcement |
-| **Planner** (nodes/planner.py) | Decompose instructions into typed PlanSteps | Router (LLM), file_ops (listing) | Output validation, plan sanity checks, step count limits |
-| **Reader** (nodes/reader.py) | Load files into file_buffer | file_ops, ContextAssembler | Content hashing for stale detection, budget-aware truncation |
-| **Editor** (nodes/editor.py) | Apply LLM-generated edits via anchor/replacement | Router (LLM), file_ops, ast_ops, ApprovalManager | Fuzzy anchor matching, edit pre-validation, snapshot guarantees |
-| **Validator** (nodes/validator.py) | Check edits for correctness, rollback on failure | LSP manager, subprocess checks | Error classification (retriable vs fatal), independent verification |
-| **Loop Guard** (new) | Detect stuck agents, enforce progress | Graph runner, state | Repeated-action detection, step budgets, progress signals |
-| **Context Manager** (context.py) | Fill LLM context windows within budget | All LLM-calling nodes | Wire into nodes (currently unused), window utilization tracking |
-| **Checkpointer** (new integration) | Persist state at each super-step | Graph runner, SQLite | Enable run resumption after crashes |
+| Component | Responsibility | Communicates With |
+|-----------|---------------|-------------------|
+| `IDELayout` | Top-level layout shell, mounts TopBar + PanelGroup | WorkspaceProvider (layout prefs) |
+| `TopBar` | Instruction input, run history dropdown, project selector, status indicator | ProjectContext (submit, select), WebSocketContext (status) |
+| `FileExplorer` | Recursive file tree with lazy-loading, change indicators (M/A/D) | WorkspaceProvider (select file), WebSocketContext (file change events) |
+| `EditorArea` | Tabbed container for file viewing and diff viewing | WorkspaceProvider (active tabs, selected file) |
+| `FileViewer` | Read-only code display with syntax highlighting for a single file | api.getFileContent (new endpoint) |
+| `DiffPanel` | Side-by-side or unified diff for an edit | api.getEdits, `diff` library for computation |
+| `ActivityStream` | Agent step timeline + streaming LLM output + approval actions | WebSocketContext (all event types), ProjectContext (run state) |
+| `WorkspaceProvider` | Manages open tabs, selected file, active diff, layout preferences | Consumed by EditorArea, FileExplorer, TopBar |
 
-### Data Flow (Hardened)
+### New Context: WorkspaceProvider
 
-**Current flow** (happy path only):
-```
-receive -> planner -> coordinator -> classify -> reader -> editor -> validator -> advance -> ...
+The existing contexts (WebSocket, Project) handle connectivity and project/run state. The IDE needs a third context for workspace UI state that does not belong in either existing context.
+
+```typescript
+interface WorkspaceContextValue {
+  // File explorer state
+  selectedPath: string | null
+  expandedDirs: Set<string>
+
+  // Tab state
+  openTabs: Tab[]
+  activeTabId: string | null
+
+  // Change tracking (from WebSocket events)
+  changedFiles: Map<string, 'modified' | 'added' | 'deleted'>
+
+  // Actions
+  openFile: (path: string) => void
+  openDiff: (editId: string) => void
+  closeTab: (tabId: string) => void
+  setActiveTab: (tabId: string) => void
+  clearChangedFiles: () => void
+}
+
+interface Tab {
+  id: string
+  type: 'file' | 'diff' | 'welcome'
+  label: string
+  path?: string      // for file tabs
+  editId?: string    // for diff tabs
+  isPinned: boolean  // false = preview tab (replaced on next single-click)
+}
 ```
 
-**Hardened flow** (with reliability layers):
+**Why a new context instead of extending ProjectContext:** ProjectContext manages server-side state (projects, runs, instructions). Workspace state is purely client-side UI state (which tab is open, which directory is expanded). Mixing them violates single-responsibility and would cause unnecessary re-renders across unrelated components.
+
+### Data Flow
+
+#### 1. File Explorer Data Flow
+
 ```
-receive -> planner -> [plan validator] -> coordinator -> classify
-  -> reader [with content hashing + budget tracking]
-  -> editor [with stale detection + fuzzy matching + pre-validation]
-  -> validator [LSP -> syntax -> independent verify, with error classification]
-  -> [loop guard check: progress? retry budget?]
-  -> advance or [error handler -> retry/skip/abort]
+User clicks directory in FileExplorer
+  -> api.browse(path) fetches children (files + dirs)
+  -> FileExplorer stores in local state (lazy-loaded tree)
+  -> expandedDirs updated in WorkspaceContext
+
+User clicks file in FileExplorer
+  -> WorkspaceContext.openFile(path)
+  -> Creates/activates Tab { type: 'file', path }
+  -> EditorArea renders FileViewer
+  -> FileViewer calls api.getFileContent(path) (NEW endpoint)
+  -> Renders with syntax highlighting via Shiki
 ```
 
-At each node boundary:
-1. State is checkpointed (LangGraph super-step)
-2. Loop guard evaluates progress
-3. Context budget is recalculated
-4. Error state is classified (retriable/fatal/degraded)
+#### 2. Live File Change Indicators
+
+```
+Agent edits a file during run
+  -> Backend emits Event(type="diff", data={file_path, status})  [already exists]
+  -> WebSocketContext distributes to 'diff' subscribers
+  -> WorkspaceProvider subscribes to 'diff' events
+  -> Updates changedFiles Map in WorkspaceContext
+  -> FileExplorer reads changedFiles, shows M/A/D badge next to filename
+```
+
+#### 3. Diff Viewing Data Flow
+
+```
+User clicks changed file indicator OR approval event arrives
+  -> WorkspaceContext.openDiff(editId)
+  -> Creates/activates Tab { type: 'diff', editId }
+  -> EditorArea renders DiffPanel
+  -> DiffPanel calls api.getEdits(runId) to get Edit record
+  -> Uses `diff` library (jsdiff) to compute line-level changes from old_content/new_content
+  -> Renders side-by-side diff with syntax highlighting
+  -> Approve/Reject buttons call api.patchEdit()
+```
+
+#### 4. Agent Stream Data Flow (mostly unchanged)
+
+```
+Run starts via TopBar instruction submit
+  -> ProjectContext.submitInstruction() (unchanged)
+  -> WebSocket events flow through WebSocketContext (unchanged)
+  -> ActivityStream subscribes to '*' wildcard (like current RunProgress)
+  -> Renders StepTimeline + expandable LLM output sections
+  -> Approval events trigger diff tab auto-opening via WorkspaceContext
+```
 
 ## Patterns to Follow
 
-### Pattern 1: LangGraph Checkpointing for Crash Recovery
+### Pattern 1: Lazy-Loading File Tree
 
-**What:** Use `langgraph-checkpoint-sqlite` (or `AsyncSqliteSaver`) to persist graph state at every super-step. On crash or WebSocket drop, resume from last checkpoint.
+**What:** Only fetch directory contents when a user expands a directory node. Cache results but invalidate on file change events.
 
-**Why:** Shipyard currently stores run state in an in-memory `runs` dict. A uvicorn crash loses all in-flight runs with no recovery path. LangGraph's built-in checkpointer solves this with zero architectural change.
+**When:** Always, for the file explorer.
 
-**When:** Every graph invocation. Compile the graph with a checkpointer.
+**Example:**
+```typescript
+function useDirectoryContents(path: string | null) {
+  const [entries, setEntries] = useState<FileEntry[]>([])
+  const [loading, setLoading] = useState(false)
 
-**Implementation sketch:**
-```python
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+  useEffect(() => {
+    if (!path) return
+    setLoading(true)
+    api.browse(path).then(result => {
+      setEntries(result.entries)
+      setLoading(false)
+    })
+  }, [path])
 
-async def build_graph_with_checkpointer(db_path: str):
-    checkpointer = AsyncSqliteSaver.from_conn_string(db_path)
-    graph = StateGraph(AgentState)
-    _build_graph_nodes(graph)
-    return graph.compile(checkpointer=checkpointer)
+  return { entries, loading }
+}
 ```
 
-Each run gets a unique `thread_id` in the config. On crash, re-invoke with the same thread_id to resume from last checkpoint.
+**Why:** Project directories can have thousands of files. Eagerly loading the entire tree would be slow and wasteful. VS Code uses lazy loading -- match that pattern.
 
-**Confidence:** HIGH -- this is LangGraph's documented, primary persistence mechanism.
+### Pattern 2: Tab-Based Navigation (Preview vs Pinned)
 
-### Pattern 2: Content Hashing for Stale Edit Detection
+**What:** Files and diffs open in tabs in the center panel. Single-click opens a preview tab (italic title, replaced by next single-click). Double-click pins it (normal title, persists).
 
-**What:** Hash file contents when read into `file_buffer`. Before applying an edit, verify the hash still matches the file on disk. Reject edits against stale content.
+**When:** Any time a file or diff is opened.
 
-**Why:** The current editor reads content from `file_buffer` but has no mechanism to detect if the file changed between read and edit (e.g., by the executor node running a command that modifies files, or by external tools). This is the exact problem hash-anchored edits solve in oh-my-pi, which saw "tenfold improvement in success rates" on some models.
+**Why:** This is the VS Code convention users expect. It prevents tab explosion while allowing multi-file work.
 
-**When:** Every edit operation.
+```typescript
+function openFile(path: string, pin = false) {
+  const existingTab = openTabs.find(t => t.type === 'file' && t.path === path)
+  if (existingTab) {
+    setActiveTab(existingTab.id)
+    if (pin) pinTab(existingTab.id)
+    return
+  }
 
-**Implementation sketch:**
-```python
-import hashlib
-
-def hash_content(content: str) -> str:
-    return hashlib.sha256(content.encode()).hexdigest()
-
-# In reader_node: store hash alongside content
-file_buffer[path] = content
-file_hashes[path] = hash_content(content)
-
-# In editor_node: verify before applying
-current_on_disk = _read_raw(file_path)
-if hash_content(current_on_disk) != state["file_hashes"].get(file_path):
-    # File changed since read -- re-read and retry, don't apply stale edit
-    return {"error_state": f"Stale file detected: {file_path}. Re-reading.", ...}
+  // Replace existing preview tab, or add new
+  const previewTab = openTabs.find(t => !t.isPinned)
+  if (previewTab && !pin) {
+    replaceTab(previewTab.id, { type: 'file', path, isPinned: false })
+  } else {
+    addTab({ type: 'file', path, isPinned: pin })
+  }
+}
 ```
 
-**Confidence:** HIGH -- proven pattern in oh-my-pi and similar systems.
+### Pattern 3: Event-Driven Change Tracking
 
-### Pattern 3: Layered Anchor Matching (Fuzzy Fallback)
+**What:** Subscribe to WebSocket diff/file events to maintain a `changedFiles` map. Use this to show M/A/D indicators in the file tree without polling.
 
-**What:** When the exact anchor string is not found, fall through a matching cascade: exact -> whitespace-normalized -> indentation-preserving -> fuzzy (difflib). This matches the proven pattern from Aider and RooCode.
+**When:** During active runs.
 
-**Why:** The current `edit_file()` does strict `content.count(anchor)` and fails immediately if count != 1. LLMs frequently produce anchors with minor whitespace differences, especially across long files. Aider's success is partly attributed to its layered matching strategy.
+**Why:** The existing P0/P1/P2 event priority system already delivers diff events. Subscribe and track -- no new infrastructure needed.
 
-**When:** When exact anchor matching fails in `edit_file()`.
+### Pattern 4: Resizable Panel Persistence
 
-**Implementation sketch:**
-```python
-def edit_file(path: str, anchor: str, replacement: str) -> dict:
-    content = _read(path)
+**What:** Use `react-resizable-panels` with `autoSaveId` to persist panel sizes to localStorage automatically.
 
-    # Layer 1: Exact match
-    if content.count(anchor) == 1:
-        return _apply(content, anchor, replacement, path)
+**When:** Always. The library handles this natively.
 
-    # Layer 2: Whitespace-normalized match
-    normalized_anchor = _normalize_ws(anchor)
-    normalized_content = _normalize_ws(content)
-    match = _find_normalized_match(content, normalized_content, normalized_anchor)
-    if match:
-        return _apply(content, match, replacement, path)
-
-    # Layer 3: Fuzzy match (difflib, threshold 0.85)
-    match = _fuzzy_find(content, anchor, threshold=0.85)
-    if match:
-        return _apply(content, match, replacement, path)
-
-    return {"error": f"Anchor not found in {path} (tried exact, normalized, fuzzy)"}
-```
-
-**Confidence:** MEDIUM -- pattern is well-proven in Aider/RooCode, but threshold tuning needs empirical testing on Shipyard's specific edit patterns.
-
-### Pattern 4: Loop Guard with Progress Detection
-
-**What:** Track the last N tool calls / node executions. Detect repeating patterns (same file edited 3+ times with errors, same anchor failing repeatedly). Inject steering or abort.
-
-**Why:** The current retry logic (`_retry_count >= 3 -> reporter`) counts consecutive errors but does not detect semantic loops (e.g., the editor keeps trying the same bad anchor). SWE-agent research shows "a prominent failure mode occurs when models repeatedly edit the same code snippet."
-
-**When:** After every node execution, checked in `should_continue()`.
-
-**Implementation sketch:**
-```python
-def _detect_loop(state: dict) -> bool:
-    """Check last 6 edit_history entries for repeating patterns."""
-    history = state.get("edit_history", [])[-6:]
-    if len(history) < 4:
-        return False
-
-    # Check for same-file repeated failures
-    recent_errors = [h for h in history if h.get("error")]
-    if len(recent_errors) >= 3:
-        files = [h.get("file") for h in recent_errors]
-        if len(set(files)) == 1:
-            return True  # Same file failing repeatedly
-
-    # Check for anchor repetition
-    anchors = [h.get("old", "")[:100] for h in history[-4:]]
-    if len(set(anchors)) <= 2 and len(anchors) >= 3:
-        return True  # Cycling between same anchors
-
-    return False
-
-def should_continue(state: dict) -> str:
-    if _detect_loop(state):
-        return "reporter"  # Bail out, don't waste tokens
-    # ... existing logic
-```
-
-**Confidence:** HIGH -- pattern documented in strongdm/attractor coding-agent-loop-spec, validated in production.
-
-### Pattern 5: Context Budget Enforcement
-
-**What:** Wire the existing `ContextAssembler` into all LLM-calling nodes. Track context utilization. Keep it in the 40-60% range for complex tasks to leave room for LLM reasoning.
-
-**Why:** `ContextAssembler` exists in `agent/context.py` but is completely unused -- nodes build prompts directly with unbounded string concatenation. This means large files silently exceed context windows, causing truncation or degraded output quality. The "lost-in-the-middle" phenomenon means information buried in large contexts is effectively invisible to the model.
-
-**When:** Every LLM call in planner, editor, and reader nodes.
-
-**Implementation sketch:**
-```python
-# In editor_node, replace direct prompt building:
-assembler = ContextAssembler(max_tokens=router.resolve_model(task_type).context_window)
-assembler.add_task(step_text)
-assembler.add_file(file_path, numbered, priority="working")
-if context.get("spec"):
-    assembler.add_error(context["spec"])  # or add as reference
-user_prompt = assembler.build()
-```
-
-**Confidence:** HIGH -- the component exists and is well-designed. This is pure wiring work.
-
-### Pattern 6: Error Classification (Retriable vs Fatal vs Degraded)
-
-**What:** Replace the current string-based `error_state` with a typed error object that classifies failures. Different error types get different recovery paths.
-
-**Why:** The current system treats all errors identically: set `error_state` string, retry up to 3 times, then report. But "anchor not found" (retriable with re-read) is fundamentally different from "file not found" (fatal) or "LSP unavailable" (degraded mode). Conflating these wastes retry budget on unrecoverable errors and fails to use appropriate recovery for each type.
-
-**When:** Every error path in every node.
-
-**Implementation sketch:**
-```python
-from enum import Enum
-from typing import TypedDict, Optional
-
-class ErrorSeverity(Enum):
-    RETRIABLE = "retriable"    # Re-read file and retry edit
-    DEGRADED = "degraded"      # Continue with reduced capability
-    FATAL = "fatal"            # Skip step, move to next
-    ABORT = "abort"            # Stop entire run
-
-class ErrorInfo(TypedDict):
-    severity: str  # ErrorSeverity value
-    message: str
-    node: str
-    step: int
-    retry_hint: Optional[str]  # What to do differently on retry
-
-# In should_continue():
-error = state.get("error_info")  # Typed, not just a string
-if error:
-    if error["severity"] == "fatal":
-        return "advance"  # Skip this step
-    if error["severity"] == "abort":
-        return "reporter"
-    if error["severity"] == "retriable" and _retry_count(state) < 3:
-        return "reader"  # Re-read and retry
-    return "reporter"
-```
-
-**Confidence:** MEDIUM -- the pattern is sound and well-established, but requires touching every node's error paths. Needs careful migration.
-
-### Pattern 7: Independent Verification (Two-Context Validation)
-
-**What:** After the editor produces an edit and the primary validator (LSP/syntax) passes it, optionally send the before/after diff to a separate LLM call (fast tier) to verify the edit matches the intent. This is the "generator-evaluator" pattern.
-
-**Why:** The current validator catches syntax errors but not semantic errors (edit compiles but does the wrong thing). The planner's `acceptance_criteria` field exists but is never checked post-edit. This is the gap between "code compiles" and "code is correct."
-
-**When:** For complex edits (complexity == "complex") or after retries.
-
-**Implementation sketch:**
-```python
-async def _semantic_verify(router, file_path, old_content, new_content, acceptance_criteria):
-    diff = _generate_diff(old_content, new_content)
-    prompt = f"Does this diff satisfy these criteria?\n{acceptance_criteria}\n\nDiff:\n{diff}\n\nAnswer YES or NO with brief explanation."
-    result = await router.call("validate", VERIFY_SYSTEM, prompt)
-    return "YES" in result.upper()
-```
-
-**Confidence:** MEDIUM -- the pattern is proven (Anthropic's compound AI architecture, Hermes agent's independent verification), but adds latency and cost. Use selectively.
+**Why:** Users expect their layout to persist across sessions. The existing codebase already uses localStorage for panel collapse state (`shipyard-left-collapsed`, `shipyard-right-collapsed`) -- this replaces that with better library support.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Unbounded Retry Without Re-Reading
+### Anti-Pattern 1: Monaco Editor for Read-Only Viewing
 
-**What:** Retrying an edit without re-reading the file from disk first.
+**What:** Embedding Monaco Editor (or CodeMirror) for file viewing.
 
-**Why bad:** After a rollback, the file_buffer may still contain the pre-rollback content. The editor will generate the same bad anchor again. The current `should_continue -> reader` path does handle this correctly for the retry case, but if rollback changes the file state, the buffer must be explicitly invalidated.
+**Why bad:** Monaco adds ~2MB to the bundle. Shipyard is a read-only viewer -- users do not edit code in the browser. The agent edits; users review. Loading a full editor for read-only display is massive overkill.
 
-**Instead:** Always re-read from disk on retry. Invalidate file_buffer entries for rolled-back files.
+**Instead:** Use Shiki for syntax highlighting in a `<pre>` block. ~25KB core + grammars loaded on demand. Save Monaco for if/when in-browser editing is added (out of scope for v1.1).
 
-### Anti-Pattern 2: Silent Context Overflow
+### Anti-Pattern 2: Global File Content Cache in Context
 
-**What:** Building prompts by concatenating strings without checking total token count.
+**What:** Storing all fetched file contents in WorkspaceContext.
 
-**Why bad:** When a 500-line file is loaded into context alongside a detailed plan and step instructions, the prompt may exceed the model's effective attention window. The model still produces output, but quality degrades silently. No error is raised.
+**Why bad:** File contents can be large. Storing them in context causes re-renders across all consumers when any file loads. Memory pressure grows with open tabs.
 
-**Instead:** Use ContextAssembler with explicit budget. Truncate or summarize large files. Track utilization.
+**Instead:** Each FileViewer/DiffPanel manages its own content via local `useState`. The context only tracks which tabs are open and which is active, not their content.
 
-### Anti-Pattern 3: Single Error Type for All Failures
+### Anti-Pattern 3: Replacing WebSocket Architecture
 
-**What:** Using `error_state: Optional[str]` for every failure mode.
+**What:** Adding React Query or SWR alongside the existing WebSocket pub/sub.
 
-**Why bad:** "Anchor not found" and "file permissions denied" both become strings in the same field. The retry logic cannot distinguish between them. Retry budget is wasted on unrecoverable errors.
+**Why bad:** The WebSocket infrastructure already handles real-time updates with priority routing, reconnection, and replay. Adding another data layer creates confusion about source of truth.
 
-**Instead:** Use typed error objects with severity classification.
+**Instead:** Use existing WebSocket subscribe pattern for real-time data. Use plain `fetch` (via existing `api` module) for one-shot data loads (file contents, edit records). No new data layer needed.
 
-### Anti-Pattern 4: Editing Without Snapshot Guarantee
+### Anti-Pattern 4: Putting Prompt Input in Center Panel
 
-**What:** The legacy `edit_file()` path creates a snapshot, but if the function throws between read and write, the snapshot is lost.
+**What:** Keeping the WorkspaceHome prompt as the center panel default view.
 
-**Why bad:** Rollback becomes impossible. The validator calls `_rollback(last_edit)` which reads `snapshot` from `edit_history`, but if the editor crashed mid-write, the snapshot may not exist.
+**Why bad:** In an IDE layout, the center panel should always show code/diffs. A centered prompt box wastes the most valuable screen real estate and breaks the IDE mental model.
 
-**Instead:** Write snapshot to a temporary file (or checkpointer state) before any write operation. Use atomic write patterns (write to temp, rename).
+**Instead:** Move the instruction input to the TopBar (always accessible). The center panel shows a welcome tab or open files/diffs.
 
-### Anti-Pattern 5: Mutable State in Node Return
+## Integration Points with Existing Architecture
 
-**What:** Building new state dicts with spread operators `{**file_buffer, file_path: updated_content}` -- this works but creates increasingly large state objects as the run progresses.
+### WebSocketContext (NO CHANGES NEEDED)
 
-**Why bad:** Each edit appends to `edit_history` and copies `file_buffer`. For long runs (20+ edits), state grows unbounded. LangGraph checkpointer persists this at every step.
+The existing `subscribe(eventType, handler)` pattern is sufficient. New components subscribe to relevant event types:
 
-**Instead:** Consider evicting completed steps from edit_history (keep only last N for rollback). Use a separate file cache that is not persisted in state.
+| New Component | Subscribes To | Purpose |
+|--------------|---------------|---------|
+| WorkspaceProvider | `'diff'` | Track which files changed (M/A/D indicators) |
+| ActivityStream | `'*'` (wildcard) | All events for stream display |
+| DiffPanel | `'approval'` | React to approval status changes |
+| TopBar | `'status'` | Show current agent node/step |
 
-## Scalability Considerations
+### ProjectContext (MINOR ADDITIONS)
 
-| Concern | Current (10 files) | At 50 files | At 200+ lines/file |
-|---------|-------------------|-------------|---------------------|
-| State size | Small, no issue | file_buffer grows, checkpoints slow | Context overflow in editor prompts |
-| Edit precision | Anchors work | Anchor uniqueness degrades | Must use longer anchors or line-range hints |
-| Validation time | Fast (LSP + esbuild) | LSP startup cost amortized | Individual file validation still fast |
-| Context window | Under budget | Files compete for context | Truncation or summarization required |
-| Retry budget | 3 retries adequate | 3 per step * 50 steps = 150 max LLM calls | Cost concern at scale |
+The `runs` state is currently stubbed as an empty array. It needs to fetch runs for the current project to populate the run history dropdown in TopBar:
 
-## Build Order (Dependencies Between Hardening Components)
+```typescript
+// Current (stubbed):
+const [runs] = useState<Run[]>([])
 
-The hardening work should proceed in this order based on dependencies and impact:
+// Needed:
+const [runs, setRuns] = useState<Run[]>([])
+// Fetch on project change + after run completes
+```
 
-### Phase 1: Foundation (No Dependencies)
-1. **Checkpointing** -- Add `AsyncSqliteSaver` to graph compilation. This is a one-line change to `build_graph()` plus config wiring. Everything else benefits from crash recovery.
-2. **Content hashing** -- Add `file_hashes` field to `AgentState`, populate in reader, check in editor. Independent of other changes.
-3. **Wire ContextAssembler** -- Replace direct prompt building in editor and planner nodes. The component exists; this is integration work.
+### API Module (ADDITIONS)
 
-### Phase 2: Edit Reliability (Depends on Phase 1)
-4. **Fuzzy anchor matching** -- Extend `edit_file()` with layered matching cascade. Benefits from content hashing (knows when to re-read vs fuzzy match).
-5. **Error classification** -- Replace `error_state: str` with typed `ErrorInfo`. Update `should_continue()` routing. All retry/rollback logic improves.
-6. **Stale file detection** -- Uses content hashes from Phase 1. Editor rejects edits against changed files.
+Two new endpoints needed, plus extending `/browse`:
 
-### Phase 3: Loop Prevention (Depends on Phase 2)
-7. **Loop guard** -- Requires error classification to distinguish "stuck" from "retriable." Analyzes edit_history patterns.
-8. **Step budget enforcement** -- Limit total LLM calls per run. Requires error classification to know when to skip vs abort.
+```typescript
+// Extend existing:
+browse: (path?: string, includeFiles?: boolean) => ...
 
-### Phase 4: Advanced Validation (Depends on Phases 1-3)
-9. **Independent verification** -- Semantic check using acceptance_criteria. Useful only after edit reliability is solid (otherwise you are verifying garbage).
-10. **Validation cascade hardening** -- Add timeout enforcement, fallback ordering, degraded-mode tracking for LSP.
+// New:
+getFileContent: (path: string) =>
+  request<{ content: string; language: string; size: number }>(`/files?path=${encodeURIComponent(path)}`)
+
+getRuns: (projectId: string) =>
+  request<Run[]>(`/projects/${projectId}/runs`)
+```
+
+## Build Order (Dependency-Aware)
+
+Components must be built bottom-up based on dependencies:
+
+```
+Phase 1: Foundation (no component dependencies)
+  1. WorkspaceProvider context
+  2. Install react-resizable-panels, diff, shiki
+  3. IDELayout shell (replaces AppShell with PanelGroup)
+  4. TopBar (instruction input + project selector + run dropdown)
+
+Phase 2: File Explorer (depends on Phase 1 + backend extension)
+  5. Backend: extend /browse to include files
+  6. Backend: add GET /files endpoint for content
+  7. FileExplorer component with lazy-loading recursive tree
+  8. File change indicator integration (WebSocket 'diff' events -> changedFiles)
+
+Phase 3: Editor Area (depends on Phase 1 + Phase 2 partially)
+  9. Tab bar and tab management in EditorArea
+  10. FileViewer with Shiki syntax highlighting
+  11. DiffPanel with jsdiff algorithm + side-by-side rendering
+  12. Approval actions in DiffPanel (reuse existing api.patchEdit)
+
+Phase 4: Activity Stream (depends on Phase 1, parallel with Phases 2-3)
+  13. ActivityStream (evolve from AgentPanel + absorb RunProgress)
+  14. Expandable LLM output sections (click step -> see full prompt/response)
+  15. Inline approval actions + auto-open diff tab on approval events
+```
+
+**Why this order:**
+- WorkspaceProvider must exist before any component that opens tabs or tracks files
+- IDELayout must exist before panels can be placed
+- Backend file endpoints must exist before FileExplorer can show real files
+- Tab system must exist before FileViewer/DiffPanel can be mounted in tabs
+- ActivityStream is independent of file/diff viewing and can be built in parallel
 
 ## Sources
 
-- [Code Surgery: How AI Assistants Make Precise Edits](https://fabianhertwig.com/blog/coding-assistants-file-edits/) -- Comparative analysis of edit strategies across Aider, Cursor, Codex, RooCode, OpenHands. HIGH confidence.
-- [oh-my-pi: Hash-Anchored Edits](https://github.com/can1357/oh-my-pi) -- Hash-anchor approach with stale detection. Benchmarked across 16 models. MEDIUM confidence (single project, but with quantitative benchmarks).
-- [Advanced Context Engineering for Coding Agents](https://github.com/humanlayer/advanced-context-engineering-for-coding-agents/blob/main/ace-fca.md) -- Context budget patterns, 40-60% utilization target, sub-agent compaction. HIGH confidence.
-- [LangGraph Persistence Docs](https://docs.langchain.com/oss/python/langgraph/persistence) -- Checkpointer API, AsyncSqliteSaver, thread-based resumption. HIGH confidence (official docs).
-- [Advanced Error Handling in LangGraph](https://sparkco.ai/blog/advanced-error-handling-strategies-in-langgraph-applications) -- Node-level error objects, circuit breakers, graceful degradation. MEDIUM confidence.
-- [Coding Agent Loop Spec (strongdm/attractor)](https://github.com/strongdm/attractor/blob/main/coding-agent-loop-spec.md) -- Turn-based loop spec with progress detection and loop guards. HIGH confidence (production-derived spec).
-- [Aider Edit Formats](https://aider.chat/docs/more/edit-formats.html) -- Layered matching: exact -> whitespace -> indentation -> fuzzy. HIGH confidence.
-- [SWE-Agent: Agent-Computer Interfaces](https://proceedings.neurips.cc/paper_files/paper/2024/file/5a7c947568c1b1328ccc5230172e1e7c-Paper-Conference.pdf) -- Repeated edit failure modes, guardrail patterns. HIGH confidence (NeurIPS paper).
-- [Infinite Agent Loop Detection](https://www.agentpatterns.tech/en/failures/infinite-loop) -- Loop detection patterns for agents. MEDIUM confidence.
-- [Hermes Agent Independent Verification](https://github.com/NousResearch/hermes-agent/issues/406) -- Independent code verification and quality gates. MEDIUM confidence.
-
----
-
-*Architecture research: 2026-03-26*
+- Existing codebase audit: `web/src/` -- all components, contexts, hooks, types, api module read directly
+- [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) - v4.7.6, actively maintained, 1777 npm dependents
+- [jsdiff](https://github.com/kpdecker/jsdiff) - text differencing library, Myers O(ND) algorithm
+- [Shiki](https://shiki.style/) - VS Code-compatible syntax highlighter using TextMate grammars

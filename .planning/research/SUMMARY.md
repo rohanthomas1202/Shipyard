@@ -1,219 +1,204 @@
 # Project Research Summary
 
-**Project:** Shipyard (Autonomous AI Coding Agent — Reliability Hardening)
-**Domain:** Production-hardening of an existing LangGraph-based coding agent
-**Researched:** 2026-03-26
+**Project:** Shipyard v1.1 IDE UI Rebuild
+**Domain:** VS Code-style IDE UI for an AI coding agent (React SPA with real-time WebSocket streaming)
+**Researched:** 2026-03-27
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Shipyard is a production-quality autonomous coding agent built on a solid but not yet resilient foundation: an 11-node LangGraph StateGraph with anchor-based editing, LSP validation, tiered model routing, and priority WebSocket event streaming. The agent runs correctly on the happy path but lacks the reliability layers that separate demo-quality agents from production-quality ones. Research across four domains converges on a single diagnosis: the pipeline lacks defensive programming at every layer — edits fail silently on whitespace mismatches, retries burn budget without learning from failures, context windows are built without budgets, and a server crash loses all in-flight run state.
+Shipyard v1.1 is a UI rebuild, not a new product. The existing React 19 + Tailwind CSS + FastAPI stack is sound and does not need replacement. The work is surgical: swap the layout engine from CSS grid to `react-resizable-panels`, add three small libraries (`react-resizable-panels`, `diff`, `shiki` — total ~48KB gzipped), introduce a new `WorkspaceProvider` context for IDE UI state, and replace three key components (AppShell, FileTree, DiffViewer) with production-quality equivalents. Two minor backend endpoints are needed — extending `/browse` to include files and adding `GET /files` for content — both using only existing Python dependencies. The architecture research has the highest confidence of any area: the entire existing codebase was audited directly.
 
-The recommended approach is not architectural restructuring but surgical hardening in four dependency-ordered phases. Phase 1 addresses the three highest-impact, zero-risk improvements: fuzzy anchor matching to recover 10–30% of failed edits, structured outputs to eliminate LLM parse failures, and error feedback in retry prompts to break the "retry blindly" loop. Phases 2–4 layer in state management, loop prevention, and advanced validation — each building on the previous. The existing `ContextAssembler` component, tiered `ModelRouter`, and `ApprovalManager` are well-designed and simply need to be wired in; they are not gaps requiring new design, only integration work.
+The recommended approach is a four-phase build ordered by strict dependency: foundation first (WorkspaceProvider + layout + TopBar), then file explorer (backend + FileExplorer), then editor area (tabs + FileViewer + DiffPanel), then activity stream evolution (ActivityStream absorbing RunProgress). This order is non-negotiable because WorkspaceProvider must exist before any component can open tabs, the backend file endpoints must exist before FileExplorer can render real data, and the tab system must exist before FileViewer/DiffPanel can mount within it.
 
-The primary risk is treating validation as theater: the current validator passes edits that are syntactically valid but semantically wrong, and flags pre-existing errors as edit failures. The LSP diagnostic diffing system (recently added) is the right solution but must become the canonical validation path, not an optional fallback. Run this first — it eliminates both false positives and false negatives in validation with infrastructure already in place.
+The dominant risks are all performance-related and all front-loaded: WebSocket render storms, React Context propagation cascade, non-virtualized file tree, and non-virtualized agent stream each require architectural decisions in Phase 1 that are expensive to retrofit later. The research is unambiguous — use Zustand for all high-frequency state (WebSocket events, file statuses), use `react-resizable-panels` for layout, use React Arborist or TanStack Virtual for the file tree, and use Shiki (not Monaco) for syntax highlighting. Taking shortcuts here doubles implementation time when the inevitable rewrite hits.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack is well-chosen and should not change. LangGraph 1.1.3, FastAPI, React 19, pygls, and ast-grep-py are all correct choices. Three targeted additions deliver the most reliability value: `tenacity>=9.1.0` (retry with exponential backoff, replaces scattered ad-hoc retry logic), `structlog>=25.1.0` (structured JSON logging with run_id/node_name binding, essential for debugging async multi-step runs), and `langgraph-checkpoint-sqlite>=3.0.0` (crash recovery via persistent graph state — currently all in-flight runs are lost on server restart).
+The existing stack is kept intact. Three new frontend libraries cover the entire feature surface. `react-resizable-panels` (v4.7, ~8KB) is the industry standard for IDE-style resizable panels — it is what shadcn/ui wraps, handles localStorage persistence natively via `autoSaveId`, and eliminates the panel-resize-jank pitfall at no extra complexity cost. `diff` (jsdiff, v7.0, ~15KB) provides the Myers O(ND) line-diff algorithm needed for a correct side-by-side diff view. `shiki` (v3.0, ~25KB core + grammars on demand) provides VS Code-quality syntax highlighting for the read-only file viewer without the 2MB+ bundle cost of Monaco. No backend Python dependencies are added.
 
-The most important version constraint is pinning `openai>=1.80.0,<2.0.0`. The 2.x SDK introduced the Responses API which replaces Chat Completions patterns used throughout `agent/llm.py`. Migrating to 2.x is a future milestone, not a hardening task. Two configuration changes require no new dependencies: enabling SQLite WAL mode (eliminates read/write lock contention between WebSocket handlers and agent writes) and enabling OpenAI structured outputs with `strict: True` (guarantees schema-compliant LLM output, eliminating the entire parse failure category in the editor and planner).
+Zustand is not in STACK.md but is strongly implied by PITFALLS.md as a requirement, not an optional optimization. The roadmap should treat it as a Phase 1 dependency.
 
 **Core technologies:**
-- `tenacity>=9.1.0`: Retry with backoff — standardizes retry logic across LLM calls, LSP, and git ops
-- `structlog>=25.1.0`: Structured logging — async-safe JSON logs with bound run_id for debugging
-- `langgraph-checkpoint-sqlite>=3.0.0`: Graph checkpointing — enables crash recovery and run resumption
-- `openai>=1.80.0,<2.0.0`: LLM provider — stay on 1.x to avoid breaking Responses API migration
-- SQLite WAL mode: Configuration only — concurrent read/write without lock contention
-- OpenAI structured outputs (`strict: True`): Configuration only — eliminates LLM parse failures
-
-**Rejected additions:** PydanticAI (competing framework), circuit breakers (overkill for single-caller agent), loguru (fights stdlib integration), Postgres checkpointing (unnecessary for single-process deployment).
+- `react-resizable-panels` ^4.7: IDE panel layout with drag-resize and collapse — de facto standard, WAI-ARIA compliant, localStorage persistence built-in
+- `diff` (jsdiff) ^7.0: Line-level diff computation for side-by-side diff view — Myers O(ND), most widely used JS diff library
+- `shiki` ^3.0: Syntax highlighting for read-only file viewer — VS Code TextMate grammars, 200+ languages, on-demand grammar loading
+- Zustand (add in Phase 1): State management for high-frequency WebSocket-derived state — required to avoid render storm and Context propagation pitfalls
 
 ### Expected Features
 
-Research across production agents (Aider, RooCode, Codex, OpenHands) identifies a clear hierarchy of what must work vs what differentiates.
-
 **Must have (table stakes):**
-- Layered edit matching with fuzzy fallbacks — every production agent does exact -> whitespace-normalized -> fuzzy; Shipyard currently fails on whitespace mismatches
-- Actionable error feedback on edit failure — agent must know which anchor failed and why, to self-correct on retry
-- File state freshness checking via content hashes — detect when files changed between read and edit
-- Validate-rollback-retry loop with error context in retry prompt — currently retries blindly with no error information
-- Token-budgeted context assembly — `ContextAssembler` exists but is not wired in; nodes build prompts with unbounded string concatenation (the #1 gap)
-- Syntax validation for all edited file types — add Python syntax checking to existing TS/JS/JSON/YAML coverage
-- Structured trace logging per run — `TraceLogger` exists; ensure per-run isolation (currently module-level singletons)
-- Graceful cancellation — stop callback is never wired; cancel must not leave partial writes
+- Three-panel resizable layout with collapse — core IDE convention; missing means prototype
+- File explorer with real directory tree (lazy-loaded) — cannot review agent work without one
+- Syntax-highlighted read-only file viewer in tabs — raw text feels broken in an IDE
+- Side-by-side diff view for agent edits with approve/reject — primary agent review workflow
+- Top bar with instruction input + project selector — prompt must always be accessible
+- Agent activity stream with step timeline — users must see what the agent is doing
+- Run status indicator in TopBar — always-visible agent state
 
-**Should have (differentiators):**
-- LSP-powered semantic validation with baseline diffing — already built, must become canonical validation path (not optional fallback)
-- Tiered model routing with retry-count-based escalation — `ModelRouter` exists; add escalation on consecutive failures
-- AST-aware structural refactoring via ast-grep — already built; deterministic alternative to LLM edits for mechanical changes
-- Contextual error recovery (error details in retry prompts) — `error_state` exists but is not fed into editor prompt template
-- Edit confidence scoring — route low-confidence edits to human review automatically
-- Cost tracking per run — low effort, high visibility; track tokens per call and aggregate
+**Should have (high-value differentiators to ship in v1.1):**
+- Live file change indicators (M/A/D) in file tree — low complexity, high impact for agent observability
+- Auto-open diff on approval request — low complexity, dramatically improves edit review UX
+- Preview vs pinned tabs (VS Code convention) — prevents tab explosion, expected by power users
 
-**Defer to v2+:**
-- Self-generated regression tests — high value (2x precision improvement per SWE-bench), but requires test infrastructure first
-- Multi-file transactional edits — important for refactors, but single-file atomicity must be solid first
-- Run resumption after crash — valuable, requires LangGraph checkpointing migration (significant infrastructure work)
-- Context summarization on long runs — only matters after basic context assembly is wired in
-
-**Anti-features (do not build):**
-- Multi-agent parallel execution — adds coordination complexity without proportional value at this stage
-- Whole-file rewriting — primary cause of broken edits; anchor-based replacement exists to prevent this
-- Autonomous deployment pipelines — agent creates branch/PR; human merges
-- Natural language code search (embeddings/RAG) — grep + AST search is faster and more reliable for code
+**Defer to v1.2:**
+- Run history dropdown (requires new backend endpoint, not critical for demo)
+- Expandable LLM output in activity stream (agent stream shows step summaries; full output is secondary)
+- Keyboard shortcuts beyond existing Ctrl+Shift+P
+- Inline approval in activity stream (users can approve in the diff tab)
+- In-browser code editing (explicit anti-feature for v1.1 — the agent edits, users review)
+- Git graph visualization, terminal panel, file search, minimap
 
 ### Architecture Approach
 
-The hardening work follows five reliability layers added to the existing pipeline without restructuring it: (1) checkpointed state for crash recovery, (2) edit integrity via stale detection, fuzzy matching, and snapshot guarantees, (3) loop guards for stuck-agent termination, (4) context budget enforcement via the existing but unwired `ContextAssembler`, and (5) a validation cascade with proper error classification replacing the current flat string-based error state.
+The target architecture adds one new context (WorkspaceProvider), one new layout shell (IDELayout replacing AppShell), four primary components (TopBar, FileExplorer, EditorArea, ActivityStream), and two sub-components (FileViewer, DiffPanel). The existing WebSocketContext and ProjectContext are kept with minor extensions. The key structural principle is single-responsibility: WorkspaceProvider owns client-side UI state only (open tabs, selected path, expanded dirs, changed files map); ProjectContext owns server-side state (projects, runs, instructions); WebSocketContext owns the connection and dispatch. All high-frequency WebSocket-derived state (file statuses, event stream) belongs in Zustand stores outside React reconciliation.
 
-**Major components and hardening needed:**
-1. **Graph Runner** (graph.py) — add `AsyncSqliteSaver` checkpointing, timeout enforcement, crash recovery
-2. **Editor** (nodes/editor.py) — add fuzzy anchor matching cascade (exact -> whitespace-normalized -> fuzzy), stale detection via content hashes, pre-validation before applying, snapshot atomicity guarantee
-3. **Validator** (nodes/validator.py) — enforce LSP diagnostic diffing as canonical path, typed error classification (RETRIABLE / DEGRADED / FATAL / ABORT), Python syntax checking
-4. **Reader** (nodes/reader.py) — populate `file_hashes` alongside `file_buffer`, budget-aware truncation via `ContextAssembler`
-5. **Context Manager** (context.py) — wire `ContextAssembler` into all LLM-calling nodes; target 40–60% context window utilization
-6. **Loop Guard** (new component) — detect repeating edit patterns (same file failing 3+ times, same anchor cycling), inject into `should_continue()` routing
-7. **Checkpointer** (new integration) — `AsyncSqliteSaver` enabling resume from last completed node after crash
+**Major components:**
+1. `WorkspaceProvider` — new context managing tab state, selected path, expanded dirs, changed file tracking; consumed by all panels
+2. `IDELayout` — replaces AppShell; mounts TopBar + react-resizable-panels PanelGroup
+3. `TopBar` — instruction input, project selector, run status indicator (always visible)
+4. `FileExplorer` — lazy-loaded recursive file tree from extended `/browse` API; M/A/D indicators from WebSocket diff events; virtualized via React Arborist
+5. `EditorArea` — tab container managing FileViewer and DiffPanel; preview/pinned tab semantics
+6. `FileViewer` — read-only code display with Shiki syntax highlighting; local state for content (not in Context)
+7. `DiffPanel` — side-by-side diff with jsdiff; approve/reject reuses existing `api.patchEdit`; memoized by edit_id
+8. `ActivityStream` — evolves from AgentPanel; absorbs RunProgress; virtualized event list via TanStack Virtual
+
+**Backend additions (no new Python dependencies):**
+- Extend `GET /browse` to include files (remove `is_dir()` filter, add file metadata)
+- Add `GET /files?path=` for file content (pathlib read + mimetypes language detection)
+- Add path validation to `/browse` and `/files` to prevent directory traversal (`os.path.commonpath` check)
 
 ### Critical Pitfalls
 
-1. **Anchor mismatch cascade** — LLMs produce anchors with minor whitespace differences that cause exact-match failures; retries reproduce the same wrong anchor because the LLM sees the same numbered content. Prevention: implement layered fuzzy matching (exact -> whitespace-normalized -> Levenshtein threshold 0.95); return actual file bytes in error message so retry sees reality; prefer shorter anchors (3–5 distinctive lines, not half the file).
+1. **WebSocket render storms** — Each WebSocket message dispatched to `useState` handlers triggers its own render cycle (React 18 batching does not apply across `onmessage` callbacks). At 20-50 messages/second during runs, all panels re-render 20-50 times/second. Prevention: move WebSocket event distribution into a Zustand store; each panel subscribes to its own slice. Must be decided in Phase 1 — retrofitting is a full-codebase rewrite (~2-3 days recovery).
 
-2. **Retry without learning** — `error_state` is stored in `AgentState` but never included in the editor's retry prompt (`EDITOR_USER` template has no `previous_error` field). All three retry attempts reproduce the same failure. Prevention: add `previous_error` to editor prompt template; escalate model tier on retry (gpt-4o-mini -> gpt-4o -> o3 already supported by `ModelRouter`); vary anchor strategy on retry 2.
+2. **React Context propagation cascade** — The existing `WebSocketContext` bundles stable refs with frequently-changing values (`snapshot`, `status`). Every consumer re-renders on any value change, bypassing `React.memo`. With three IDE panels consuming this context, a snapshot update re-renders every panel simultaneously. Prevention: keep Context only for static data; move all dynamic state to Zustand with fine-grained selectors. Phase 1 architectural decision.
 
-3. **Validation theater (false confidence and false positives)** — validator reports pass when edits are wrong (syntax valid, semantics broken), and flags pre-existing errors as edit failures (causing rollback of correct edits). Prevention: make LSP diagnostic diffing the canonical validation path for TS/TSX (not optional fallback); layer validation in order of speed (syntax -> types -> tests); report validation coverage per edit so humans know what was actually checked.
+3. **Non-virtualized file tree** — Real project directories include node_modules, __pycache__, dist with thousands of files. Without virtualization, expanding any large directory freezes the browser. The `/browse` endpoint currently has no gitignore filtering (confirmed in codebase audit). Prevention: use React Arborist (virtualized file explorer) from day one; filter node_modules/.git/dist on the backend. Retrofitting virtualization requires a complete component rewrite (~2 days recovery).
 
-4. **Synchronous operations blocking the event loop** — `executor_node` calls sync `subprocess.run(shell=True)` which blocks uvicorn's asyncio loop, causing WebSocket heartbeats to stop, connections to drop, and the UI to show "disconnected" during long commands. Prevention: use `asyncio.create_subprocess_exec` (not `shell=True`) everywhere; the async `run_command_async()` already exists — use it; implement command allowlist to prevent shell injection from LLM-generated commands.
+4. **Naive diff algorithm** — The existing `DiffViewer.tsx` marks every old line as removed and every new line as added (confirmed: `buildDiffLines` function in codebase). This produces unreadable output and freezes the main thread on files >500 lines. Prevention: use `diff.diffLines()` for actual change computation; memoize computed diffs by `edit_id`; for files >2000 lines, consider Web Worker or fallback summary.
 
-5. **State bloat and context rot** — `edit_history` accumulates full file snapshots for every edit across all steps; `file_buffer` holds entire file content indefinitely; `runs` dict in `server/main.py` holds all of this in memory with no TTL. For 20-step plans on 200+ line files, state balloons to hundreds of KB, slowing checkpointing and risking context overflow. Prevention: store rollback snapshots in SQLite keyed by edit_id (not in graph state); cap `edit_history` to last 5 entries; evict `file_buffer` entries when steps complete; add TTL-based cleanup to `runs` dict.
+5. **Syntax highlighting bundle bloat and render blocking** — Monaco adds ~2MB to the bundle and 50-100MB per instance; Shiki's `codeToHtml()` is synchronous and blocks 50-200ms on large files if called during render. Prevention: use Shiki only (never Monaco for v1.1); lazy-load via dynamic import; load language grammars on demand; call via `useEffect` so initial render shows plain text; code-split via `React.lazy()`.
 
 ## Implications for Roadmap
 
-Based on research, the hardening work decomposes naturally into four dependency-ordered phases. Each phase delivers standalone value and unblocks the next.
+The architecture research provides an explicit four-phase build order with hard dependencies. This should map directly to roadmap phases.
 
-### Phase 1: Edit Reliability and Infrastructure Foundations
+### Phase 1: Foundation — Layout, State Architecture, TopBar
 
-**Rationale:** Edit failures are the primary failure mode. Three independent fixes — fuzzy matching, structured outputs, and error feedback in retry prompts — each recovers 10–30% of failures and have no prerequisites. Infrastructure changes (WAL mode, async subprocesses, stop callback) are similarly zero-dependency and unblock everything else. All PITFALLS.md P0 items belong here.
+**Rationale:** WorkspaceProvider and the Zustand state management architecture must exist before any panel component can be built. IDELayout must exist before panels can be placed. This phase also addresses the two highest-recovery-cost pitfalls (render storms, Context cascade) — 2-3 days each to fix retroactively vs. 0 days if designed correctly upfront.
 
-**Delivers:** Dramatically reduced retry rate; retries that actually learn from failures; unblocked event loop; working run cancellation.
+**Delivers:** Working IDE shell with resizable panels, persistent layout sizes, instruction input always visible in TopBar, run status indicator. Panels render as placeholders pending real data.
 
-**Addresses features:** Layered edit matching, actionable error feedback, file state freshness (hashing), structured outputs, async subprocess conversion, graceful cancellation.
+**Addresses:** Table stakes: resizable three-panel layout, TopBar instruction input, run status indicator, panel collapse/expand
 
-**Avoids pitfalls:** Anchor mismatch cascade (#1), retry without learning (#4), event loop blocking (#5), LLM output format brittleness (#8), large file listing (#13).
+**Avoids:** Pitfall 1 (WebSocket render storms — design Zustand integration here), Pitfall 2 (Context propagation cascade — split state architecture here), Pitfall 6 (panel resize jank — react-resizable-panels)
 
-**Stack additions:** `openai>=1.80.0,<2.0.0` pinned; SQLite WAL mode configured; `tenacity>=9.1.0` added.
+**Stack:** `react-resizable-panels`, Zustand (install in this phase)
 
-### Phase 2: State Management and Context Integrity
+### Phase 2: File Explorer — Backend Extensions + FileExplorer Component
 
-**Rationale:** With edit reliability improved in Phase 1, the next bottleneck is state quality: unbounded state growth, stale file buffer reads, unwired context assembly, and planner quality issues. These are the PITFALLS.md P1 items. Phase 2 makes long runs stable and token-efficient.
+**Rationale:** Depends on Phase 1 (WorkspaceProvider must exist for file selection state and changedFiles map). Backend file endpoints must exist before FileExplorer can show real data. Virtualization must be the foundation — React Arborist has a fundamentally different API from a naive recursive tree and cannot be incrementally added later.
 
-**Delivers:** Bounded memory growth for long runs; fresh file content on every edit; context-budget-aware prompts; plan schema enforcement.
+**Delivers:** Real file tree browsing with lazy-loading, M/A/D change indicators during agent runs, files accessible by path, security-hardened backend endpoints.
 
-**Addresses features:** Token-budgeted context assembly (wire `ContextAssembler`), selective file reading (line ranges for files >200 lines), file buffer stale detection after executor steps, planner output schema validation, plan length cap.
+**Addresses:** Table stakes: file explorer with real directory tree; differentiator: live M/A/D change indicators
 
-**Avoids pitfalls:** State bloat (#2), file buffer stale reads (#7), planner generating unbounded or mistyped plans (#6).
+**Avoids:** Pitfall 4 (file tree collapse/freeze — React Arborist virtualization from day one), security: Pitfall 10 (/browse path traversal — `os.path.commonpath` validation)
 
-**Stack additions:** `structlog>=25.1.0` added; structured logging wired into all nodes with `run_id` binding.
+**Stack:** React Arborist (new frontend dependency), backend uses existing Python only
 
-### Phase 3: Loop Prevention and Crash Recovery
+### Phase 3: Editor Area — Tabs, FileViewer, DiffPanel
 
-**Rationale:** With reliable edits and stable state, the remaining reliability risk is catastrophic failures: stuck agents burning full retry budgets, crashed servers losing all run state. Loop guard requires error classification from Phase 2; checkpointing requires stable state management from Phase 2.
+**Rationale:** Depends on Phase 1 (WorkspaceProvider tab state) and Phase 2 (file content endpoint from `/files`). Tab system must exist before FileViewer/DiffPanel can mount in tabs. Diff algorithm and Shiki loading strategy are architectural decisions that cannot be changed incrementally.
 
-**Delivers:** Agents that detect when they're stuck and bail out gracefully; run state that survives server crashes and WebSocket disconnects; per-run timeout enforcement.
+**Delivers:** Full code review workflow — open files in syntax-highlighted tabs, view side-by-side diffs for agent edits, approve/reject from diff view, preview/pinned tab semantics, stale file detection banner.
 
-**Addresses features:** Run resumption after crash, human-in-the-loop approval persistence, run/step timeout enforcement, stop callback wired.
+**Addresses:** Table stakes: syntax-highlighted file viewer, diff view with approve/reject; differentiator: preview vs pinned tabs, auto-open diff on approval request
 
-**Avoids pitfalls:** Retry loop without learning escalation variant (#4), no cancellation/timeout (#9), WebSocket reconnection race (#10), approval manager in-memory state loss (#14), module-level singleton tracer (#11).
+**Avoids:** Pitfall 3 (diff rendering freeze — jsdiff + memoization), Pitfall 5 (highlighting bloat — Shiki async, not Monaco), Pitfall 8 (tab state loss — local state per component not Context), Pitfall 9 (stale file content — external change banner), Pitfall 11 (glassmorphic diff color conflicts — higher-opacity diff backgrounds, e.g., `rgba(239,68,68,0.25)`)
 
-**Stack additions:** `langgraph-checkpoint-sqlite>=3.0.0` integrated with `AsyncSqliteSaver`; `pytest-timeout>=2.3.0` added to dev dependencies.
+**Stack:** `shiki`, `diff` (jsdiff) — install in this phase
 
-### Phase 4: Advanced Validation and Observability
+### Phase 4: Activity Stream — AgentPanel Evolution + RunProgress Absorption
 
-**Rationale:** With reliable edits, stable state, and crash recovery in place, the final layer is semantic correctness and observability. Independent verification (generator-evaluator pattern), acceptance criteria checking, and cost tracking deliver the differentiating quality signals. These require the solid foundation of Phases 1–3 — verifying garbage edits is wasteful.
+**Rationale:** Depends on Phase 1 (WorkspaceProvider.openDiff for auto-open on approval events). Independent of Phases 2-3 and can overlap them partially. Completing it last ensures the full WorkspaceContext integration is in place. Agent stream virtualization reuses the TanStack Virtual pattern established in Phase 2.
 
-**Delivers:** Semantic correctness checks beyond syntax/types; cost visibility per run; LangSmith trace annotations; validation coverage reporting.
+**Delivers:** Unified activity stream replacing both AgentPanel and RunProgress. Virtualized event list for long runs. Auto-opens diff tab when agent requests approval. Step summaries expandable to full agent detail. WebSocket reconnection replays missed events via `lastSeqRef`.
 
-**Addresses features:** Independent verification via acceptance criteria, cost tracking per run, LangSmith trace annotations, edit confidence scoring (LSP results inform routing to human review).
+**Addresses:** Table stakes: agent activity stream with step timeline; differentiator: auto-open diff on approval
 
-**Avoids pitfalls:** Edit produces valid syntax but wrong semantics (#12), validation theater (false confidence part) (#3).
-
-**Deferred to post-Phase 4:** Self-generated regression tests (requires test infrastructure), multi-file transactional edits (requires solid single-file atomicity), context summarization on very long runs.
+**Avoids:** Pitfall 7 (agent stream DOM growth — TanStack Virtual with dynamic row heights), UX pitfall: auto-scroll overrides user position (sticky scroll pattern)
 
 ### Phase Ordering Rationale
 
-- Phase 1 before all others because edit failures are P0 and have no prerequisites — fixing them delivers immediate value and reduces noise in all subsequent work.
-- Phase 2 before Phase 3 because checkpointing large unbounded state is counterproductive — state must be bounded before persisting it efficiently.
-- Phase 3 before Phase 4 because independent verification of unstable edits wastes tokens — the validator needs reliable input to produce reliable output.
-- Anti-features (whole-file rewriting, multi-agent parallelism, RAG search) are explicitly excluded at every phase; the research is unambiguous that these add complexity without reliability gains at this stage.
+- WorkspaceProvider is a dependency of every panel component — it cannot move out of Phase 1.
+- Backend endpoints block FileExplorer from displaying real data — they must precede Phase 2 component work.
+- Tab system blocks FileViewer and DiffPanel from mounting — it must precede Phase 3.
+- ActivityStream's auto-open-diff behavior requires `WorkspaceProvider.openDiff()` — Phase 1 dependency, but the component itself can be built in Phase 4.
+- All performance architecture decisions (Zustand, virtualization) cost 2-3x more to retrofit than to design correctly upfront.
 
 ### Research Flags
 
-Phases with standard, well-documented patterns (skip research-phase during planning):
-- **Phase 1 — Fuzzy anchor matching:** Aider and RooCode both document this pattern exhaustively. Implementation is mechanical.
-- **Phase 1 — Structured outputs:** OpenAI official docs. No ambiguity.
-- **Phase 1 — WAL mode / async subprocesses:** SQLite official docs, asyncio stdlib. Standard patterns.
-- **Phase 3 — LangGraph checkpointing:** Official LangGraph docs, `AsyncSqliteSaver` is the documented primary mechanism.
+Phases likely needing deeper research during planning:
 
-Phases that may benefit from targeted research during planning:
-- **Phase 2 — ContextAssembler wiring:** The component exists and is well-designed, but the integration points across multiple node prompt templates need careful mapping before implementation. A quick audit of all `EDITOR_USER`, `PLANNER_USER` prompt templates is warranted.
-- **Phase 2 — State eviction strategy:** The tradeoff between rollback capability (need N snapshots) and memory growth (want few snapshots) needs to be calibrated against realistic run lengths. The "last 5 entries" suggestion from research needs validation against actual run data.
-- **Phase 4 — Independent verification latency/cost:** The generator-evaluator pattern adds a fast-model LLM call per complex edit. Acceptable cost at single-user scale, but the routing threshold (when to trigger verification) needs empirical tuning.
+- **Phase 1 (Zustand store architecture):** Zustand was not in STACK.md — it emerged from PITFALLS.md analysis. Store shape for WebSocket event distribution (per-event-type slices vs. unified event log) should be decided before building consumers. Confirm Zustand version and selector patterns for React 19.
+- **Phase 2 (React Arborist compatibility):** Not in STACK.md — recommended by PITFALLS.md for virtualized file tree. Confirm React 19 compatibility before starting Phase 2. TanStack Virtual is the fallback if incompatible.
+- **Phase 3 (Large-file diff strategy):** PITFALLS.md recommends `@git-diff-view/react` or CodeMirror 6 merge extension for files >2000 lines, but STACK.md recommends jsdiff + custom renderer. Validate the custom renderer approach handles the "Looks Done But Isn't" checklist items (new file with null old_content, deleted file with null new_content, 5000-line file).
+
+Phases with well-documented standard patterns (skip research-phase):
+
+- **Phase 1 (react-resizable-panels layout):** Library is mature, well-documented, API is clear. Standard integration with `autoSaveId` for persistence.
+- **Phase 1 (TopBar instruction input):** Moves existing WorkspaceHome textarea to TopBar. Straightforward refactor.
+- **Phase 3 (approve/reject actions):** Reuses existing `api.patchEdit` — no new API surface.
+- **Phase 4 (WebSocket event subscription):** Uses existing wildcard subscribe pattern unchanged.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All recommendations verified against PyPI, official docs. The `openai <2.0.0` pin is critical and well-documented. Only FastAPI floor version is MEDIUM (inferred from release notes). |
-| Features | HIGH | Sourced from comparative analysis of Aider, RooCode, Codex, OpenHands plus SWE-bench research and Martin Fowler/Simon Willison writing. Strong cross-source agreement on priorities. |
-| Architecture | HIGH | LangGraph checkpointing from official docs. Fuzzy matching from Aider docs + quantitative benchmarks. Content hashing from oh-my-pi with benchmark data. Context budget from advanced-context-engineering spec. |
-| Pitfalls | HIGH | Forensic audit of real-world agent PRs, LangGraph-specific state bloat research, FastAPI WebSocket disconnect analysis. All pitfalls are grounded in specific code locations in Shipyard. |
+| Stack | HIGH | All existing dependencies verified in package.json. New libraries verified on npm with version numbers. No speculative choices. |
+| Features | HIGH | Based on VS Code UX conventions (de facto standard) and direct audit of existing Shipyard components. Feature boundaries are clear and well-reasoned. |
+| Architecture | HIGH | Entire `web/src/` codebase audited directly. Component boundaries, data flows, and integration points based on actual code. Backend endpoints verified in `server/main.py`. |
+| Pitfalls | HIGH | Each critical pitfall confirmed against actual codebase: naive diff in `DiffViewer.tsx` (`buildDiffLines`), no path validation in `/browse`, stable refs mixed with dynamic values in `WebSocketContext.tsx` — all verified directly. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Fuzzy match threshold tuning:** ARCHITECTURE.md recommends difflib threshold 0.85 for fuzzy anchor matching, but notes this requires empirical testing on Shipyard's specific edit patterns. Start with 0.85, add a metric to track fuzzy match acceptance rate, adjust based on false positive rate (fuzzy matches that produce incorrect edits).
-
-- **State eviction calibration:** Research recommends capping `edit_history` to last 5 entries, but the right number depends on maximum realistic rollback depth. Audit the longest rollback chain in existing trace logs before hard-coding the cap.
-
-- **LSP server stability under load:** PITFALLS.md notes the LSP server crash fallback path must exist, but the current `LspManager` behavior on repeated crashes is not fully specified. Clarify restart policy (how many restarts before degraded mode?) during Phase 3 planning.
-
-- **OpenAI SDK 2.x migration timeline:** Pinning `<2.0.0` is the right short-term call, but the Responses API is the future direction. Flag this as a planned migration milestone after Phase 4 is complete.
+- **Zustand version and store shape:** Zustand is recommended by PITFALLS.md but not specified with a version. Add to STACK.md and confirm install during Phase 1 planning. Store shape for WebSocket event distribution should be decided before building consumers.
+- **React Arborist + React 19 compatibility:** Confirm before Phase 2 starts. TanStack Virtual is the fallback.
+- **Large file diff strategy:** For files >2000 lines, the jsdiff + custom renderer approach may need a Web Worker. The checklist item "Files >5000 lines show graceful fallback" needs an explicit implementation decision in Phase 3 planning.
+- **Path normalization for display:** PITFALLS.md flags that raw server absolute paths should not reach the browser. Decide in Phase 2 whether the backend strips the project root or the frontend computes relative paths from the known project root.
+- **File content caching strategy:** Decide during Phase 3 whether to cache file contents across tab switches or re-fetch. Re-fetching is simpler and always current; caching is faster for large files but adds invalidation complexity on agent edits.
 
 ## Sources
 
-### Primary (HIGH confidence)
-- [LangGraph PyPI + Docs](https://pypi.org/project/langgraph/) — version verification, checkpointing API
-- [LangGraph Checkpoint SQLite PyPI](https://pypi.org/project/langgraph-checkpoint-sqlite/) — `AsyncSqliteSaver` API
-- [OpenAI Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs) — `strict: True` schema compliance
-- [OpenAI Responses API Migration Guide](https://platform.openai.com/docs/guides/migrate-to-responses) — confirmed breaking change in 2.x
-- [SQLite WAL Mode](https://www.sqlite.org/wal.html) — concurrent read/write configuration
-- [LangGraph Persistence Docs](https://docs.langchain.com/oss/python/langgraph/persistence) — checkpointer thread_id resumption
-- [Aider Edit Formats](https://aider.chat/docs/more/edit-formats.html) — layered matching: exact -> whitespace -> indentation -> fuzzy
-- [Aider GPT-4 Benchmarks](https://aider.chat/docs/benchmarks.html) — quantitative edit format success rates
-- [SWE-Agent NeurIPS 2024](https://proceedings.neurips.cc/paper_files/paper/2024/file/5a7c947568c1b1328ccc5230172e1e7c-Paper-Conference.pdf) — repeated edit failure modes
-- [Tenacity PyPI](https://pypi.org/project/tenacity/) — version 9.1.4 verified
-- [structlog docs](https://www.structlog.org/en/stable/) — async support, stdlib integration
-- [Coding Agent Loop Spec (strongdm/attractor)](https://github.com/strongdm/attractor/blob/main/coding-agent-loop-spec.md) — loop guard patterns
+### Primary (HIGH confidence — direct codebase audit)
+- `web/src/` — All components, contexts, hooks, types, api module (full audit)
+- `server/main.py` — Backend endpoints, `/browse` implementation, path handling
+- `web/src/components/DiffViewer.tsx` — Naive diff algorithm confirmed (`buildDiffLines`)
+- `web/src/contexts/WebSocketContext.tsx` — Context value mixing stable refs with changing values confirmed
+- `web/package.json` — Existing dependency versions confirmed
 
-### Secondary (MEDIUM confidence)
-- [Code Surgery: How AI Assistants Make Precise Edits](https://fabianhertwig.com/blog/coding-assistants-file-edits/) — comparative edit strategy analysis across Codex, Aider, RooCode, Cursor, OpenHands
-- [Advanced Context Engineering for Coding Agents](https://github.com/humanlayer/advanced-context-engineering-for-coding-agents/blob/main/ace-fca.md) — 40–60% context utilization target
-- [oh-my-pi hash-anchored edits](https://github.com/can1357/oh-my-pi) — stale detection benchmark across 16 models
-- [Advanced Error Handling in LangGraph](https://sparkco.ai/blog/advanced-error-handling-strategies-in-langgraph-applications) — node-level error classification patterns
-- [The Memory Leak in the Loop](https://azguards.com/ai-engineering/the-memory-leak-in-the-loop-optimizing-custom-state-reducers-in-langgraph/) — LangGraph state bloat from `add_messages` reducer
-- [Where Autonomous Coding Agents Fail](https://medium.com/@vivek.babu/where-autonomous-coding-agents-fail-a-forensic-audit-of-real-world-prs-59d66e33efe9) — forensic audit of production agent PRs
-- [Simon Willison: Anti-patterns in Agentic Engineering](https://simonwillison.net/guides/agentic-engineering-patterns/anti-patterns/) — what not to build
-- [Context Engineering for Coding Agents (Martin Fowler)](https://martinfowler.com/articles/exploring-gen-ai/context-engineering-coding-agents.html) — context management strategies
+### Primary (HIGH confidence — library verification)
+- [react-resizable-panels npm](https://www.npmjs.com/package/react-resizable-panels) — v4.7.6, 1777 npm dependents
+- [diff (jsdiff) npm](https://www.npmjs.com/package/diff) — v7.0, Myers O(ND) algorithm
+- [Shiki](https://shiki.style/) — v3.0, VS Code TextMate grammars, 200+ languages
 
-### Tertiary (MEDIUM-LOW confidence)
-- [SWE-bench and Code Agents as Testers](https://arxiv.org/html/2406.12952v1) — test generation improving edit precision 2x (needs validation on Shipyard's specific task types)
-- [Hermes Agent Independent Verification](https://github.com/NousResearch/hermes-agent/issues/406) — generator-evaluator pattern for semantic correctness
-- [Agentic Coding Trends Report 2026](https://resources.anthropic.com/hubfs/2026%20Agentic%20Coding%20Trends%20Report.pdf) — industry context
+### Secondary (MEDIUM confidence — community sources)
+- [React Context Performance Trap: useSyncExternalStore](https://azguards.com/performance-optimization/the-propagation-penalty-bypassing-react-context-re-renders-via-usesyncexternalstore/)
+- [Streaming Backends & React: Controlling Re-render Chaos](https://www.sitepoint.com/streaming-backends-react-controlling-re-render-chaos/)
+- [React State Management: Context API vs Zustand](https://medium.com/@bloodturtle/react-state-management-why-context-api-might-be-causing-performance-issues-and-how-zustand-can-ec7718103a71)
+- [Git Diff View — High-Performance Diff Component](https://mrwangjusttodo.github.io/git-diff-view/)
+- [Building High Performance Directory Components in React](https://dev.to/jdetle/memoization-generators-virtualization-oh-my-building-a-high-performance-directory-component-in-react-3efm)
+- [Shiki vs react-syntax-highlighter — Vercel AI Elements #14](https://github.com/vercel/ai-elements/issues/14)
+- [TanStack Virtual](https://tanstack.com/virtual/latest)
+- [react-resizable-panels GitHub](https://github.com/bvaughn/react-resizable-panels)
+- VS Code UX conventions (de facto standard for IDE UI patterns)
 
 ---
-*Research completed: 2026-03-26*
+*Research completed: 2026-03-27*
 *Ready for roadmap: yes*
