@@ -29,9 +29,14 @@ def make_config_with_mock_router(return_value):
     from agent.schemas import EditResponse
     mock_router = MagicMock()
 
-    # Parse the JSON string to build a proper EditResponse for call_structured
-    data = json.loads(return_value) if isinstance(return_value, str) else return_value
-    edit_response = EditResponse(anchor=data["anchor"], replacement=data["replacement"])
+    # If return_value is already an EditResponse, use it directly
+    if isinstance(return_value, EditResponse):
+        edit_response = return_value
+    elif isinstance(return_value, str):
+        data = json.loads(return_value)
+        edit_response = EditResponse(anchor=data["anchor"], replacement=data["replacement"])
+    else:
+        edit_response = EditResponse(anchor=return_value["anchor"], replacement=return_value["replacement"])
 
     mock_router.call = AsyncMock(return_value=return_value)
     mock_router.call_structured = AsyncMock(return_value=edit_response)
