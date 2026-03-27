@@ -12,6 +12,7 @@ import json
 import os
 import re
 from langgraph.types import RunnableConfig
+from agent.node_events import emit_status, flush_node
 from agent.tools.shell import run_command_async
 from agent.tracing import TraceLogger
 
@@ -104,6 +105,8 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
     """
     if config is None:
         config = {"configurable": {}}
+    await emit_status(config, "validator", "Validating edits...")
+
     edit_history = state.get("edit_history", [])
     if not edit_history:
         return {"error_state": None}
@@ -164,6 +167,7 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
             "file_path": file_path,
             "normalized_error": _normalize_error_msg(check["error"]),
         })
+        await flush_node(config)
         return {
             "error_state": error_msg,
             "last_validation_error": {
@@ -174,6 +178,7 @@ async def validator_node(state: dict, config: RunnableConfig | None = None) -> d
             "validation_error_history": error_history,
         }
 
+    await flush_node(config)
     return {"error_state": None}
 
 

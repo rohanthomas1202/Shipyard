@@ -1,9 +1,14 @@
+from agent.node_events import emit_status, flush_node
 from agent.tracing import TraceLogger
 
 tracer = TraceLogger()
 
 
-def receive_instruction_node(state: dict) -> dict:
+async def receive_instruction_node(state: dict, config: dict = None) -> dict:
+    if config is None:
+        config = {"configurable": {}}
+    await emit_status(config, "receive", "Receiving instruction...")
+
     tracer.log("receive_instruction", {
         "instruction": state.get("instruction", ""),
         "has_context": bool(state.get("context")),
@@ -24,4 +29,5 @@ def receive_instruction_node(state: dict) -> dict:
             tracer.log("language_detection", {"error": str(e)})
             result["ast_available"] = {}
 
+    await flush_node(config)
     return result

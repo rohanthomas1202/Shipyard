@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from langgraph.types import RunnableConfig
+from agent.node_events import emit_status, flush_node
 from agent.tracing import TraceLogger
 from agent.tools.ast_ops import apply_rule
 
@@ -15,6 +16,8 @@ tracer = TraceLogger()
 
 async def refactor_node(state: dict, config: RunnableConfig) -> dict:
     """Execute a codebase-wide refactoring step."""
+    await emit_status(config, "refactor", "Applying structural refactor...")
+
     approval_manager = config["configurable"].get("approval_manager")
     supervised = config["configurable"].get("supervised", False)
     run_id = config["configurable"].get("run_id", "")
@@ -118,6 +121,7 @@ async def refactor_node(state: dict, config: RunnableConfig) -> dict:
     if context.get("spec"):
         tracer.log("refactor_context", {"spec_available": True})
 
+    await flush_node(config)
     return {
         "file_buffer": new_file_buffer,
         "edit_history": new_edit_history,

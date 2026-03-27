@@ -1,6 +1,7 @@
 """Coordinator node -- decides parallel vs sequential execution and executes parallel batches."""
 from langgraph.types import RunnableConfig
 import logging
+from agent.node_events import emit_status, flush_node
 from agent.tracing import TraceLogger
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,8 @@ def coordinator_node(state: dict) -> dict:
 
 async def parallel_executor_node(state: dict, config: RunnableConfig) -> dict:
     """Execute parallel batches using separate graph invocations."""
+    await emit_status(config, "coordinator", "Executing parallel batches...")
+
     from agent.parallel import run_parallel_batches
     from agent.graph import build_graph
     from agent.nodes.merger import merge_batch_results
@@ -85,4 +88,5 @@ async def parallel_executor_node(state: dict, config: RunnableConfig) -> dict:
 
     # Merge results
     merged = merge_batch_results(results)
+    await flush_node(config)
     return merged

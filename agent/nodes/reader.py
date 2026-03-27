@@ -1,5 +1,6 @@
 """Reader node: loads files into state with line-range and skeleton support."""
 import os
+from agent.node_events import emit_status, flush_node
 from agent.tools.file_ops import read_file, content_hash
 from agent.tracing import TraceLogger
 
@@ -46,8 +47,12 @@ def _read_with_range(file_path: str, start: int | None = None, end: int | None =
     return "".join(lines)
 
 
-def reader_node(state: dict) -> dict:
+async def reader_node(state: dict, config: dict = None) -> dict:
     """Read files into file_buffer with skeleton/line-range support."""
+    if config is None:
+        config = {"configurable": {}}
+    await emit_status(config, "reader", f"Reading files for step {state.get('current_step', 0) + 1}...")
+
     plan = state.get("plan", [])
     step = state.get("current_step", 0)
     working_dir = state["working_directory"]
@@ -108,4 +113,5 @@ def reader_node(state: dict) -> dict:
         line_count = raw_content.count("\n") + 1
         tracer.log("reader", {"file": fpath, "lines": line_count})
 
+    await flush_node(config)
     return {"file_buffer": file_buffer, "file_hashes": file_hashes}

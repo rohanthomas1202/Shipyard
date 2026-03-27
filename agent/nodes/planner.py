@@ -4,6 +4,7 @@ Uses ContextAssembler for model-aware context budget management.
 """
 from langgraph.types import RunnableConfig
 from agent.context import ContextAssembler
+from agent.node_events import emit_status, emit_node_event, flush_node
 from agent.prompts.planner import PLANNER_SYSTEM, PLANNER_USER
 from agent.steps import parse_plan_steps
 from agent.tracing import TraceLogger
@@ -13,6 +14,8 @@ tracer = TraceLogger()
 
 
 async def planner_node(state: dict, config: RunnableConfig) -> dict:
+    await emit_status(config, "planner", "Planning edits...")
+
     router = config["configurable"]["router"]
     instruction = state["instruction"]
     working_dir = state["working_directory"]
@@ -54,6 +57,11 @@ async def planner_node(state: dict, config: RunnableConfig) -> dict:
 
     tracer.log("planner", {"steps": len(steps), "instruction": instruction[:100]})
 
+    await emit_node_event(config, "planner", "plan_ready", {
+        "steps": [{"kind": s.kind, "target_files": s.target_files, "label": s.acceptance_criteria or f"Step {i+1}"} for i, s in enumerate(steps)],
+        "total_steps": len(steps),
+    })
+    await flush_node(config)
     return {
         "plan": [step.model_dump() for step in steps],
     }

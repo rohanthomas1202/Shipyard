@@ -13,6 +13,7 @@ import logging
 import os
 from langgraph.types import RunnableConfig
 from agent.context import ContextAssembler
+from agent.node_events import emit_status, emit_node_event, flush_node
 from agent.prompts.editor import EDITOR_SYSTEM, EDITOR_USER, ERROR_FEEDBACK_TEMPLATE
 from agent.schemas import EditResponse
 from agent.tools.file_ops import read_file, edit_file, content_hash
@@ -111,6 +112,10 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
     file_buffer = state.get("file_buffer", {})
     plan = state.get("plan", [])
     current_step = state.get("current_step", 0)
+
+    step_entry = plan[current_step] if current_step < len(plan) else {}
+    target = step_entry.get("target_files", []) if isinstance(step_entry, dict) else []
+    await emit_status(config, "editor", f"Editing {', '.join(target[:3])}..." if target else "Editing files...")
 
     if not file_buffer:
         return {"error_state": "No files in buffer to edit"}
@@ -266,6 +271,7 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
 
         if supervised:
             tracer.log("editor", {"file": file_path, "edit_id": proposed.id, "mode": "supervised"})
+            await flush_node(config)
             return {
                 "waiting_for_human": True,
                 "edit_history": state.get("edit_history", []) + [
@@ -278,9 +284,11 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
             await approval_manager.approve(proposed.id, op_id)
             applied = await approval_manager.apply_edit(proposed.id)
             tracer.log("editor", {"file": file_path, "edit_id": applied.id, "mode": "autonomous"})
+            await emit_node_event(config, "editor", "edit_applied", {"file_path": file_path, "step": current_step})
             updated_content = _read_raw(file_path)
             new_hash = content_hash(updated_content)
             updated_hashes = {**state.get("file_hashes", {}), file_path: new_hash}
+            await flush_node(config)
             return {
                 "file_buffer": {**file_buffer, file_path: updated_content},
                 "file_hashes": updated_hashes,
@@ -297,9 +305,11 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
         with open(file_path, "w") as f:
             f.write(new_content)
         tracer.log("editor", {"file": file_path, "anchor": anchor[:50], "model": task_type, "ast_grep": True})
+        await emit_node_event(config, "editor", "edit_applied", {"file_path": file_path, "step": current_step})
         updated_content = _read_raw(file_path)
         new_hash = content_hash(updated_content)
         updated_hashes = {**state.get("file_hashes", {}), file_path: new_hash}
+        await flush_node(config)
         return {
             "file_buffer": {**file_buffer, file_path: new_content},
             "file_hashes": updated_hashes,
@@ -320,16 +330,19 @@ async def editor_node(state: dict, config: RunnableConfig) -> dict:
             "best_score": result.get("best_score"),
             "best_match_preview": result.get("best_match_preview", ""),
         }
+        await flush_node(config)
         return {
             "error_state": result["error"],
             "edit_history": state.get("edit_history", []) + [error_entry],
         }
 
     tracer.log("editor", {"file": file_path, "anchor": anchor[:50], "model": task_type})
+    await emit_node_event(config, "editor", "edit_applied", {"file_path": file_path, "step": current_step})
 
     updated_content = _read_raw(file_path)
     new_hash = content_hash(updated_content)
     updated_hashes = {**state.get("file_hashes", {}), file_path: new_hash}
+    await flush_node(config)
     return {
         "file_buffer": {**file_buffer, file_path: updated_content},
         "file_hashes": updated_hashes,

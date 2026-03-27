@@ -4,6 +4,7 @@ from langgraph.types import RunnableConfig
 import logging
 import re
 from agent.git import GitManager
+from agent.node_events import emit_status, flush_node
 from agent.github import GitHubClient
 from agent.prompts.git import COMMIT_MSG_SYSTEM, COMMIT_MSG_USER
 from agent.tracing import TraceLogger
@@ -20,7 +21,9 @@ async def git_ops_node(state: dict, config: RunnableConfig = None) -> dict:
     config["configurable"] with fallback to state context.
     Push is skipped when no remote is configured (local-only repos).
     """
-    config = config or {}
+    config = config or {"configurable": {}}
+    await emit_status(config, "git_ops", "Running git operations...")
+
     configurable = config.get("configurable", {})
 
     store = configurable.get("store")
@@ -141,6 +144,7 @@ async def git_ops_node(state: dict, config: RunnableConfig = None) -> dict:
             ops_log.append({"type": "pr", "status": "failed", "error": str(e)})
 
     tracer.log("git_ops", {"ops": ops_log, "branch": branch, "run_id": run_id})
+    await flush_node(config)
     return {"branch": branch, "error_state": None}
 
 

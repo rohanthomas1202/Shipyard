@@ -80,31 +80,34 @@ def _make_state(tmp_path, file_contents, plan_entry=None):
     }
 
 
-def test_reader_node_small_file(tmp_path):
+@pytest.mark.asyncio
+async def test_reader_node_small_file(tmp_path):
     """reader_node loads files under 200 lines in full."""
     content = "".join(f"line {i}\n" for i in range(1, 51))
     state = _make_state(tmp_path, {"small.py": content})
 
-    result = reader_node(state)
+    result = await reader_node(state)
     fpath = str(tmp_path / "small.py")
     assert fpath in result["file_buffer"]
     assert "line 1" in result["file_buffer"][fpath]
     assert "skeleton" not in result["file_buffer"][fpath]
 
 
-def test_reader_node_large_file_skeleton(tmp_path):
+@pytest.mark.asyncio
+async def test_reader_node_large_file_skeleton(tmp_path):
     """reader_node loads files over 200 lines as skeleton view."""
     content = "".join(f"line {i}\n" for i in range(1, 301))
     state = _make_state(tmp_path, {"big.py": content})
 
-    result = reader_node(state)
+    result = await reader_node(state)
     fpath = str(tmp_path / "big.py")
     assert fpath in result["file_buffer"]
     assert "skeleton view" in result["file_buffer"][fpath]
     assert "omitted" in result["file_buffer"][fpath]
 
 
-def test_reader_node_line_range_from_step(tmp_path):
+@pytest.mark.asyncio
+async def test_reader_node_line_range_from_step(tmp_path):
     """When PlanStep dict has line_range, reader_node uses that range."""
     content = "".join(f"line {i}\n" for i in range(1, 101))
     fpath = tmp_path / "ranged.py"
@@ -119,18 +122,19 @@ def test_reader_node_line_range_from_step(tmp_path):
     # Need to put the file path in context.files so it gets picked up
     state["context"] = {"files": [str(fpath)]}
 
-    result = reader_node(state)
+    result = await reader_node(state)
     buf = result["file_buffer"][str(fpath)]
     assert "[Lines 11-30 of 100]" in buf
     assert "line 11" in buf
 
 
-def test_reader_node_returns_file_hashes(tmp_path):
+@pytest.mark.asyncio
+async def test_reader_node_returns_file_hashes(tmp_path):
     """reader_node returns file_hashes with content_hash values."""
     content = "hello world\n"
     state = _make_state(tmp_path, {"hashed.py": content})
 
-    result = reader_node(state)
+    result = await reader_node(state)
     assert "file_hashes" in result
     fpath = str(tmp_path / "hashed.py")
     assert fpath in result["file_hashes"]
