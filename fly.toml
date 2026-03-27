@@ -1,18 +1,29 @@
-app = "shipyard-demo"
-primary_region = "sjc"
+# fly.toml app configuration file generated for shipyard-demo on 2026-03-26T21:23:19-05:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'shipyard-demo'
+primary_region = 'sjc'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
+
+[env]
+  SHIPYARD_DB_PATH = '/data/shipyard.db'
+
+[[mounts]]
+  source = 'shipyard_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8080
   force_https = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  auto_stop_machines = true
 
-[mounts]
-  source = "shipyard_data"
-  destination = "/data"
-
-[env]
-  SHIPYARD_DB_PATH = "/data/shipyard.db"
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
