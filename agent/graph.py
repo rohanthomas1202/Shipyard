@@ -178,7 +178,7 @@ def _build_graph_nodes(graph: StateGraph):
     graph.add_edge("reporter", END)
 
 
-def build_graph():
+def build_graph(checkpointer=None):
     graph = StateGraph(AgentState)
     _build_graph_nodes(graph)
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)

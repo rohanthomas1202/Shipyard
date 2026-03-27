@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
     store = SQLiteSessionStore(DB_PATH)
     await store.initialize()
 
@@ -41,20 +43,24 @@ async def lifespan(app: FastAPI):
     approval_manager = ApprovalManager(store=store, event_bus=event_bus)
     conn_manager.set_approval_manager(approval_manager)
 
-    app.state.store = store
-    app.state.router = ModelRouter()
-    app.state.graph = build_graph()
-    app.state.event_bus = event_bus
-    app.state.conn_manager = conn_manager
-    app.state.approval_manager = approval_manager
+    async with AsyncSqliteSaver.from_conn_string("shipyard_checkpoints.db") as checkpointer:
+        await checkpointer.setup()
 
-    heartbeat_task = asyncio.create_task(_heartbeat_loop(conn_manager))
-    yield
-    heartbeat_task.cancel()
-    try:
-        await heartbeat_task
-    except asyncio.CancelledError:
-        pass
+        app.state.store = store
+        app.state.router = ModelRouter()
+        app.state.graph = build_graph(checkpointer=checkpointer)
+        app.state.checkpointer = checkpointer
+        app.state.event_bus = event_bus
+        app.state.conn_manager = conn_manager
+        app.state.approval_manager = approval_manager
+
+        heartbeat_task = asyncio.create_task(_heartbeat_loop(conn_manager))
+        yield
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
     await event_bus.shutdown()
     await store.close()
 
@@ -135,6 +141,7 @@ async def _resume_run(run_id: str) -> None:
                     "approval_manager": app.state.approval_manager,
                     "run_id": run_id,
                     "lsp_manager": lsp_mgr,
+                    "thread_id": run_id,
                 }
             }
             result = await graph.ainvoke(state, config=config)
@@ -204,6 +211,7 @@ async def submit_instruction(req: InstructionRequest):
                         "approval_manager": app.state.approval_manager,
                         "run_id": run_id,
                         "lsp_manager": lsp_mgr,
+                        "thread_id": run_id,
                     }
                 }
                 result = await graph.ainvoke(initial_state, config=config)
@@ -255,6 +263,7 @@ async def continue_run(run_id: str, req: InstructionRequest):
                         "approval_manager": app.state.approval_manager,
                         "run_id": run_id,
                         "lsp_manager": lsp_mgr,
+                        "thread_id": run_id,
                     }
                 }
                 result = await graph.ainvoke(state, config=config)

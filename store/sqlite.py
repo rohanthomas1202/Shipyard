@@ -67,6 +67,11 @@ class SQLiteSessionStore:
         await self._db.execute("PRAGMA synchronous=NORMAL")
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(_SCHEMA)
+        # Migration: add trace_url column if missing
+        try:
+            await self._db.execute("ALTER TABLE runs ADD COLUMN trace_url TEXT")
+        except Exception:
+            pass  # Column already exists
         await self._db.commit()
 
     async def close(self):
@@ -129,12 +134,13 @@ class SQLiteSessionStore:
         await self._db.execute(
             """INSERT INTO runs
                (id, project_id, instruction, status, branch, context, plan,
-                model_usage, total_tokens, created_at, completed_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                model_usage, total_tokens, trace_url, created_at, completed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 run.id, run.project_id, run.instruction, run.status, run.branch,
                 json.dumps(run.context), json.dumps(run.plan),
                 json.dumps(run.model_usage), run.total_tokens,
+                run.trace_url,
                 run.created_at.isoformat(),
                 run.completed_at.isoformat() if run.completed_at else None,
             ),
@@ -158,11 +164,12 @@ class SQLiteSessionStore:
     async def update_run(self, run: Run) -> Run:
         await self._db.execute(
             """UPDATE runs SET status=?, branch=?, context=?, plan=?, model_usage=?,
-               total_tokens=?, completed_at=? WHERE id=?""",
+               total_tokens=?, trace_url=?, completed_at=? WHERE id=?""",
             (
                 run.status, run.branch,
                 json.dumps(run.context), json.dumps(run.plan),
                 json.dumps(run.model_usage), run.total_tokens,
+                run.trace_url,
                 run.completed_at.isoformat() if run.completed_at else None,
                 run.id,
             ),
@@ -173,6 +180,20 @@ class SQLiteSessionStore:
     async def list_runs(self, project_id: str) -> list[Run]:
         async with self._db.execute(
             "SELECT * FROM runs WHERE project_id = ?", (project_id,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+        result = []
+        for row in rows:
+            data = dict(row)
+            data["context"] = json.loads(data["context"]) if data["context"] else {}
+            data["plan"] = json.loads(data["plan"]) if data["plan"] else []
+            data["model_usage"] = json.loads(data["model_usage"]) if data["model_usage"] else {}
+            result.append(Run(**data))
+        return result
+
+    async def list_runs_by_status(self, status: str) -> list[Run]:
+        async with self._db.execute(
+            "SELECT * FROM runs WHERE status = ?", (status,)
         ) as cursor:
             rows = await cursor.fetchall()
         result = []

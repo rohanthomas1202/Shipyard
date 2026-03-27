@@ -98,6 +98,20 @@ def test_normalize_error_strips_line_numbers():
     assert a == b
 
 
+def test_graph_compiles_with_checkpointer():
+    """build_graph(checkpointer=MemorySaver()) returns a compiled graph with checkpointer."""
+    from langgraph.checkpoint.memory import MemorySaver
+    checkpointer = MemorySaver()
+    graph = build_graph(checkpointer=checkpointer)
+    assert graph is not None
+
+
+def test_graph_compiles_without_checkpointer():
+    """build_graph(checkpointer=None) returns a compiled graph (backward compat)."""
+    graph = build_graph(checkpointer=None)
+    assert graph is not None
+
+
 import os
 
 @pytest.mark.asyncio

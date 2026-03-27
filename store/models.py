@@ -38,6 +38,7 @@ class Run(BaseModel):
     plan: list[dict] = Field(default_factory=list)
     model_usage: dict[str, int] = Field(default_factory=dict)
     total_tokens: int = 0
+    trace_url: str | None = None
     created_at: datetime = Field(default_factory=_now)
     completed_at: datetime | None = None
 
