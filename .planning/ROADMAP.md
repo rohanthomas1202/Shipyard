@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Crash Recovery & Run Lifecycle** - LangGraph checkpointing, graceful cancellation, LangSmith tracing with shared links
 - [ ] **Phase 5: Agent Core Features** - Persistent agent loop, external context injection, multi-agent coordination, git operations end-to-end
 - [ ] **Phase 6: Ship Rebuild** - Agent rebuilds the Ship app from scratch, every intervention documented
-- [ ] **Phase 7: Deliverables & Deployment** - CODEAGENT.md, comparative analysis, dev log, cost analysis, demo video, deployment
+- [x] **Phase 7: Deliverables & Deployment** - CODEAGENT.md, comparative analysis, dev log, cost analysis, demo video, deployment (completed 2026-03-27)
 
 ## Phase Details
 
@@ -139,4 +139,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 4. Crash Recovery & Run Lifecycle | 0/3 | Planned | - |
 | 5. Agent Core Features | 0/3 | Planned | - |
 | 6. Ship Rebuild | 0/TBD | Not started | - |
-| 7. Deliverables & Deployment | 0/TBD | Not started | - |
+| 7. Deliverables & Deployment | 1/1 | Complete   | 2026-03-27 |
