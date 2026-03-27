@@ -107,8 +107,8 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 06-01-PLAN.md — Ship project registration and rebuild log template (SHIP-02)
-- [ ] 06-02-PLAN.md — Ship app rebuild execution
-- [ ] 06-03-PLAN.md — Rebuild analysis and intervention summary
+- [x] 06-02-PLAN.md — Ship app rebuild execution
+- [x] 06-03-PLAN.md — Rebuild analysis and intervention summary
 
 ### Phase 7: Deliverables & Deployment
 **Goal**: All submission artifacts are complete and both the agent and the agent-built Ship app are publicly accessible
