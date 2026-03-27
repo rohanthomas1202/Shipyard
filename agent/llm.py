@@ -1,8 +1,26 @@
 # agent/llm.py
 """Thin OpenAI wrapper — called by the router, not by nodes directly."""
 import os
+from dataclasses import dataclass
 from openai import AsyncOpenAI
 from pydantic import BaseModel
+
+
+@dataclass
+class LLMResult:
+    """Result from a plain text LLM call."""
+    content: str
+    usage: dict
+    model: str
+
+
+@dataclass
+class LLMStructuredResult:
+    """Result from a structured (parsed) LLM call."""
+    parsed: BaseModel
+    usage: dict
+    model: str
+
 
 _client: AsyncOpenAI | None = None
 
@@ -14,14 +32,25 @@ def _get_client() -> AsyncOpenAI:
     return _client
 
 
+def _extract_usage(response) -> dict:
+    """Extract usage dict from an OpenAI response, handling None gracefully."""
+    if response.usage is None:
+        return {}
+    return {
+        "prompt_tokens": response.usage.prompt_tokens,
+        "completion_tokens": response.usage.completion_tokens,
+        "total_tokens": response.usage.total_tokens,
+    }
+
+
 async def call_llm(
     system: str,
     user: str,
     model: str = "gpt-4o",
     max_tokens: int = 16_384,
     timeout: int = 60,
-) -> str:
-    """Call OpenAI chat completions. Returns the assistant message content."""
+) -> LLMResult:
+    """Call OpenAI chat completions. Returns LLMResult with content, usage, and model."""
     client = _get_client()
     response = await client.chat.completions.create(
         model=model,
@@ -32,7 +61,9 @@ async def call_llm(
         max_tokens=max_tokens,
         timeout=timeout,
     )
-    return response.choices[0].message.content or ""
+    content = response.choices[0].message.content or ""
+    usage = _extract_usage(response)
+    return LLMResult(content=content, usage=usage, model=model)
 
 
 async def call_llm_structured(
@@ -42,22 +73,19 @@ async def call_llm_structured(
     model: str = "gpt-4o",
     max_tokens: int = 16_384,
     timeout: int = 60,
-) -> BaseModel:
-    """Call OpenAI with structured output. Returns parsed Pydantic model.
-
-    Uses client.chat.completions.parse() which enforces the schema
-    server-side, eliminating JSON parse failures. This is the non-beta
-    path available in OpenAI SDK >= 2.x (project uses 2.29.0).
-    """
+) -> LLMStructuredResult:
+    """Call OpenAI with structured output parsing. Returns LLMStructuredResult."""
     client = _get_client()
-    response = await client.chat.completions.parse(
+    response = await client.beta.chat.completions.parse(
         model=model,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
         response_format=response_model,
-        max_completion_tokens=max_tokens,
+        max_tokens=max_tokens,
         timeout=timeout,
     )
-    return response.choices[0].message.parsed
+    parsed = response.choices[0].message.parsed
+    usage = _extract_usage(response)
+    return LLMStructuredResult(parsed=parsed, usage=usage, model=model)
