@@ -41,7 +41,16 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 
 ### Active
 
-(No active requirements — next milestone not yet defined)
+- [ ] DAG-based orchestrator that decomposes complex apps into spec-driven task graphs
+- [ ] Analyzer agent that parses codebases into module maps with dependency graphs
+- [ ] Planner agent with three-layer decomposition (PRD → Tech Spec → Task DAG)
+- [ ] Versioned contract layer (DB schema, OpenAPI, shared types) as source of truth
+- [ ] Bounded parallel execution (5-15 agents, ≤300 LOC / ≤3 files per task)
+- [ ] Failure classification system (syntax→auto-fix, contract→spec, test→debug, structural→replan)
+- [ ] CI engine maintaining always-working main branch after every merge
+- [ ] Module ownership model preventing cross-agent conflicts
+- [ ] Checkpointing and recovery for long-running multi-agent builds
+- [ ] Ship rebuild proof — 47 API routes, core E2E flows, deployed to public URL
 
 ### Validated in v1.1
 
@@ -62,6 +71,25 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 - Mobile UI — desktop browser is the only target
 - Real-time collaboration — single-user agent
 - Custom plugin/extension system — hardcoded pipeline sufficient for v1
+
+## Current Milestone: v1.2 Autonomous Software Factory
+
+**Goal:** Build a spec-driven, DAG-orchestrated multi-agent system proven by rebuilding Ship (133K LOC) end-to-end.
+
+**Target features:**
+- Analyzer agent — module map, dependency graph, per-module summaries
+- Planner agent — PRDs → Tech Specs → Task DAG with plan validation phase
+- Contract layer — versioned DB schema, OpenAPI, shared types, migration strategy
+- Execution layer — 5-15 concurrent agents, context packs ≤5 files, git branch+PR per agent
+- Validation layer — CI after every task, failure classification (A/B/C/D types)
+- CI engine — always-working main branch, rejects unstable PRs, mock services for external deps
+- Orchestrator — owns DAG, failure-type retries, structured logging, observability
+- Ownership model — designated owner per module, orchestrator-mediated cross-module changes
+- Checkpointing — persist DAG state, resume from failure, re-run failed branches
+- Progress metrics — tasks completed, DAG coverage %, CI pass rate, scale gates
+- Automated deployment scripts for Ship rebuild proof
+
+**Build order:** Orchestrator+DAG → Planner+specs → CI+validation → Full Ship rebuild
 
 ## Current State
 
@@ -124,4 +152,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v1.1 milestone — IDE UI Rebuild shipped*
+*Last updated: 2026-03-28 after v1.2 milestone start — Autonomous Software Factory*

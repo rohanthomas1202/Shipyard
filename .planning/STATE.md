@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: IDE UI Rebuild
-status: executing
-stopped_at: Phase 11 plans verified
-last_updated: "2026-03-27T23:16:43.931Z"
-last_activity: 2026-03-27
+milestone: v1.2
+milestone_name: Autonomous Software Factory
+status: defining_requirements
+stopped_at: Milestone started
+last_updated: "2026-03-28"
+last_activity: 2026-03-28
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -18,16 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-26)
+See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 08 — foundation-layout-state-architecture-topbar
+**Current focus:** Defining requirements for v1.2 Autonomous Software Factory
 
 ## Current Position
 
-Phase: 11
-Plan: Not started
-Status: Executing Phase 08
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-28 — Milestone v1.2 started
 Last activity: 2026-03-27
 
 Progress: [░░░░░░░░░░] 0%
