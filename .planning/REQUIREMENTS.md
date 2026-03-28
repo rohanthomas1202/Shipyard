@@ -1,7 +1,7 @@
 # Requirements: Shipyard
 
 **Defined:** 2026-03-28
-**Core Value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
+**Core Value:** The agent must reliably complete real coding tasks end-to-end -- from instruction to committed code -- without producing broken edits, missing errors, or crashing mid-run.
 
 ## v1.2 Requirements
 
@@ -10,7 +10,7 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 ### Orchestration
 
 - [ ] **ORCH-01**: User can submit a codebase path and receive a DAG of executable tasks with dependency ordering
-- [ ] **ORCH-02**: Orchestrator enforces DAG dependencies — no task executes before its prerequisites complete
+- [ ] **ORCH-02**: Orchestrator enforces DAG dependencies -- no task executes before its prerequisites complete
 - [ ] **ORCH-03**: Orchestrator retries failed tasks with failure-type awareness (A/B/C/D classification)
 - [ ] **ORCH-04**: Orchestrator limits concurrency to 5-15 agents with queue-based scheduling
 - [ ] **ORCH-05**: Orchestrator persists DAG state to enable resume from failure without restart
@@ -24,7 +24,7 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 
 - [ ] **PLAN-01**: Planner generates PRDs from module map, decomposing into buildable units
 - [ ] **PLAN-02**: Planner generates Tech Specs from PRDs (API contracts, DB schema, component interfaces)
-- [ ] **PLAN-03**: Planner generates a Task DAG from Tech Specs with ≤300 LOC / ≤3 files per task
+- [ ] **PLAN-03**: Planner generates a Task DAG from Tech Specs with <=300 LOC / <=3 files per task
 - [ ] **PLAN-04**: Plan validation phase detects dependency cycles, validates contract completeness, estimates cost before execution
 
 ### Contracts
@@ -36,8 +36,8 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 ### Execution
 
 - [ ] **EXEC-01**: Each agent works in its own git branch and submits changes via PR
-- [ ] **EXEC-02**: Agents receive context packs (≤5 relevant files + contracts + recent changes)
-- [ ] **EXEC-03**: Agents are idempotent — safe to re-run without corrupting state
+- [ ] **EXEC-02**: Agents receive context packs (<=5 relevant files + contracts + recent changes)
+- [ ] **EXEC-03**: Agents are idempotent -- safe to re-run without corrupting state
 - [ ] **EXEC-04**: Module ownership model prevents conflicting edits across agents
 
 ### Validation
@@ -93,40 +93,40 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORCH-01 | TBD | Pending |
-| ORCH-02 | TBD | Pending |
-| ORCH-03 | TBD | Pending |
-| ORCH-04 | TBD | Pending |
-| ORCH-05 | TBD | Pending |
-| ANLZ-01 | TBD | Pending |
-| ANLZ-02 | TBD | Pending |
-| PLAN-01 | TBD | Pending |
-| PLAN-02 | TBD | Pending |
-| PLAN-03 | TBD | Pending |
-| PLAN-04 | TBD | Pending |
-| CNTR-01 | TBD | Pending |
-| CNTR-02 | TBD | Pending |
-| CNTR-03 | TBD | Pending |
-| EXEC-01 | TBD | Pending |
-| EXEC-02 | TBD | Pending |
-| EXEC-03 | TBD | Pending |
-| EXEC-04 | TBD | Pending |
-| VALD-01 | TBD | Pending |
-| VALD-02 | TBD | Pending |
-| VALD-03 | TBD | Pending |
-| OBSV-01 | TBD | Pending |
-| OBSV-02 | TBD | Pending |
-| OBSV-03 | TBD | Pending |
-| SHIP-01 | TBD | Pending |
-| SHIP-02 | TBD | Pending |
-| SHIP-03 | TBD | Pending |
-| SHIP-04 | TBD | Pending |
-| SHIP-05 | TBD | Pending |
+| ORCH-01 | Phase 12 | Pending |
+| ORCH-02 | Phase 12 | Pending |
+| ORCH-03 | Phase 15 | Pending |
+| ORCH-04 | Phase 15 | Pending |
+| ORCH-05 | Phase 12 | Pending |
+| ANLZ-01 | Phase 13 | Pending |
+| ANLZ-02 | Phase 13 | Pending |
+| PLAN-01 | Phase 13 | Pending |
+| PLAN-02 | Phase 13 | Pending |
+| PLAN-03 | Phase 13 | Pending |
+| PLAN-04 | Phase 13 | Pending |
+| CNTR-01 | Phase 12 | Pending |
+| CNTR-02 | Phase 12 | Pending |
+| CNTR-03 | Phase 14 | Pending |
+| EXEC-01 | Phase 15 | Pending |
+| EXEC-02 | Phase 15 | Pending |
+| EXEC-03 | Phase 15 | Pending |
+| EXEC-04 | Phase 15 | Pending |
+| VALD-01 | Phase 15 | Pending |
+| VALD-02 | Phase 15 | Pending |
+| VALD-03 | Phase 15 | Pending |
+| OBSV-01 | Phase 14 | Pending |
+| OBSV-02 | Phase 14 | Pending |
+| OBSV-03 | Phase 14 | Pending |
+| SHIP-01 | Phase 16 | Pending |
+| SHIP-02 | Phase 16 | Pending |
+| SHIP-03 | Phase 16 | Pending |
+| SHIP-04 | Phase 16 | Pending |
+| SHIP-05 | Phase 16 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 29 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 29
+- Mapped to phases: 29
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-28*
