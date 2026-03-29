@@ -1,6 +1,7 @@
 import { useState, useId } from 'react'
-import type { WSEvent } from '../../types'
+import type { WSEvent, DecisionTraceData } from '../../types'
 import { EventTypeBadge, EVENT_CONFIG, DEFAULT_EVENT_CONFIG } from './EventTypeBadge'
+import { DecisionTrace } from './DecisionTrace'
 
 const NODE_LABELS: Record<string, string> = {
   planning: 'Planning',
@@ -225,6 +226,11 @@ function EventBody({ event }: { event: WSEvent }) {
         </span>
       )
 
+    case 'decision_trace': {
+      const traceData = event.data as unknown as DecisionTraceData
+      return <DecisionTrace trace={traceData} />
+    }
+
     default:
       return null
   }
@@ -272,6 +278,9 @@ function ExpandedDetail({ event }: { event: WSEvent }) {
     case 'run_failed':
     case 'error':
       return <>{String(event.data.error ?? JSON.stringify(event.data, null, 2))}</>
+
+    case 'decision_trace':
+      return <>{JSON.stringify(event.data, null, 2)}</>
 
     default:
       return <>{JSON.stringify(event.data, null, 2)}</>

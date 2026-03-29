@@ -6,6 +6,7 @@ import { AutonomyToggle } from './AutonomyToggle'
 import { RunSection } from './RunSection'
 import { NewEventBadge } from './NewEventBadge'
 import { ProgressHeader } from './ProgressHeader'
+import { FailureHeatmap } from './FailureHeatmap'
 import type { WSEvent } from '../../types'
 
 export function AgentPanel() {
@@ -160,6 +161,11 @@ export function AgentPanel() {
             <NewEventBadge count={newEventCount} onClick={handleBadgeClick} />
           </>
         )}
+      </div>
+
+      {/* Failure heatmap -- below activity stream */}
+      <div style={{ borderTop: '1px solid var(--color-border)', padding: 12 }}>
+        <FailureHeatmap />
       </div>
 
       {/* Status */}
