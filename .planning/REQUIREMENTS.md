@@ -49,7 +49,7 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 ### Observability
 
 - [ ] **OBSV-01**: Structured logging with unified format across all agents
-- [ ] **OBSV-02**: Progress metrics dashboard (tasks completed, DAG coverage %, CI pass rate)
+- [x] **OBSV-02**: Progress metrics dashboard (tasks completed, DAG coverage %, CI pass rate)
 - [ ] **OBSV-03**: Task decision traces and failure heatmap for debugging
 
 ### Ship Rebuild
@@ -115,7 +115,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VALD-02 | Phase 15 | Pending |
 | VALD-03 | Phase 15 | Pending |
 | OBSV-01 | Phase 14 | Pending |
-| OBSV-02 | Phase 14 | Pending |
+| OBSV-02 | Phase 14 | Complete |
 | OBSV-03 | Phase 14 | Pending |
 | SHIP-01 | Phase 16 | Pending |
 | SHIP-02 | Phase 16 | Pending |

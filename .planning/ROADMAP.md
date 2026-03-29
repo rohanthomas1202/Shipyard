@@ -86,7 +86,7 @@ Plans:
 **Plans**: 4 plans
 Plans:
 - [ ] 14-01-PLAN.md -- TraceLogger unified format extension (OBSV-01)
-- [ ] 14-02-PLAN.md -- Progress metrics WebSocket + ProgressHeader UI (OBSV-02)
+- [x] 14-02-PLAN.md -- Progress metrics WebSocket + ProgressHeader UI (OBSV-02)
 - [ ] 14-03-PLAN.md -- Decision traces + failure heatmap (OBSV-03)
 - [ ] 14-04-PLAN.md -- Contract backward compatibility + migration docs (CNTR-03)
 **UI hint**: yes
@@ -134,7 +134,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 11. Agent Activity Stream | v1.1 | 3/3 | Complete | 2026-03-27 |
 | 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete    | 2026-03-29 |
 | 13. Analyzer + Planner Agents | v1.2 | 4/4 | Complete    | 2026-03-29 |
-| 14. Observability + Contract Maturity | v1.2 | 0/4 | In progress | - |
+| 14. Observability + Contract Maturity | v1.2 | 1/4 | In Progress|  |
 | 15. Execution Engine + CI Validation | v1.2 | 0/0 | Not started | - |
 | 16. Ship Rebuild Proof | v1.2 | 0/0 | Not started | - |
 

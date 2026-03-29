@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
-status: verifying
-stopped_at: Phase 14 context gathered
-last_updated: "2026-03-29T19:43:30.047Z"
+status: executing
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-03-29T20:23:25.769Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 11
+  completed_plans: 8
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 05 — agent-core-features
+**Current focus:** Phase 14 — observability-contract-maturity
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 14 (observability-contract-maturity) -- EXECUTING
+Plan: 2 of 4
+Status: Executing plan 14-02
 Last activity: 2026-03-29
 
 Progress: [░░░░░░░░░░] 0%
@@ -109,6 +109,8 @@ Recent decisions affecting current work:
 - [Phase 13]: TOKENS_PER_LOC = 50 for cost estimation; ValidationError as Pydantic BaseModel with severity
 - [Phase 13]: LLM enrichment uses router.call_structured with analyze_enrich task type -- no direct OpenAI calls
 - [Phase 13]: Copy task dicts before TaskDAG.from_definition() to avoid pop('id') mutation
+- [Phase 14]: P0 priority for progress_update ensures immediate delivery without batching
+- [Phase 14]: Progress metrics cleared on run_completed/run_failed/run_cancelled to reset between runs
 
 ### Pending Todos
 
@@ -120,6 +122,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T19:43:30.043Z
-Stopped at: Phase 14 context gathered
-Resume file: .planning/phases/14-observability-contract-maturity/14-CONTEXT.md
+Last session: 2026-03-29T20:23:25.765Z
+Stopped at: Completed 14-02-PLAN.md
+Resume file: None
