@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Autonomous Software Factory
-status: executing
-stopped_at: Completed 14-02-PLAN.md
-last_updated: "2026-03-29T20:23:25.769Z"
+milestone: v1.0
+milestone_name: milestone
+status: verifying
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-03-29T20:22:29.794Z"
 last_activity: 2026-03-29
 progress:
-  total_phases: 5
-  completed_phases: 2
-  total_plans: 11
-  completed_plans: 8
+  total_phases: 7
+  completed_phases: 3
+  total_plans: 15
+  completed_plans: 11
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 14 — observability-contract-maturity
+**Current focus:** Phase 05 — agent-core-features
 
 ## Current Position
 
-Phase: 14 (observability-contract-maturity) -- EXECUTING
-Plan: 2 of 4
-Status: Executing plan 14-02
+Phase: 05 (agent-core-features) — EXECUTING
+Plan: 3 of 3
+Status: Phase complete — ready for verification
 Last activity: 2026-03-29
 
 Progress: [░░░░░░░░░░] 0%
@@ -65,9 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P03 | 9min | 1 tasks | 3 files |
 | Phase 05 P01 | 3min | 2 tasks | 4 files |
 | Phase 05 P02 | 5min | 2 tasks | 3 files |
-| Phase 13 P02 | 3min | 2 tasks | 8 files |
-| Phase 13 P03 | 2min | 2 tasks | 4 files |
-| Phase 13 P04 | 3min | 2 tasks | 5 files |
+| Phase 14 P04 | 2min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -105,12 +103,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Editor context uses list-join pattern matching planner_node for consistency
 - [Phase 05]: Separate auto_git node from plan-step git_ops to avoid cycle; both call git_ops_node but wire differently
 - [Phase 05]: project_id resolved from config first, state context fallback in git_ops_node
-- [Phase 13]: Analyzer/orchestrator stubs created for parallel execution compatibility
-- [Phase 13]: TOKENS_PER_LOC = 50 for cost estimation; ValidationError as Pydantic BaseModel with severity
-- [Phase 13]: LLM enrichment uses router.call_structured with analyze_enrich task type -- no direct OpenAI calls
-- [Phase 13]: Copy task dicts before TaskDAG.from_definition() to avoid pop('id') mutation
-- [Phase 14]: P0 priority for progress_update ensures immediate delivery without batching
-- [Phase 14]: Progress metrics cleared on run_completed/run_failed/run_cancelled to reset between runs
+- [Phase 14]: Filter reformatted lines from true removals to prevent false positives on additive contract changes
+- [Phase 14]: Contract-type-specific structural indicators for breaking change detection (SQL keywords, YAML keys, TS exports, JSON keys)
 
 ### Pending Todos
 
@@ -122,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T20:23:25.765Z
-Stopped at: Completed 14-02-PLAN.md
+Last session: 2026-03-29T20:22:29.790Z
+Stopped at: Completed 14-04-PLAN.md
 Resume file: None
