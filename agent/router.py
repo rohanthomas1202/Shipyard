@@ -15,6 +15,10 @@ ROUTING_POLICY: dict[str, dict] = {
     "merge":          {"tier": "general", "escalation": "reasoning"},
     "summarize":      {"tier": "general"},
     "parse_results":  {"tier": "general", "escalation": "reasoning"},
+    "analyze_enrich": {"tier": "general"},
+    "plan_prd":       {"tier": "reasoning"},
+    "plan_spec":      {"tier": "reasoning"},
+    "plan_dag":       {"tier": "reasoning"},
 }
 
 
