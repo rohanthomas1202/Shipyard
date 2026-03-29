@@ -38,7 +38,7 @@
 - [x] **Phase 12: Orchestrator + DAG Engine + Contract Foundation** - Core DAG scheduler, dependency enforcement, persistent state, and versioned contract store (completed 2026-03-29)
 - [x] **Phase 13: Analyzer + Planner Agents** - Codebase analysis into module maps, three-layer plan decomposition (PRD -> Tech Spec -> Task DAG) (completed 2026-03-29)
 - [x] **Phase 14: Observability + Contract Maturity** - Structured logging, progress metrics, failure traces, and backward-compatible contract evolution (completed 2026-03-29)
-- [ ] **Phase 15: Execution Engine + CI Validation** - Parallel agent execution with branch-per-task, failure-aware retries, and always-green CI pipeline
+- [x] **Phase 15: Execution Engine + CI Validation** - Parallel agent execution with branch-per-task, failure-aware retries, and always-green CI pipeline (completed 2026-03-29)
 - [ ] **Phase 16: Ship Rebuild Proof** - Full Ship rebuild through the autonomous pipeline, deployed to a public URL
 
 ## Phase Details
@@ -103,10 +103,10 @@ Plans:
   5. Agents are idempotent -- re-running a failed task produces the same result without corrupting shared state
 **Plans**: 4 plans
 Plans:
-- [ ] 15-01-PLAN.md -- BranchManager for git branch isolation (EXEC-01, EXEC-03)
+- [x] 15-01-PLAN.md -- BranchManager for git branch isolation (EXEC-01, EXEC-03)
 - [x] 15-02-PLAN.md -- CI Runner + Failure Classifier (VALD-01, VALD-02)
 - [x] 15-03-PLAN.md -- Context Packs + Ownership Validator (EXEC-02, EXEC-04)
-- [ ] 15-04-PLAN.md -- Scheduler integration with retry engine + CI gate (ORCH-03, ORCH-04, VALD-03)
+- [x] 15-04-PLAN.md -- Scheduler integration with retry engine + CI gate (ORCH-03, ORCH-04, VALD-03)
 
 ### Phase 16: Ship Rebuild Proof
 **Goal**: The autonomous pipeline rebuilds Ship's core functionality end-to-end and deploys it to a public URL, proving the system works on a real 133K LOC codebase
@@ -140,7 +140,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete    | 2026-03-29 |
 | 13. Analyzer + Planner Agents | v1.2 | 4/4 | Complete    | 2026-03-29 |
 | 14. Observability + Contract Maturity | v1.2 | 4/4 | Complete    | 2026-03-29 |
-| 15. Execution Engine + CI Validation | v1.2 | 2/4 | In Progress|  |
+| 15. Execution Engine + CI Validation | v1.2 | 4/4 | Complete   | 2026-03-29 |
 | 16. Ship Rebuild Proof | v1.2 | 0/0 | Not started | - |
 
 ---

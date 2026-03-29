@@ -11,8 +11,8 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 
 - [x] **ORCH-01**: User can submit a codebase path and receive a DAG of executable tasks with dependency ordering
 - [x] **ORCH-02**: Orchestrator enforces DAG dependencies -- no task executes before its prerequisites complete
-- [ ] **ORCH-03**: Orchestrator retries failed tasks with failure-type awareness (A/B/C/D classification)
-- [ ] **ORCH-04**: Orchestrator limits concurrency to 5-15 agents with queue-based scheduling
+- [x] **ORCH-03**: Orchestrator retries failed tasks with failure-type awareness (A/B/C/D classification)
+- [x] **ORCH-04**: Orchestrator limits concurrency to 5-15 agents with queue-based scheduling
 - [x] **ORCH-05**: Orchestrator persists DAG state to enable resume from failure without restart
 
 ### Analysis
@@ -44,7 +44,7 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 
 - [x] **VALD-01**: Type checks, tests, lint, and build verification run after every task completion
 - [x] **VALD-02**: Failure classification routes errors to appropriate handler (auto-fix / spec / debug / replan)
-- [ ] **VALD-03**: CI engine maintains always-working main branch, rejecting unstable merges
+- [x] **VALD-03**: CI engine maintains always-working main branch, rejecting unstable merges
 
 ### Observability
 
@@ -95,8 +95,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ORCH-01 | Phase 12 | Complete |
 | ORCH-02 | Phase 12 | Complete |
-| ORCH-03 | Phase 15 | Pending |
-| ORCH-04 | Phase 15 | Pending |
+| ORCH-03 | Phase 15 | Complete |
+| ORCH-04 | Phase 15 | Complete |
 | ORCH-05 | Phase 12 | Complete |
 | ANLZ-01 | Phase 13 | Complete |
 | ANLZ-02 | Phase 13 | Complete |
@@ -113,7 +113,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXEC-04 | Phase 15 | Complete |
 | VALD-01 | Phase 15 | Complete |
 | VALD-02 | Phase 15 | Complete |
-| VALD-03 | Phase 15 | Pending |
+| VALD-03 | Phase 15 | Complete |
 | OBSV-01 | Phase 14 | Pending |
 | OBSV-02 | Phase 14 | Complete |
 | OBSV-03 | Phase 14 | Complete |
