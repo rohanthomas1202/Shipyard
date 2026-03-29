@@ -297,3 +297,85 @@ async def test_events_emitted():
     assert "task_started" in types
     assert "task_completed" in types
     assert "dag_completed" in types
+
+
+# ---------------------------------------------------------------------------
+# test_scheduler_emits_progress_update
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_scheduler_emits_progress_update():
+    """Scheduler emits progress_update events with all 6 metric fields."""
+    dag = TaskDAG(dag_id="prog")
+    dag.add_task("a", label="A")
+    dag.add_task("b", label="B")
+    run = DAGRun(id="prog", project_id="p1", total_tasks=2)
+
+    emitted: list[Event] = []
+
+    class MockEventBus:
+        async def emit(self, event: Event) -> None:
+            emitted.append(event)
+
+    scheduler = DAGScheduler(
+        dag, run,
+        event_bus=MockEventBus(),
+        task_executor=_mock_executor,
+    )
+    await scheduler.run()
+
+    progress_events = [e for e in emitted if e.type == "progress_update"]
+    assert len(progress_events) >= 1, "Expected at least one progress_update event"
+
+    # Verify all required fields in at least one progress event
+    last_progress = progress_events[-1]
+    required_keys = {
+        "total_tasks", "completed_tasks", "failed_tasks",
+        "running_tasks", "coverage_pct", "ci_pass_rate",
+    }
+    assert required_keys.issubset(set(last_progress.data.keys())), (
+        f"Missing keys: {required_keys - set(last_progress.data.keys())}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# test_progress_metrics_accuracy
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_progress_metrics_accuracy():
+    """3-task DAG where 1 fails: verify final progress_update metrics."""
+    dag = TaskDAG(dag_id="acc")
+    dag.add_task("a", label="A")
+    dag.add_task("b", label="B")
+    dag.add_task("c", label="C")
+    run = DAGRun(id="acc", project_id="p1", total_tasks=3)
+
+    emitted: list[Event] = []
+
+    class MockEventBus:
+        async def emit(self, event: Event) -> None:
+            emitted.append(event)
+
+    async def partial_fail_executor(task_id: str, task: TaskNode) -> dict:
+        if task_id == "b":
+            raise RuntimeError("Task b failed")
+        await asyncio.sleep(0.01)
+        return {"success": True}
+
+    scheduler = DAGScheduler(
+        dag, run,
+        event_bus=MockEventBus(),
+        task_executor=partial_fail_executor,
+    )
+    await scheduler.run()
+
+    progress_events = [e for e in emitted if e.type == "progress_update"]
+    assert len(progress_events) >= 1
+
+    # Last progress event should reflect final state
+    last = progress_events[-1]
+    assert last.data["completed_tasks"] == 2
+    assert last.data["failed_tasks"] == 1
+    assert abs(last.data["coverage_pct"] - 66.7) < 0.1
+    assert abs(last.data["ci_pass_rate"] - 66.7) < 0.1

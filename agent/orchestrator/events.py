@@ -10,6 +10,9 @@ DAG_FAILED = "dag_failed"
 
 CONTRACT_UPDATE_REQUESTED = "contract_update_requested"
 
+PROGRESS_UPDATE = "progress_update"
+DECISION_TRACE = "decision_trace"
+
 TASK_LIFECYCLE_EVENTS = frozenset({
     TASK_STARTED,
     TASK_COMPLETED,
@@ -18,4 +21,6 @@ TASK_LIFECYCLE_EVENTS = frozenset({
     DAG_COMPLETED,
     DAG_FAILED,
     CONTRACT_UPDATE_REQUESTED,
+    PROGRESS_UPDATE,
+    DECISION_TRACE,
 })

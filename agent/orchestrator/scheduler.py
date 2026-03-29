@@ -16,6 +16,7 @@ from agent.orchestrator.events import (
     DAG_STARTED,
     DAG_COMPLETED,
     DAG_FAILED,
+    PROGRESS_UPDATE,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ class DAGScheduler:
 
         # Emit dag_started
         await self._emit(DAG_STARTED)
+        await self._emit_progress()  # initial 0% progress
 
         # Main scheduling loop
         while True:
@@ -140,6 +142,7 @@ class DAGScheduler:
                     )
                 self._completed.add(task_id)
                 await self._emit(TASK_COMPLETED, task_id=task_id, data=result)
+                await self._emit_progress()
 
             except Exception as exc:
                 # Failure
@@ -151,6 +154,7 @@ class DAGScheduler:
                     )
                 self._failed.add(task_id)
                 await self._emit(TASK_FAILED, task_id=task_id, data={"error": error_msg})
+                await self._emit_progress()
                 logger.warning("Task %s failed: %s", task_id, error_msg)
 
             finally:
@@ -160,6 +164,26 @@ class DAGScheduler:
     async def _default_executor(self, task_id: str, task: TaskNode) -> dict:
         """No-op executor used in tests."""
         return {"success": True}
+
+    async def _emit_progress(self) -> None:
+        """Emit progress metrics after task state changes."""
+        total = self._dag_run.total_tasks
+        completed = len(self._completed)
+        failed = len(self._failed)
+        running = len(self._running)
+        coverage = round((completed / total * 100), 1) if total > 0 else 0.0
+        ci_pass_rate = round(
+            (completed / (completed + failed) * 100), 1
+        ) if (completed + failed) > 0 else 100.0
+
+        await self._emit(PROGRESS_UPDATE, data={
+            "total_tasks": total,
+            "completed_tasks": completed,
+            "failed_tasks": failed,
+            "running_tasks": running,
+            "coverage_pct": coverage,
+            "ci_pass_rate": ci_pass_rate,
+        })
 
     async def _emit(
         self,
