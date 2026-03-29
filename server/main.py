@@ -16,6 +16,12 @@ from agent.git import GitManager
 from agent.github import GitHubClient
 from store.models import Project, Run, GitOperation, Event
 from server.websocket import ConnectionManager
+from agent.orchestrator.dag import TaskDAG
+from agent.orchestrator.scheduler import DAGScheduler
+from agent.orchestrator.persistence import DAGPersistence
+from agent.orchestrator.contracts import ContractStore
+from agent.orchestrator.models import DAGRun
+from agent.orchestrator.test_dag_factory import build_test_dag, build_test_task_executor
 
 
 runs: dict[str, dict] = {}
@@ -163,6 +169,11 @@ async def lifespan(app: FastAPI):
     async with AsyncSqliteSaver.from_conn_string("shipyard_checkpoints.db") as checkpointer:
         await checkpointer.setup()
 
+        dag_persistence = DAGPersistence(
+            os.environ.get("SHIPYARD_DB_PATH", "shipyard.db"),
+        )
+        await dag_persistence.initialize()
+
         app.state.store = store
         app.state.router = ModelRouter()
         app.state.graph = build_graph(checkpointer=checkpointer)
@@ -170,6 +181,8 @@ async def lifespan(app: FastAPI):
         app.state.event_bus = event_bus
         app.state.conn_manager = conn_manager
         app.state.approval_manager = approval_manager
+        app.state.dag_persistence = dag_persistence
+        app.state.dag_schedulers: dict[str, asyncio.Task] = {}
 
         heartbeat_task = asyncio.create_task(_heartbeat_loop(conn_manager))
         asyncio.create_task(_resume_interrupted_runs())
@@ -179,6 +192,7 @@ async def lifespan(app: FastAPI):
             await heartbeat_task
         except asyncio.CancelledError:
             pass
+        await dag_persistence.close()
     await event_bus.shutdown()
     await store.close()
 
@@ -974,6 +988,173 @@ async def websocket_endpoint(websocket: WebSocket, project_id: str):
     except Exception:
         logger.exception("WebSocket error for project %s", project_id)
         await conn_manager.disconnect(websocket)
+
+
+# --- DAG Orchestrator Endpoints ---
+
+
+class DAGSubmitRequest(BaseModel):
+    project_id: str
+    codebase_path: str | None = None
+    use_test_dag: bool = True
+    max_concurrency: int = 10
+    tasks: list[dict] | None = None
+    edges: list[dict] | None = None
+
+
+@app.post("/dag/submit")
+async def dag_submit(req: DAGSubmitRequest):
+    """Submit a DAG for execution. Uses hardcoded test DAG or custom definition."""
+    persistence: DAGPersistence = app.state.dag_persistence
+
+    if req.use_test_dag:
+        dag = build_test_dag(req.codebase_path or ".")
+    else:
+        if not req.tasks or not req.edges:
+            raise HTTPException(
+                status_code=400,
+                detail="tasks and edges required when use_test_dag=False",
+            )
+        dag = TaskDAG.from_definition(
+            dag_id="",
+            tasks=[dict(t) for t in req.tasks],
+            edges=[dict(e) for e in req.edges],
+        )
+
+    dag_run = DAGRun(
+        id=dag.dag_id,
+        project_id=req.project_id,
+        status="running",
+        max_concurrency=req.max_concurrency,
+        total_tasks=dag.task_count,
+    )
+    await persistence.save_dag(dag, dag_run)
+
+    # Build contract store and task executor
+    contract_store = ContractStore(req.codebase_path or ".")
+    executor = build_test_task_executor(contract_store)
+
+    scheduler = DAGScheduler(
+        dag,
+        dag_run,
+        persistence=persistence,
+        event_bus=getattr(app.state, "event_bus", None),
+        task_executor=executor,
+        max_concurrency=req.max_concurrency,
+    )
+
+    task = asyncio.create_task(scheduler.run())
+    app.state.dag_schedulers[dag.dag_id] = task
+
+    return {
+        "dag_id": dag.dag_id,
+        "status": "running",
+        "total_tasks": dag.task_count,
+        "codebase_path": req.codebase_path,
+    }
+
+
+@app.get("/dag/{dag_id}")
+async def dag_status(dag_id: str):
+    """Get current DAG execution status with per-task summary."""
+    persistence: DAGPersistence = app.state.dag_persistence
+    result = await persistence.load_dag(dag_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="DAG not found")
+
+    dag, dag_run = result
+
+    # Load per-task statuses from persistence
+    assert persistence._db is not None
+    async with persistence._db.execute(
+        "SELECT task_id, status FROM task_executions WHERE dag_id = ?",
+        (dag_id,),
+    ) as cursor:
+        rows = await cursor.fetchall()
+    status_map = {dict(r)["task_id"]: dict(r)["status"] for r in rows}
+
+    tasks = []
+    for task_id in dag._graph.nodes:
+        task = dag.get_task(task_id)
+        tasks.append({
+            "id": task_id,
+            "label": task.label if task else "",
+            "status": status_map.get(task_id, "pending"),
+        })
+
+    return {
+        "dag_id": dag_id,
+        "status": dag_run.status,
+        "total_tasks": dag_run.total_tasks,
+        "completed_tasks": dag_run.completed_tasks,
+        "failed_tasks": dag_run.failed_tasks,
+        "tasks": tasks,
+    }
+
+
+@app.post("/dag/{dag_id}/resume")
+async def dag_resume(dag_id: str):
+    """Resume a failed or paused DAG from its last persisted state."""
+    persistence: DAGPersistence = app.state.dag_persistence
+    result = await persistence.load_dag(dag_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="DAG not found")
+
+    dag, dag_run = result
+    dag_run.status = "running"
+
+    # Build contract store and task executor
+    contract_store = ContractStore(".")
+    executor = build_test_task_executor(contract_store)
+
+    scheduler = DAGScheduler(
+        dag,
+        dag_run,
+        persistence=persistence,
+        event_bus=getattr(app.state, "event_bus", None),
+        task_executor=executor,
+        max_concurrency=dag_run.max_concurrency,
+    )
+
+    task = asyncio.create_task(scheduler.run())
+    app.state.dag_schedulers[dag_id] = task
+
+    return {"dag_id": dag_id, "status": "running"}
+
+
+@app.get("/dag/{dag_id}/tasks")
+async def dag_tasks(dag_id: str):
+    """Get detailed per-task information for a DAG."""
+    persistence: DAGPersistence = app.state.dag_persistence
+    result = await persistence.load_dag(dag_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="DAG not found")
+
+    dag, dag_run = result
+
+    # Load per-task statuses
+    assert persistence._db is not None
+    async with persistence._db.execute(
+        "SELECT task_id, status FROM task_executions WHERE dag_id = ?",
+        (dag_id,),
+    ) as cursor:
+        rows = await cursor.fetchall()
+    status_map = {dict(r)["task_id"]: dict(r)["status"] for r in rows}
+
+    tasks = []
+    for task_id in dag._graph.nodes:
+        task = dag.get_task(task_id)
+        deps = list(dag._graph.predecessors(task_id))
+        tasks.append({
+            "id": task_id,
+            "label": task.label if task else "",
+            "status": status_map.get(task_id, "pending"),
+            "dependencies": deps,
+            "contract_inputs": task.contract_inputs if task else [],
+            "contract_outputs": task.contract_outputs if task else [],
+        })
+
+    return {"tasks": tasks}
 
 
 # --- Production static file serving ---
