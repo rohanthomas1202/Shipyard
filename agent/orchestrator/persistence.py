@@ -64,6 +64,13 @@ CREATE INDEX IF NOT EXISTS idx_task_exec_status ON task_executions(dag_id, statu
 """
 
 
+_MIGRATION_V2_COLUMNS = [
+    "ALTER TABLE task_executions ADD COLUMN retry_count INTEGER DEFAULT 0",
+    "ALTER TABLE task_executions ADD COLUMN failure_type TEXT",
+    "ALTER TABLE task_executions ADD COLUMN branch_name TEXT",
+]
+
+
 def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
@@ -86,6 +93,13 @@ class DAGPersistence:
         await self._db.execute("PRAGMA synchronous=NORMAL")
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(_DAG_SCHEMA)
+        # Run V2 migration: add retry/CI columns (safe to re-run)
+        for stmt in _MIGRATION_V2_COLUMNS:
+            try:
+                await self._db.execute(stmt)
+            except Exception:
+                # Column already exists -- ignore "duplicate column name" errors
+                pass
         await self._db.commit()
 
     async def close(self) -> None:
@@ -217,38 +231,55 @@ class DAGPersistence:
         status: str,
         error_message: str | None = None,
         result_summary: dict | None = None,
+        retry_count: int | None = None,
+        failure_type: str | None = None,
+        branch_name: str | None = None,
     ) -> None:
         """Update a task execution's status and timestamps."""
         assert self._db is not None
 
         now = datetime.now(timezone.utc).isoformat()
 
+        # Build dynamic SET clause for optional new fields
+        extra_sets: list[str] = []
+        extra_params: list = []
+        if retry_count is not None:
+            extra_sets.append("retry_count = ?")
+            extra_params.append(retry_count)
+        if failure_type is not None:
+            extra_sets.append("failure_type = ?")
+            extra_params.append(failure_type)
+        if branch_name is not None:
+            extra_sets.append("branch_name = ?")
+            extra_params.append(branch_name)
+        extra_clause = (", " + ", ".join(extra_sets)) if extra_sets else ""
+
         # Update started_at when transitioning to running
         if status == "running":
             await self._db.execute(
-                """UPDATE task_executions
-                   SET status = ?, started_at = ?
+                f"""UPDATE task_executions
+                   SET status = ?, started_at = ?{extra_clause}
                    WHERE dag_id = ? AND task_id = ?""",
-                (status, now, dag_id, task_id),
+                (status, now, *extra_params, dag_id, task_id),
             )
         elif status in ("completed", "failed"):
             await self._db.execute(
-                """UPDATE task_executions
+                f"""UPDATE task_executions
                    SET status = ?, completed_at = ?, error_message = ?,
-                       result_summary = ?
+                       result_summary = ?{extra_clause}
                    WHERE dag_id = ? AND task_id = ?""",
                 (
                     status, now, error_message,
                     json.dumps(result_summary) if result_summary else None,
-                    dag_id, task_id,
+                    *extra_params, dag_id, task_id,
                 ),
             )
         else:
             await self._db.execute(
-                """UPDATE task_executions
-                   SET status = ?
+                f"""UPDATE task_executions
+                   SET status = ?{extra_clause}
                    WHERE dag_id = ? AND task_id = ?""",
-                (status, dag_id, task_id),
+                (status, *extra_params, dag_id, task_id),
             )
 
         # Update dag_runs counters

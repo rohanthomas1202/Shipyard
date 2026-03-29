@@ -42,7 +42,13 @@ class TaskExecution(BaseModel):
     completed_at: datetime | None = None
     error_message: str | None = None
     result_summary: dict = Field(default_factory=dict)
+    retry_count: int = 0
+    failure_type: Literal["syntax", "test", "contract", "structural"] | None = None
+    branch_name: str | None = None
     created_at: datetime = Field(default_factory=_now)
+
+
+MAX_TOTAL_RETRIES = 4
 
 
 class DAGRun(BaseModel):
