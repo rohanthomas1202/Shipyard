@@ -36,9 +36,9 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 ### Execution
 
 - [ ] **EXEC-01**: Each agent works in its own git branch and submits changes via PR
-- [ ] **EXEC-02**: Agents receive context packs (<=5 relevant files + contracts + recent changes)
+- [x] **EXEC-02**: Agents receive context packs (<=5 relevant files + contracts + recent changes)
 - [ ] **EXEC-03**: Agents are idempotent -- safe to re-run without corrupting state
-- [ ] **EXEC-04**: Module ownership model prevents conflicting edits across agents
+- [x] **EXEC-04**: Module ownership model prevents conflicting edits across agents
 
 ### Validation
 
@@ -108,9 +108,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CNTR-02 | Phase 12 | Complete |
 | CNTR-03 | Phase 14 | Pending |
 | EXEC-01 | Phase 15 | Pending |
-| EXEC-02 | Phase 15 | Pending |
+| EXEC-02 | Phase 15 | Complete |
 | EXEC-03 | Phase 15 | Pending |
-| EXEC-04 | Phase 15 | Pending |
+| EXEC-04 | Phase 15 | Complete |
 | VALD-01 | Phase 15 | Complete |
 | VALD-02 | Phase 15 | Complete |
 | VALD-03 | Phase 15 | Pending |
