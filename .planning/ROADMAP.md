@@ -35,7 +35,7 @@
 
 **Milestone Goal:** Build a spec-driven, DAG-orchestrated multi-agent system proven by rebuilding Ship (133K LOC) end-to-end.
 
-- [ ] **Phase 12: Orchestrator + DAG Engine + Contract Foundation** - Core DAG scheduler, dependency enforcement, persistent state, and versioned contract store
+- [x] **Phase 12: Orchestrator + DAG Engine + Contract Foundation** - Core DAG scheduler, dependency enforcement, persistent state, and versioned contract store (completed 2026-03-29)
 - [ ] **Phase 13: Analyzer + Planner Agents** - Codebase analysis into module maps, three-layer plan decomposition (PRD -> Tech Spec -> Task DAG)
 - [ ] **Phase 14: Observability + Contract Maturity** - Structured logging, progress metrics, failure traces, and backward-compatible contract evolution
 - [ ] **Phase 15: Execution Engine + CI Validation** - Parallel agent execution with branch-per-task, failure-aware retries, and always-green CI pipeline
@@ -56,7 +56,7 @@
 Plans:
 - [x] 12-01-PLAN.md -- DAG engine (NetworkX wrapper) + ContractStore + Pydantic models
 - [x] 12-02-PLAN.md -- DAGScheduler + SQLite persistence + EventBus extension
-- [ ] 12-03-PLAN.md -- Server endpoints + test DAG factory + integration tests
+- [x] 12-03-PLAN.md -- Server endpoints + test DAG factory + integration tests
 
 ### Phase 13: Analyzer + Planner Agents
 **Goal**: System can analyze a codebase into a module map and decompose it into a validated, executable task DAG with bounded task sizes
@@ -122,7 +122,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 9. File Explorer & Backend APIs | v1.1 | 2/2 | Complete | 2026-03-27 |
 | 10. Code & Diff Viewing | v1.1 | 2/2 | Complete | 2026-03-27 |
 | 11. Agent Activity Stream | v1.1 | 3/3 | Complete | 2026-03-27 |
-| 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 2/3 | In Progress|  |
+| 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete   | 2026-03-29 |
 | 13. Analyzer + Planner Agents | v1.2 | 0/0 | Not started | - |
 | 14. Observability + Contract Maturity | v1.2 | 0/0 | Not started | - |
 | 15. Execution Engine + CI Validation | v1.2 | 0/0 | Not started | - |

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
-status: executing
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-03-29T09:29:50.890Z"
+status: verifying
+stopped_at: Completed 12-03-PLAN.md
+last_updated: "2026-03-29T09:35:31.480Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 Phase: 12 (orchestrator-dag-engine-contract-foundation) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-03-29
 
 Progress: [░░░░░░░░░░] 0%
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 12 P01 | 4min | 2 tasks | 7 files |
 | Phase 12 P02 | 6min | 2 tasks | 7 files |
+| Phase 12 P03 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 12]: Failed predecessors block downstream tasks -- not treated as completed
 - [Phase 12]: load_failed_tasks added to DAGPersistence for crash recovery correctness
 - [Phase 12]: Event-driven scheduling loop via asyncio.Event -- no polling
+- [Phase 12]: DAGPersistence initialized from SHIPYARD_DB_PATH env var for robustness
+- [Phase 12]: Active DAG schedulers tracked in app.state.dag_schedulers dict
+- [Phase 12]: Resume endpoint resets failed tasks to pending before re-running scheduler
 
 ### Pending Todos
 
@@ -80,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T09:29:50.886Z
-Stopped at: Completed 12-02-PLAN.md
+Last session: 2026-03-29T09:35:31.476Z
+Stopped at: Completed 12-03-PLAN.md
 Resume file: None

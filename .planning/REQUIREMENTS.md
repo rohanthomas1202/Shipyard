@@ -30,7 +30,7 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 ### Contracts
 
 - [x] **CNTR-01**: Contract layer stores versioned DB schema, OpenAPI definitions, and shared types
-- [ ] **CNTR-02**: Agents read contracts before execution and write back changes through controlled updates
+- [x] **CNTR-02**: Agents read contracts before execution and write back changes through controlled updates
 - [ ] **CNTR-03**: Contract changes include backward compatibility checks and migration strategy
 
 ### Execution
@@ -105,7 +105,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAN-03 | Phase 13 | Pending |
 | PLAN-04 | Phase 13 | Pending |
 | CNTR-01 | Phase 12 | Complete |
-| CNTR-02 | Phase 12 | Pending |
+| CNTR-02 | Phase 12 | Complete |
 | CNTR-03 | Phase 14 | Pending |
 | EXEC-01 | Phase 15 | Pending |
 | EXEC-02 | Phase 15 | Pending |
