@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
 status: executing
-stopped_at: Completed 15-04-PLAN.md
-last_updated: "2026-03-29T22:16:09.010Z"
+stopped_at: Phase 16 context gathered
+last_updated: "2026-03-29T23:57:51.701Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 5
@@ -134,6 +134,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T22:10:30.616Z
-Stopped at: Completed 15-04-PLAN.md
-Resume file: None
+Last session: 2026-03-29T23:57:51.696Z
+Stopped at: Phase 16 context gathered
+Resume file: .planning/phases/16-ship-rebuild-proof/16-CONTEXT.md
