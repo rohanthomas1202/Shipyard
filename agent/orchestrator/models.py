@@ -56,3 +56,17 @@ class DAGRun(BaseModel):
     created_at: datetime = Field(default_factory=_now)
     started_at: datetime | None = None
     completed_at: datetime | None = None
+
+
+class DecisionTrace(BaseModel):
+    """Captured context when a task fails -- used for debugging and heatmap aggregation."""
+    task_id: str
+    dag_id: str
+    error_message: str
+    error_category: Literal["syntax", "test", "contract", "structural"] = "structural"
+    llm_prompt: str | None = None
+    llm_response: str | None = None
+    files_read: list[str] = Field(default_factory=list)
+    final_state: dict = Field(default_factory=dict)
+    module_name: str | None = None
+    timestamp: datetime = Field(default_factory=_now)

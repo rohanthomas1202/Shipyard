@@ -17,7 +17,9 @@ from agent.orchestrator.events import (
     DAG_COMPLETED,
     DAG_FAILED,
     PROGRESS_UPDATE,
+    DECISION_TRACE,
 )
+from agent.orchestrator.metrics import build_decision_trace
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +149,30 @@ class DAGScheduler:
             except Exception as exc:
                 # Failure
                 error_msg = str(exc)
+
+                # Emit decision trace for debugging
+                trace = build_decision_trace(
+                    task_id=task_id,
+                    dag_id=self._dag_run.id,
+                    error_message=error_msg,
+                )
+                await self._emit(DECISION_TRACE, task_id=task_id, data={
+                    "task_id": trace.task_id,
+                    "dag_id": trace.dag_id,
+                    "error_message": trace.error_message,
+                    "error_category": trace.error_category,
+                    "llm_prompt": trace.llm_prompt,
+                    "llm_response": trace.llm_response,
+                    "files_read": trace.files_read,
+                    "module_name": trace.module_name,
+                    "timestamp": trace.timestamp.isoformat(),
+                })
+
                 if self._persistence is not None:
                     await self._persistence.update_task_status(
                         self._dag_run.id, task_id, "failed",
                         error_message=error_msg,
+                        result_summary={"decision_trace": trace.model_dump(mode="json")},
                     )
                 self._failed.add(task_id)
                 await self._emit(TASK_FAILED, task_id=task_id, data={"error": error_msg})
