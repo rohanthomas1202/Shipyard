@@ -53,6 +53,56 @@ CREATE TABLE IF NOT EXISTS git_operations (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_git_ops_run ON git_operations(run_id);
+
+CREATE TABLE IF NOT EXISTS dag_runs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES projects(id),
+    status TEXT DEFAULT 'pending',
+    max_concurrency INTEGER DEFAULT 10,
+    total_tasks INTEGER DEFAULT 0,
+    completed_tasks INTEGER DEFAULT 0,
+    failed_tasks INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS task_nodes (
+    id TEXT PRIMARY KEY,
+    dag_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    description TEXT,
+    task_type TEXT DEFAULT 'agent',
+    contract_inputs TEXT,
+    contract_outputs TEXT,
+    metadata TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_task_nodes_dag ON task_nodes(dag_id);
+
+CREATE TABLE IF NOT EXISTS task_edges (
+    id TEXT PRIMARY KEY,
+    dag_id TEXT NOT NULL,
+    from_task TEXT NOT NULL REFERENCES task_nodes(id),
+    to_task TEXT NOT NULL REFERENCES task_nodes(id),
+    UNIQUE(dag_id, from_task, to_task)
+);
+CREATE INDEX IF NOT EXISTS idx_task_edges_dag ON task_edges(dag_id);
+
+CREATE TABLE IF NOT EXISTS task_executions (
+    id TEXT PRIMARY KEY,
+    dag_id TEXT NOT NULL,
+    task_id TEXT NOT NULL REFERENCES task_nodes(id),
+    status TEXT DEFAULT 'pending',
+    attempt INTEGER DEFAULT 1,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    error_message TEXT,
+    result_summary TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_task_exec_dag ON task_executions(dag_id);
+CREATE INDEX IF NOT EXISTS idx_task_exec_status ON task_executions(dag_id, status);
 """
 
 

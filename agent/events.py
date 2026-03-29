@@ -58,7 +58,13 @@ class TokenBatcher:
                     logger.exception("TokenBatcher flush failed")
 
 
-_P0_TYPES = frozenset({"approval", "error", "stop", "review", "run_started", "run_completed", "run_failed", "run_waiting", "run_cancelled"})
+_P0_TYPES = frozenset({
+    "approval", "error", "stop", "review",
+    "run_started", "run_completed", "run_failed", "run_waiting", "run_cancelled",
+    "task_started", "task_completed", "task_failed",
+    "dag_started", "dag_completed", "dag_failed",
+    "contract_update_requested",
+})
 _P1_TYPES = frozenset({"stream", "diff", "git"})
 _NO_PERSIST_TYPES = frozenset({"stream"})
 
