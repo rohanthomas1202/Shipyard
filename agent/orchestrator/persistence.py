@@ -301,6 +301,18 @@ class DAGPersistence:
 
         return {dict(row)["task_id"] for row in rows}
 
+    async def load_failed_tasks(self, dag_id: str) -> set[str]:
+        """Return task IDs that have failed for a given DAG."""
+        assert self._db is not None
+
+        async with self._db.execute(
+            "SELECT task_id FROM task_executions WHERE dag_id = ? AND status = 'failed'",
+            (dag_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        return {dict(row)["task_id"] for row in rows}
+
     async def mark_interrupted(self, dag_id: str) -> int:
         """Mark all 'running' task executions as 'failed' (crash recovery).
 
