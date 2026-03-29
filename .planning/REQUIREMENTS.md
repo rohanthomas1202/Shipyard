@@ -10,10 +10,10 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 ### Orchestration
 
 - [x] **ORCH-01**: User can submit a codebase path and receive a DAG of executable tasks with dependency ordering
-- [ ] **ORCH-02**: Orchestrator enforces DAG dependencies -- no task executes before its prerequisites complete
+- [x] **ORCH-02**: Orchestrator enforces DAG dependencies -- no task executes before its prerequisites complete
 - [ ] **ORCH-03**: Orchestrator retries failed tasks with failure-type awareness (A/B/C/D classification)
 - [ ] **ORCH-04**: Orchestrator limits concurrency to 5-15 agents with queue-based scheduling
-- [ ] **ORCH-05**: Orchestrator persists DAG state to enable resume from failure without restart
+- [x] **ORCH-05**: Orchestrator persists DAG state to enable resume from failure without restart
 
 ### Analysis
 
@@ -94,10 +94,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ORCH-01 | Phase 12 | Complete |
-| ORCH-02 | Phase 12 | Pending |
+| ORCH-02 | Phase 12 | Complete |
 | ORCH-03 | Phase 15 | Pending |
 | ORCH-04 | Phase 15 | Pending |
-| ORCH-05 | Phase 12 | Pending |
+| ORCH-05 | Phase 12 | Complete |
 | ANLZ-01 | Phase 13 | Pending |
 | ANLZ-02 | Phase 13 | Pending |
 | PLAN-01 | Phase 13 | Pending |
