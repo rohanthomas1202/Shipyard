@@ -93,7 +93,7 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 
 ## Current State
 
-Phase 13 complete — Analyzer + Planner agents delivered. Analyzer parses codebases into module maps with dependency graphs. Planner decomposes via PRD → Tech Spec → Task DAG pipeline with structural validation and bounded task sizes. 28 new tests, 99 total passing.
+Phase 15 complete — Execution engine with branch isolation, CI gating, and failure-aware retries. BranchManager provides per-task git branches with asyncio.Lock serialization. CIRunner validates via 4-stage pipeline (typecheck/lint/test/build). FailureClassifier routes errors to tiered retry budgets (syntax=3, test=2, contract=1, structural=1). ContextPackAssembler delivers scoped file sets. OwnershipValidator enforces module boundaries via post-hoc diff. 82 Phase 15 tests passing.
 Shipped v1.0 (agent core) and v1.1 (IDE UI rebuild) on 2026-03-27.
 
 ## Context
