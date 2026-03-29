@@ -17,8 +17,8 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 
 ### Analysis
 
-- [ ] **ANLZ-01**: Analyzer agent parses a codebase and outputs a module map with dependency graph
-- [ ] **ANLZ-02**: Analyzer generates per-module summaries for context pack assembly
+- [x] **ANLZ-01**: Analyzer agent parses a codebase and outputs a module map with dependency graph
+- [x] **ANLZ-02**: Analyzer generates per-module summaries for context pack assembly
 
 ### Planning
 
@@ -98,8 +98,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCH-03 | Phase 15 | Pending |
 | ORCH-04 | Phase 15 | Pending |
 | ORCH-05 | Phase 12 | Complete |
-| ANLZ-01 | Phase 13 | Pending |
-| ANLZ-02 | Phase 13 | Pending |
+| ANLZ-01 | Phase 13 | Complete |
+| ANLZ-02 | Phase 13 | Complete |
 | PLAN-01 | Phase 13 | Pending |
 | PLAN-02 | Phase 13 | Pending |
 | PLAN-03 | Phase 13 | Pending |
