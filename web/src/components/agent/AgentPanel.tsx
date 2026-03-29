@@ -5,6 +5,7 @@ import { StepTimeline } from './StepTimeline'
 import { AutonomyToggle } from './AutonomyToggle'
 import { RunSection } from './RunSection'
 import { NewEventBadge } from './NewEventBadge'
+import { ProgressHeader } from './ProgressHeader'
 import type { WSEvent } from '../../types'
 
 export function AgentPanel() {
@@ -111,6 +112,9 @@ export function AgentPanel() {
           <StepTimeline steps={timelineSteps} />
         </div>
       )}
+
+      {/* Progress metrics header */}
+      <ProgressHeader />
 
       {/* Stream body */}
       <div className="flex-1 overflow-hidden relative">

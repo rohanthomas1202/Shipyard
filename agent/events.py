@@ -64,6 +64,8 @@ _P0_TYPES = frozenset({
     "task_started", "task_completed", "task_failed",
     "dag_started", "dag_completed", "dag_failed",
     "contract_update_requested",
+    "progress_update",
+    "decision_trace",
 })
 _P1_TYPES = frozenset({"stream", "diff", "git"})
 _NO_PERSIST_TYPES = frozenset({"stream"})
