@@ -14,6 +14,7 @@ dependencies = [
     "aiosqlite>=0.20.0",
     "ast-grep-py>=0.30.0",
     "pygls>=2.0.0",
+    "networkx>=3.6,<4.0",
 ]
 
 [project.optional-dependencies]
