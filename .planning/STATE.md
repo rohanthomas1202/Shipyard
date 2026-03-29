@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
-status: ready_to_plan
-stopped_at: Roadmap created
-last_updated: "2026-03-28"
-last_activity: 2026-03-28
+status: planning
+stopped_at: Phase 12 context gathered
+last_updated: "2026-03-29T08:21:00.556Z"
+last_activity: 2026-03-28 -- Roadmap created for v1.2
 progress:
   total_phases: 5
   completed_phases: 0
@@ -74,6 +74,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28
-Stopped at: Roadmap created for v1.2 milestone
-Resume file: None
+Last session: 2026-03-29T08:21:00.548Z
+Stopped at: Phase 12 context gathered
+Resume file: .planning/phases/12-orchestrator-dag-engine-contract-foundation/12-CONTEXT.md
