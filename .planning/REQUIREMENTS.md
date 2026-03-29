@@ -9,7 +9,7 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 
 ### Orchestration
 
-- [ ] **ORCH-01**: User can submit a codebase path and receive a DAG of executable tasks with dependency ordering
+- [x] **ORCH-01**: User can submit a codebase path and receive a DAG of executable tasks with dependency ordering
 - [ ] **ORCH-02**: Orchestrator enforces DAG dependencies -- no task executes before its prerequisites complete
 - [ ] **ORCH-03**: Orchestrator retries failed tasks with failure-type awareness (A/B/C/D classification)
 - [ ] **ORCH-04**: Orchestrator limits concurrency to 5-15 agents with queue-based scheduling
@@ -29,7 +29,7 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 
 ### Contracts
 
-- [ ] **CNTR-01**: Contract layer stores versioned DB schema, OpenAPI definitions, and shared types
+- [x] **CNTR-01**: Contract layer stores versioned DB schema, OpenAPI definitions, and shared types
 - [ ] **CNTR-02**: Agents read contracts before execution and write back changes through controlled updates
 - [ ] **CNTR-03**: Contract changes include backward compatibility checks and migration strategy
 
@@ -93,7 +93,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORCH-01 | Phase 12 | Pending |
+| ORCH-01 | Phase 12 | Complete |
 | ORCH-02 | Phase 12 | Pending |
 | ORCH-03 | Phase 15 | Pending |
 | ORCH-04 | Phase 15 | Pending |
@@ -104,7 +104,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAN-02 | Phase 13 | Pending |
 | PLAN-03 | Phase 13 | Pending |
 | PLAN-04 | Phase 13 | Pending |
-| CNTR-01 | Phase 12 | Pending |
+| CNTR-01 | Phase 12 | Complete |
 | CNTR-02 | Phase 12 | Pending |
 | CNTR-03 | Phase 14 | Pending |
 | EXEC-01 | Phase 15 | Pending |
