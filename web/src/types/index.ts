@@ -93,3 +93,24 @@ export interface FileContent {
   binary: boolean
   path: string
 }
+
+export interface ProgressMetrics {
+  totalTasks: number
+  completedTasks: number
+  failedTasks: number
+  runningTasks: number
+  coveragePct: number
+  ciPassRate: number
+}
+
+export interface DecisionTraceData {
+  taskId: string
+  dagId: string
+  errorMessage: string
+  errorCategory: 'syntax' | 'test' | 'contract' | 'structural'
+  llmPrompt: string | null
+  llmResponse: string | null
+  filesRead: string[]
+  moduleName: string | null
+  timestamp: string
+}

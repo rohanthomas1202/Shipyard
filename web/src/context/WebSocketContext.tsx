@@ -79,6 +79,8 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
       // Handle run lifecycle events
       if (event.type === 'run_completed' || event.type === 'run_failed' || event.type === 'run_cancelled') {
         store.setActiveNode(null)
+        store.clearProgressMetrics()
+        store.clearDecisionTraces()
 
         // Auto-open diff tabs for completed runs with edits
         if (event.type === 'run_completed' && event.run_id) {
@@ -93,6 +95,33 @@ export function WebSocketProvider({ projectId, children }: { projectId: string |
             }).catch(() => {})
           })
         }
+      }
+
+      // Progress metrics from DAG scheduler
+      if (event.type === 'progress_update') {
+        store.setProgressMetrics({
+          totalTasks: Number(event.data.total_tasks),
+          completedTasks: Number(event.data.completed_tasks),
+          failedTasks: Number(event.data.failed_tasks),
+          runningTasks: Number(event.data.running_tasks),
+          coveragePct: Number(event.data.coverage_pct),
+          ciPassRate: Number(event.data.ci_pass_rate),
+        })
+      }
+
+      // Decision trace from failed tasks
+      if (event.type === 'decision_trace') {
+        store.appendDecisionTrace({
+          taskId: String(event.data.task_id ?? ''),
+          dagId: String(event.data.dag_id ?? ''),
+          errorMessage: String(event.data.error_message ?? ''),
+          errorCategory: (event.data.error_category as 'syntax' | 'test' | 'contract' | 'structural') ?? 'structural',
+          llmPrompt: event.data.llm_prompt ? String(event.data.llm_prompt) : null,
+          llmResponse: event.data.llm_response ? String(event.data.llm_response) : null,
+          filesRead: Array.isArray(event.data.files_read) ? event.data.files_read.map(String) : [],
+          moduleName: event.data.module_name ? String(event.data.module_name) : null,
+          timestamp: String(event.data.timestamp ?? new Date().toISOString()),
+        })
       }
 
       // All non-snapshot events go to agentEvents

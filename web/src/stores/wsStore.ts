@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { WSEvent, RunSnapshot } from '../types'
+import type { WSEvent, RunSnapshot, ProgressMetrics, DecisionTraceData } from '../types'
 
 interface WSStore {
   // Connection
@@ -28,6 +28,16 @@ interface WSStore {
   // Last sequence per run
   lastSeq: Record<string, number>
   setLastSeq: (runId: string, seq: number) => void
+
+  // Progress metrics from DAG scheduler
+  progressMetrics: ProgressMetrics | null
+  setProgressMetrics: (m: ProgressMetrics) => void
+  clearProgressMetrics: () => void
+
+  // Decision traces from failed tasks
+  decisionTraces: DecisionTraceData[]
+  appendDecisionTrace: (t: DecisionTraceData) => void
+  clearDecisionTraces: () => void
 
   // Active node and plan step tracking
   activeNode: string | null
@@ -64,6 +74,14 @@ export const useWsStore = create<WSStore>()((set) => ({
   setLastSeq: (runId, seq) => set((s) => ({
     lastSeq: { ...s.lastSeq, [runId]: seq },
   })),
+
+  progressMetrics: null,
+  setProgressMetrics: (m) => set({ progressMetrics: m }),
+  clearProgressMetrics: () => set({ progressMetrics: null }),
+
+  decisionTraces: [],
+  appendDecisionTrace: (t) => set((s) => ({ decisionTraces: [...s.decisionTraces, t] })),
+  clearDecisionTraces: () => set({ decisionTraces: [] }),
 
   activeNode: null,
   setActiveNode: (node) => set({ activeNode: node }),
