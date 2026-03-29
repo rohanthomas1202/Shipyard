@@ -22,9 +22,9 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 
 ### Planning
 
-- [ ] **PLAN-01**: Planner generates PRDs from module map, decomposing into buildable units
-- [ ] **PLAN-02**: Planner generates Tech Specs from PRDs (API contracts, DB schema, component interfaces)
-- [ ] **PLAN-03**: Planner generates a Task DAG from Tech Specs with <=300 LOC / <=3 files per task
+- [x] **PLAN-01**: Planner generates PRDs from module map, decomposing into buildable units
+- [x] **PLAN-02**: Planner generates Tech Specs from PRDs (API contracts, DB schema, component interfaces)
+- [x] **PLAN-03**: Planner generates a Task DAG from Tech Specs with <=300 LOC / <=3 files per task
 - [ ] **PLAN-04**: Plan validation phase detects dependency cycles, validates contract completeness, estimates cost before execution
 
 ### Contracts
@@ -100,9 +100,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCH-05 | Phase 12 | Complete |
 | ANLZ-01 | Phase 13 | Complete |
 | ANLZ-02 | Phase 13 | Complete |
-| PLAN-01 | Phase 13 | Pending |
-| PLAN-02 | Phase 13 | Pending |
-| PLAN-03 | Phase 13 | Pending |
+| PLAN-01 | Phase 13 | Complete |
+| PLAN-02 | Phase 13 | Complete |
+| PLAN-03 | Phase 13 | Complete |
 | PLAN-04 | Phase 13 | Pending |
 | CNTR-01 | Phase 12 | Complete |
 | CNTR-02 | Phase 12 | Complete |

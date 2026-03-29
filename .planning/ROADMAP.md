@@ -36,7 +36,7 @@
 **Milestone Goal:** Build a spec-driven, DAG-orchestrated multi-agent system proven by rebuilding Ship (133K LOC) end-to-end.
 
 - [x] **Phase 12: Orchestrator + DAG Engine + Contract Foundation** - Core DAG scheduler, dependency enforcement, persistent state, and versioned contract store (completed 2026-03-29)
-- [ ] **Phase 13: Analyzer + Planner Agents** - Codebase analysis into module maps, three-layer plan decomposition (PRD -> Tech Spec -> Task DAG)
+- [x] **Phase 13: Analyzer + Planner Agents** - Codebase analysis into module maps, three-layer plan decomposition (PRD -> Tech Spec -> Task DAG) (completed 2026-03-29)
 - [ ] **Phase 14: Observability + Contract Maturity** - Structured logging, progress metrics, failure traces, and backward-compatible contract evolution
 - [ ] **Phase 15: Execution Engine + CI Validation** - Parallel agent execution with branch-per-task, failure-aware retries, and always-green CI pipeline
 - [ ] **Phase 16: Ship Rebuild Proof** - Full Ship rebuild through the autonomous pipeline, deployed to a public URL
@@ -72,7 +72,7 @@ Plans:
 - [x] 13-01-PLAN.md -- Ship fixture + Analyzer models + import parser + directory scanner
 - [x] 13-02-PLAN.md -- Planner v2 models + validation gates + prompts
 - [x] 13-03-PLAN.md -- Analyzer enrichment + top-level orchestrator + routing policy
-- [ ] 13-04-PLAN.md -- Planner pipeline (PRD + Tech Spec + Task DAG) + integration tests
+- [x] 13-04-PLAN.md -- Planner pipeline (PRD + Tech Spec + Task DAG) + integration tests
 
 ### Phase 14: Observability + Contract Maturity
 **Goal**: Operators can monitor multi-agent execution with structured logs and metrics, and contracts evolve safely with backward compatibility checks
@@ -128,7 +128,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 10. Code & Diff Viewing | v1.1 | 2/2 | Complete | 2026-03-27 |
 | 11. Agent Activity Stream | v1.1 | 3/3 | Complete | 2026-03-27 |
 | 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete    | 2026-03-29 |
-| 13. Analyzer + Planner Agents | v1.2 | 3/4 | In Progress|  |
+| 13. Analyzer + Planner Agents | v1.2 | 4/4 | Complete   | 2026-03-29 |
 | 14. Observability + Contract Maturity | v1.2 | 0/0 | Not started | - |
 | 15. Execution Engine + CI Validation | v1.2 | 0/0 | Not started | - |
 | 16. Ship Rebuild Proof | v1.2 | 0/0 | Not started | - |
