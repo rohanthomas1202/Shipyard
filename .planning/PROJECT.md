@@ -93,6 +93,7 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 
 ## Current State
 
+Phase 12 complete — DAG-based orchestrator foundation delivered with task engine, contract store, async scheduler, SQLite persistence, and FastAPI endpoints. 42 tests passing.
 Shipped v1.0 (agent core) and v1.1 (IDE UI rebuild) on 2026-03-27.
 
 ## Context
@@ -152,4 +153,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after v1.2 milestone start — Autonomous Software Factory*
+*Last updated: 2026-03-29 after Phase 12 completion — orchestrator DAG engine + contract foundation*
