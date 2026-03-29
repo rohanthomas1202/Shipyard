@@ -50,9 +50,11 @@ Exceptions: Progress bar height is 6px (1.5 * xs) — matches the existing `h-1.
 | Role | Size | Weight | Line Height | Font |
 |------|------|--------|-------------|------|
 | Body | 14px | 400 (regular) | 1.5 | Plus Jakarta Sans |
-| Label / Metric value | 12px | 500 (medium) | 1.4 | Plus Jakarta Sans |
+| Label / Metric label | 12px | 400 (regular) | 1.4 | Plus Jakarta Sans |
 | Heading (metric section) | 13px | 600 (semibold) | 1.3 | Plus Jakarta Sans |
 | Metric number (large) | 20px | 600 (semibold) | 1.2 | Plus Jakarta Sans |
+
+**Weights:** 2 weights only — 400 (regular) for body text and labels, 600 (semibold) for headings and metric numbers. Weight 500 is not used.
 
 **Source:** Existing AgentPanel uses `text-xs` (12px) for status labels and `text-sm` (14px) for headings. This phase follows that established scale. Metric numbers at 20px provide visual hierarchy for at-a-glance readability.
 
@@ -112,7 +114,7 @@ Coverage: 72%    CI Pass: 91%    Failed: 2    Running: 3
 - Width: `${metrics.coveragePct}%`
 
 **Metric item styling:**
-- Label: 12px, `--color-muted`, weight 500
+- Label: 12px, `--color-muted`, weight 400
 - Value: 20px, `--color-text`, weight 600
 - Failed count value uses `--color-error` when > 0
 - CI pass rate value uses `--color-success` when >= 80%, `--color-warning` when 50-79%, `--color-error` when < 50%
@@ -133,7 +135,7 @@ Coverage: 72%    CI Pass: 91%    Failed: 2    Running: 3
 **Table styling:**
 - Container: `glass-panel` class, `p-4`, `rounded-lg`
 - Header row: 12px, `--color-muted`, weight 600, uppercase
-- Cell: 32px x 32px min, centered number, 12px weight 500
+- Cell: 32px x 32px min, centered number, 12px weight 400
 - Cell background: color-coded by failure count (see heatmap cell colors above)
 - Module name column: 14px, `--color-text`, weight 400, left-aligned, max-width 200px, truncate with ellipsis
 - Grid lines: `1px solid var(--color-border)`
@@ -149,7 +151,7 @@ Coverage: 72%    CI Pass: 91%    Failed: 2    Running: 3
 **Expanded state:** Shows full error message, files read list, and truncated LLM context (prompt first 200 chars, response first 200 chars).
 
 **Error category badge:**
-- Pill shape: `px-2 py-0.5 rounded-full text-xs font-medium`
+- Pill shape: `px-2 py-0.5 rounded-full text-xs font-semibold`
 - Colors by category:
   - syntax: `rgba(239, 68, 68, 0.15)` bg, `--color-error` text
   - test: `rgba(245, 158, 11, 0.15)` bg, `--color-warning` text
@@ -161,7 +163,7 @@ Coverage: 72%    CI Pass: 91%    Failed: 2    Running: 3
 - Font: JetBrains Mono, 12px, `--color-muted`
 - Border-left: `2px solid var(--color-border)`
 - Padding: 8px 12px
-- Label above: "LLM Prompt" / "LLM Response" in 11px uppercase `--color-muted`
+- Label above: "LLM Prompt" / "LLM Response" in 12px uppercase `--color-muted`
 
 **Files read list:**
 - Bullet list, 12px, `--color-text`, `font-code`
@@ -180,7 +182,7 @@ Coverage: 72%    CI Pass: 91%    Failed: 2    Running: 3
 | FailureHeatmap empty heading | "No failure data" |
 | FailureHeatmap empty body | "Failure patterns will appear here after tasks execute." |
 | DecisionTrace collapsed (no trace) | "No decision trace available" |
-| Error: WebSocket disconnected (metrics stale) | "Metrics may be stale -- reconnecting..." (displayed as subtitle under progress bar in `--color-warning`, 11px) |
+| Error: WebSocket disconnected (metrics stale) | "Metrics may be stale -- reconnecting..." (displayed as subtitle under progress bar in `--color-warning`, 12px) |
 | Breaking change detected | "Breaking change detected" (badge text, `--color-warning` background pill) |
 | Compatible change | "Compatible" (badge text, `--color-success` background pill) |
 
