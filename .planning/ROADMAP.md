@@ -52,7 +52,11 @@
   2. Orchestrator refuses to start a task whose prerequisites have not completed
   3. Orchestrator can be killed and restarted, resuming the DAG from exactly where it left off
   4. Agents can read versioned contracts (DB schema, OpenAPI, shared types) before executing a task and write back updates through the contract store
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 12-01-PLAN.md -- DAG engine (NetworkX wrapper) + ContractStore + Pydantic models
+- [ ] 12-02-PLAN.md -- DAGScheduler + SQLite persistence + EventBus extension
+- [ ] 12-03-PLAN.md -- Server endpoints + test DAG factory + integration tests
 
 ### Phase 13: Analyzer + Planner Agents
 **Goal**: System can analyze a codebase into a module map and decompose it into a validated, executable task DAG with bounded task sizes
@@ -118,7 +122,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 9. File Explorer & Backend APIs | v1.1 | 2/2 | Complete | 2026-03-27 |
 | 10. Code & Diff Viewing | v1.1 | 2/2 | Complete | 2026-03-27 |
 | 11. Agent Activity Stream | v1.1 | 3/3 | Complete | 2026-03-27 |
-| 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 0/0 | Not started | - |
+| 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 0/3 | Planning | - |
 | 13. Analyzer + Planner Agents | v1.2 | 0/0 | Not started | - |
 | 14. Observability + Contract Maturity | v1.2 | 0/0 | Not started | - |
 | 15. Execution Engine + CI Validation | v1.2 | 0/0 | Not started | - |
