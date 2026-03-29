@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
 status: executing
-stopped_at: Completed 15-03-PLAN.md
+stopped_at: Completed Wave 1 (15-01, 15-02, 15-03)
 last_updated: "2026-03-29T22:03:24.163Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 11
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 
 Phase: 15 (execution-engine-ci-validation) — EXECUTING
 Plan: 3 of 4
-Status: Ready to execute
+Status: Wave 1 complete, executing Wave 2
 Last activity: 2026-03-29
 
 Progress: [░░░░░░░░░░] 0%
@@ -69,6 +69,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 13 P03 | 2min | 2 tasks | 4 files |
 | Phase 13 P04 | 3min | 2 tasks | 5 files |
 | Phase 14 P03 | 3min | 3 tasks | 8 files |
+| Phase 15 P01 | 3min | 1 tasks | 3 files |
 | Phase 15 P02 | 2min | 2 tasks | 4 files |
 | Phase 15 P03 | 2min | 2 tasks | 4 files |
 
@@ -114,6 +115,7 @@ Recent decisions affecting current work:
 - [Phase 13]: Copy task dicts before TaskDAG.from_definition() to avoid pop('id') mutation
 - [Phase 14]: LLM context truncated to 2000 chars in build_decision_trace to prevent event bloat
 - [Phase 14]: FailureHeatmap placed below activity stream in bordered section per UI-SPEC
+- [Phase 15]: asyncio.Lock on all public methods prevents concurrent git race conditions
 - [Phase 15]: Dataclasses for CI pipeline models -- lightweight, no Pydantic overhead for internal structures
 - [Phase 15]: Regex-first classification with LLM fallback preserves speed for known error patterns
 - [Phase 15]: Regex-based Python import parser as lightweight stand-in for full analyzer module map
@@ -130,5 +132,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-29T22:03:24.160Z
-Stopped at: Completed 15-03-PLAN.md
+Stopped at: Completed Wave 1 (15-01, 15-02, 15-03)
 Resume file: None
