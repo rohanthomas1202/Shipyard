@@ -67,7 +67,12 @@ Plans:
   2. Planner produces PRDs, Tech Specs, and a Task DAG from the module map without manual intervention
   3. Every task in the generated DAG is bounded to 300 LOC and 3 files or fewer
   4. Plan validation detects and rejects dependency cycles, flags incomplete contracts, and reports estimated cost before execution begins
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 13-01-PLAN.md -- Ship fixture + Analyzer models + import parser + directory scanner
+- [ ] 13-02-PLAN.md -- Planner v2 models + validation gates + prompts
+- [ ] 13-03-PLAN.md -- Analyzer enrichment + top-level orchestrator + routing policy
+- [ ] 13-04-PLAN.md -- Planner pipeline (PRD + Tech Spec + Task DAG) + integration tests
 
 ### Phase 14: Observability + Contract Maturity
 **Goal**: Operators can monitor multi-agent execution with structured logs and metrics, and contracts evolve safely with backward compatibility checks
@@ -123,7 +128,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 10. Code & Diff Viewing | v1.1 | 2/2 | Complete | 2026-03-27 |
 | 11. Agent Activity Stream | v1.1 | 3/3 | Complete | 2026-03-27 |
 | 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete    | 2026-03-29 |
-| 13. Analyzer + Planner Agents | v1.2 | 0/0 | Not started | - |
+| 13. Analyzer + Planner Agents | v1.2 | 0/4 | Not started | - |
 | 14. Observability + Contract Maturity | v1.2 | 0/0 | Not started | - |
 | 15. Execution Engine + CI Validation | v1.2 | 0/0 | Not started | - |
 | 16. Ship Rebuild Proof | v1.2 | 0/0 | Not started | - |
