@@ -104,8 +104,8 @@ Plans:
 **Plans**: 4 plans
 Plans:
 - [ ] 15-01-PLAN.md -- BranchManager for git branch isolation (EXEC-01, EXEC-03)
-- [ ] 15-02-PLAN.md -- CI Runner + Failure Classifier (VALD-01, VALD-02)
-- [ ] 15-03-PLAN.md -- Context Packs + Ownership Validator (EXEC-02, EXEC-04)
+- [x] 15-02-PLAN.md -- CI Runner + Failure Classifier (VALD-01, VALD-02)
+- [x] 15-03-PLAN.md -- Context Packs + Ownership Validator (EXEC-02, EXEC-04)
 - [ ] 15-04-PLAN.md -- Scheduler integration with retry engine + CI gate (ORCH-03, ORCH-04, VALD-03)
 
 ### Phase 16: Ship Rebuild Proof
@@ -140,7 +140,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete    | 2026-03-29 |
 | 13. Analyzer + Planner Agents | v1.2 | 4/4 | Complete    | 2026-03-29 |
 | 14. Observability + Contract Maturity | v1.2 | 4/4 | Complete    | 2026-03-29 |
-| 15. Execution Engine + CI Validation | v1.2 | 0/4 | In progress | - |
+| 15. Execution Engine + CI Validation | v1.2 | 2/4 | In Progress|  |
 | 16. Ship Rebuild Proof | v1.2 | 0/0 | Not started | - |
 
 ---

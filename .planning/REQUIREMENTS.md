@@ -42,8 +42,8 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 
 ### Validation
 
-- [ ] **VALD-01**: Type checks, tests, lint, and build verification run after every task completion
-- [ ] **VALD-02**: Failure classification routes errors to appropriate handler (auto-fix / spec / debug / replan)
+- [x] **VALD-01**: Type checks, tests, lint, and build verification run after every task completion
+- [x] **VALD-02**: Failure classification routes errors to appropriate handler (auto-fix / spec / debug / replan)
 - [ ] **VALD-03**: CI engine maintains always-working main branch, rejecting unstable merges
 
 ### Observability
@@ -111,8 +111,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXEC-02 | Phase 15 | Pending |
 | EXEC-03 | Phase 15 | Pending |
 | EXEC-04 | Phase 15 | Pending |
-| VALD-01 | Phase 15 | Pending |
-| VALD-02 | Phase 15 | Pending |
+| VALD-01 | Phase 15 | Complete |
+| VALD-02 | Phase 15 | Complete |
 | VALD-03 | Phase 15 | Pending |
 | OBSV-01 | Phase 14 | Pending |
 | OBSV-02 | Phase 14 | Complete |

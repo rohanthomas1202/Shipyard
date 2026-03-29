@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
 status: executing
-stopped_at: Phase 15 context gathered
-last_updated: "2026-03-29T21:29:23.308Z"
+stopped_at: Completed 15-03-PLAN.md
+last_updated: "2026-03-29T22:03:24.163Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 15
+  completed_plans: 13
   percent: 0
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 14 — observability-contract-maturity
+**Current focus:** Phase 15 — execution-engine-ci-validation
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 15 (execution-engine-ci-validation) — EXECUTING
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-03-29
 
@@ -69,6 +69,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 13 P03 | 2min | 2 tasks | 4 files |
 | Phase 13 P04 | 3min | 2 tasks | 5 files |
 | Phase 14 P03 | 3min | 3 tasks | 8 files |
+| Phase 15 P02 | 2min | 2 tasks | 4 files |
+| Phase 15 P03 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -112,6 +114,10 @@ Recent decisions affecting current work:
 - [Phase 13]: Copy task dicts before TaskDAG.from_definition() to avoid pop('id') mutation
 - [Phase 14]: LLM context truncated to 2000 chars in build_decision_trace to prevent event bloat
 - [Phase 14]: FailureHeatmap placed below activity stream in bordered section per UI-SPEC
+- [Phase 15]: Dataclasses for CI pipeline models -- lightweight, no Pydantic overhead for internal structures
+- [Phase 15]: Regex-first classification with LLM fallback preserves speed for known error patterns
+- [Phase 15]: Regex-based Python import parser as lightweight stand-in for full analyzer module map
+- [Phase 15]: Ownership uses last-writer-wins for shared files; unowned files allowed through validation
 
 ### Pending Todos
 
@@ -123,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T21:29:23.304Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-execution-engine-ci-validation/15-CONTEXT.md
+Last session: 2026-03-29T22:03:24.160Z
+Stopped at: Completed 15-03-PLAN.md
+Resume file: None
