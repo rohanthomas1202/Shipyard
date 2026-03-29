@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
 status: executing
-stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-03-29T20:17:58.193Z"
-last_activity: 2026-03-29 -- Phase 14 execution started
+stopped_at: Completed 14-03-PLAN.md
+last_updated: "2026-03-29T21:10:33.152Z"
+last_activity: 2026-03-29
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 7
+  completed_plans: 11
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 ## Current Position
 
 Phase: 14 (observability-contract-maturity) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 14
-Last activity: 2026-03-29 -- Phase 14 execution started
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-03-29
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -68,6 +68,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 13 P02 | 3min | 2 tasks | 8 files |
 | Phase 13 P03 | 2min | 2 tasks | 4 files |
 | Phase 13 P04 | 3min | 2 tasks | 5 files |
+| Phase 14 P03 | 3min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,8 @@ Recent decisions affecting current work:
 - [Phase 13]: TOKENS_PER_LOC = 50 for cost estimation; ValidationError as Pydantic BaseModel with severity
 - [Phase 13]: LLM enrichment uses router.call_structured with analyze_enrich task type -- no direct OpenAI calls
 - [Phase 13]: Copy task dicts before TaskDAG.from_definition() to avoid pop('id') mutation
+- [Phase 14]: LLM context truncated to 2000 chars in build_decision_trace to prevent event bloat
+- [Phase 14]: FailureHeatmap placed below activity stream in bordered section per UI-SPEC
 
 ### Pending Todos
 
@@ -120,6 +123,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T20:01:01.824Z
-Stopped at: Phase 14 UI-SPEC approved
-Resume file: .planning/phases/14-observability-contract-maturity/14-UI-SPEC.md
+Last session: 2026-03-29T21:10:33.149Z
+Stopped at: Completed 14-03-PLAN.md
+Resume file: None

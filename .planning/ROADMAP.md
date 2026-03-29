@@ -37,7 +37,7 @@
 
 - [x] **Phase 12: Orchestrator + DAG Engine + Contract Foundation** - Core DAG scheduler, dependency enforcement, persistent state, and versioned contract store (completed 2026-03-29)
 - [x] **Phase 13: Analyzer + Planner Agents** - Codebase analysis into module maps, three-layer plan decomposition (PRD -> Tech Spec -> Task DAG) (completed 2026-03-29)
-- [ ] **Phase 14: Observability + Contract Maturity** - Structured logging, progress metrics, failure traces, and backward-compatible contract evolution
+- [x] **Phase 14: Observability + Contract Maturity** - Structured logging, progress metrics, failure traces, and backward-compatible contract evolution (completed 2026-03-29)
 - [ ] **Phase 15: Execution Engine + CI Validation** - Parallel agent execution with branch-per-task, failure-aware retries, and always-green CI pipeline
 - [ ] **Phase 16: Ship Rebuild Proof** - Full Ship rebuild through the autonomous pipeline, deployed to a public URL
 
@@ -85,10 +85,10 @@ Plans:
   4. Contract changes are validated for backward compatibility, and breaking changes require an explicit migration strategy
 **Plans**: 4 plans
 Plans:
-- [ ] 14-01-PLAN.md -- TraceLogger unified format extension (OBSV-01)
+- [x] 14-01-PLAN.md -- TraceLogger unified format extension (OBSV-01)
 - [x] 14-02-PLAN.md -- Progress metrics WebSocket + ProgressHeader UI (OBSV-02)
-- [ ] 14-03-PLAN.md -- Decision traces + failure heatmap (OBSV-03)
-- [ ] 14-04-PLAN.md -- Contract backward compatibility + migration docs (CNTR-03)
+- [x] 14-03-PLAN.md -- Decision traces + failure heatmap (OBSV-03)
+- [x] 14-04-PLAN.md -- Contract backward compatibility + migration docs (CNTR-03)
 **UI hint**: yes
 
 ### Phase 15: Execution Engine + CI Validation
@@ -134,7 +134,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 11. Agent Activity Stream | v1.1 | 3/3 | Complete | 2026-03-27 |
 | 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete    | 2026-03-29 |
 | 13. Analyzer + Planner Agents | v1.2 | 4/4 | Complete    | 2026-03-29 |
-| 14. Observability + Contract Maturity | v1.2 | 1/4 | In Progress|  |
+| 14. Observability + Contract Maturity | v1.2 | 4/4 | Complete   | 2026-03-29 |
 | 15. Execution Engine + CI Validation | v1.2 | 0/0 | Not started | - |
 | 16. Ship Rebuild Proof | v1.2 | 0/0 | Not started | - |
 
