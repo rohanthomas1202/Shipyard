@@ -94,6 +94,107 @@ async def test_share_trace_link_exception():
 # /status endpoint trace_url test
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# TraceLogger unified format tests
+# ---------------------------------------------------------------------------
+
+class TestTraceLoggerUnifiedFormat:
+    """Tests for TraceLogger unified structured logging format."""
+
+    def test_log_backward_compat(self, tmp_path):
+        """log(node, data) without new params produces entry with defaults."""
+        from agent.tracing import TraceLogger
+        t = TraceLogger(trace_dir=str(tmp_path))
+        t.start_run("run-1")
+        t.log("my_node", {"k": "v"})
+        entries = t.get_entries()
+        assert len(entries) == 1
+        e = entries[0]
+        assert e["agent_id"] is None
+        assert e["task_id"] is None
+        assert e["severity"] == "info"
+        assert e["node"] == "my_node"
+        assert e["data"] == {"k": "v"}
+
+    def test_log_unified_format(self, tmp_path):
+        """log() with all new kwargs produces entry with correct values."""
+        from agent.tracing import TraceLogger
+        t = TraceLogger(trace_dir=str(tmp_path))
+        t.start_run("run-1")
+        t.log("editor", {"action": "edit"}, agent_id="agent-1", task_id="task-1", severity="error")
+        entries = t.get_entries()
+        assert len(entries) == 1
+        e = entries[0]
+        assert e["agent_id"] == "agent-1"
+        assert e["task_id"] == "task-1"
+        assert e["severity"] == "error"
+
+    def test_log_default_severity(self, tmp_path):
+        """Default severity is 'info'."""
+        from agent.tracing import TraceLogger
+        t = TraceLogger(trace_dir=str(tmp_path))
+        t.start_run("run-1")
+        t.log("node", {})
+        assert t.get_entries()[0]["severity"] == "info"
+
+    def test_filter_by_severity(self, tmp_path):
+        """filter_entries(severity='error') returns only error-level entries."""
+        from agent.tracing import TraceLogger
+        t = TraceLogger(trace_dir=str(tmp_path))
+        t.start_run("run-1")
+        t.log("n1", {}, severity="info")
+        t.log("n2", {}, severity="error")
+        t.log("n3", {}, severity="warn")
+        result = t.filter_entries(severity="error")
+        assert len(result) == 1
+        assert result[0]["node"] == "n2"
+
+    def test_filter_by_agent_id(self, tmp_path):
+        """filter_entries(agent_id='agent-1') returns only that agent's entries."""
+        from agent.tracing import TraceLogger
+        t = TraceLogger(trace_dir=str(tmp_path))
+        t.start_run("run-1")
+        t.log("n1", {}, agent_id="agent-1")
+        t.log("n2", {}, agent_id="agent-2")
+        t.log("n3", {}, agent_id="agent-1")
+        result = t.filter_entries(agent_id="agent-1")
+        assert len(result) == 2
+        assert all(e["agent_id"] == "agent-1" for e in result)
+
+    def test_filter_combined(self, tmp_path):
+        """filter_entries with task_id + severity returns intersection."""
+        from agent.tracing import TraceLogger
+        t = TraceLogger(trace_dir=str(tmp_path))
+        t.start_run("run-1")
+        t.log("n1", {}, task_id="task-1", severity="warn")
+        t.log("n2", {}, task_id="task-1", severity="error")
+        t.log("n3", {}, task_id="task-2", severity="warn")
+        result = t.filter_entries(task_id="task-1", severity="warn")
+        assert len(result) == 1
+        assert result[0]["node"] == "n1"
+
+    def test_save_includes_unified_fields(self, tmp_path):
+        """save() writes JSON with agent_id, task_id, severity in each entry."""
+        import json
+        from agent.tracing import TraceLogger
+        t = TraceLogger(trace_dir=str(tmp_path))
+        t.start_run("run-save-test")
+        t.log("editor", {"x": 1}, agent_id="a1", task_id="t1", severity="warn")
+        t.save()
+        path = tmp_path / "run-save-test.json"
+        assert path.exists()
+        data = json.loads(path.read_text())
+        assert len(data) == 1
+        e = data[0]
+        assert e["agent_id"] == "a1"
+        assert e["task_id"] == "t1"
+        assert e["severity"] == "warn"
+
+
+# ---------------------------------------------------------------------------
+# /status endpoint trace_url test
+# ---------------------------------------------------------------------------
+
 @pytest.mark.asyncio
 async def test_status_includes_trace_url(client):
     """GET /status/{run_id} includes trace_url field."""

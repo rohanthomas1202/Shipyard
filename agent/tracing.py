@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from typing import Literal
 
 from langsmith import Client
 
@@ -64,11 +65,22 @@ class TraceLogger:
         self.run_id = run_id
         self.entries = []
 
-    def log(self, node: str, data: dict):
+    def log(
+        self,
+        node: str,
+        data: dict,
+        *,
+        agent_id: str | None = None,
+        task_id: str | None = None,
+        severity: Literal["debug", "info", "warn", "error"] = "info",
+    ):
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "run_id": self.run_id,
             "node": node,
+            "agent_id": agent_id,
+            "task_id": task_id,
+            "severity": severity,
             "data": data,
         }
         self.entries.append(entry)
@@ -82,3 +94,20 @@ class TraceLogger:
 
     def get_entries(self) -> list[dict]:
         return self.entries
+
+    def filter_entries(
+        self,
+        *,
+        agent_id: str | None = None,
+        task_id: str | None = None,
+        severity: str | None = None,
+    ) -> list[dict]:
+        """Filter trace entries by agent, task, and/or severity."""
+        result = self.entries
+        if agent_id is not None:
+            result = [e for e in result if e.get("agent_id") == agent_id]
+        if task_id is not None:
+            result = [e for e in result if e.get("task_id") == task_id]
+        if severity is not None:
+            result = [e for e in result if e.get("severity") == severity]
+        return result
