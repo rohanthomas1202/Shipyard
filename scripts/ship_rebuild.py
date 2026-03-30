@@ -31,7 +31,7 @@ from agent.orchestrator.ship_ci import SHIP_CI_PIPELINE
 from agent.router import ModelRouter
 from agent.tools.shell import run_command_async
 
-DEFAULT_SHIP_REPO = "https://github.com/gauntlet-ai/ship.git"
+DEFAULT_SHIP_REPO = "https://github.com/US-Department-of-the-Treasury/ship.git"
 DEFAULT_OUTPUT_DIR = "/tmp/ship-rebuilt"
 DEFAULT_CLONE_DIR = "/tmp/ship-source"
 DEFAULT_MAX_CONCURRENCY = 10
