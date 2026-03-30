@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
 status: executing
-stopped_at: Phase 16 context gathered
-last_updated: "2026-03-29T23:57:51.701Z"
-last_activity: 2026-03-29
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-03-30T00:40:30.380Z"
+last_activity: 2026-03-30
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 19
+  completed_plans: 17
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 15 — execution-engine-ci-validation
+**Current focus:** Phase 16 — ship-rebuild-proof
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
+Phase: 16 (ship-rebuild-proof) — EXECUTING
+Plan: 3 of 4
 Status: Ready to execute
-Last activity: 2026-03-29
+Last activity: 2026-03-30
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -73,6 +73,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 15 P02 | 2min | 2 tasks | 4 files |
 | Phase 15 P03 | 2min | 2 tasks | 4 files |
 | Phase 15 P04 | 4min | 2 tasks | 5 files |
+| Phase 16 P01 | 2min | 2 tasks | 3 files |
+| Phase 16 P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -123,6 +125,10 @@ Recent decisions affecting current work:
 - [Phase 15]: Ownership uses last-writer-wins for shared files; unowned files allowed through validation
 - [Phase 15]: Requeue mechanism uses main loop re-detection for simplicity
 - [Phase 15]: Context packs delivered via task.metadata dict to avoid changing executor Callable signature
+- [Phase 16]: Graph compiled once in build_agent_executor closure, reused across all task invocations
+- [Phase 16]: Ship CI pipeline uses npx for tsc/eslint; separate from Shipyard DEFAULT_PIPELINE
+- [Phase 16]: Mandatory npm install after rebuild with no escape hatch (per Pitfall 7)
+- [Phase 16]: sys.path insert for project root so deploy script runs standalone without PYTHONPATH
 
 ### Pending Todos
 
@@ -134,6 +140,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T23:57:51.696Z
-Stopped at: Phase 16 context gathered
-Resume file: .planning/phases/16-ship-rebuild-proof/16-CONTEXT.md
+Last session: 2026-03-30T00:40:30.377Z
+Stopped at: Completed 16-02-PLAN.md
+Resume file: None
