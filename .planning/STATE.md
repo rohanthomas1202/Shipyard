@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
-status: executing
-stopped_at: Completed 16-03-PLAN.md
-last_updated: "2026-03-30T00:44:27.372Z"
+status: verifying
+stopped_at: "Blocked at 16-04 Task 2: Railway trial expired"
+last_updated: "2026-03-30T01:13:55.606Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 19
-  completed_plans: 18
+  completed_plans: 19
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 
 Phase: 16 (ship-rebuild-proof) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-03-30
 
 Progress: [░░░░░░░░░░] 0%
@@ -76,6 +76,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 16 P01 | 2min | 2 tasks | 3 files |
 | Phase 16 P02 | 2min | 2 tasks | 2 files |
 | Phase 16 P03 | 2min | 3 tasks | 4 files |
+| Phase 16 P04 | 21min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -133,6 +134,8 @@ Recent decisions affecting current work:
 - [Phase 16]: httpx async client for API smoke tests matches existing test patterns
 - [Phase 16]: Playwright serial mode for auth-dependent E2E test ordering
 - [Phase 16]: Structural import validation (not live execution) for pipeline integration tests
+- [Phase 16]: Seed output directory from source -- agent edits files, cannot generate from scratch
+- [Phase 16]: Relaxed planner validation (strict=False) for monorepo cross-package references
 
 ### Pending Todos
 
@@ -140,10 +143,12 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+yet.
+
+- Railway trial expired -- Tasks 2-4 of Plan 16-04 blocked on billing upgrade
 
 ## Session Continuity
 
-Last session: 2026-03-30T00:44:27.368Z
-Stopped at: Completed 16-03-PLAN.md
+Last session: 2026-03-30T01:13:55.603Z
+Stopped at: Blocked at 16-04 Task 2: Railway trial expired
 Resume file: None
