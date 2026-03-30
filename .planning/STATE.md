@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Ship Rebuild End-to-End
 status: planning
-stopped_at: ""
+stopped_at: "v1.3 roadmap created, ready to plan Phase 17"
 last_updated: "2026-03-30"
 last_activity: 2026-03-30
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,63 +20,37 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-03-30)
 
-**Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Defining requirements for v1.3
+**Core value:** The agent must reliably complete real coding tasks end-to-end -- from instruction to committed code -- without producing broken edits, missing errors, or crashing mid-run.
+**Current focus:** Phase 17 - Persistent Loop Infrastructure
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-30 — Milestone v1.3 started
+Phase: 17 of 21 (Persistent Loop Infrastructure) -- first phase of v1.3
+Plan: 0 of 0 in current phase (plans not yet created)
+Status: Ready to plan
+Last activity: 2026-03-30 -- v1.3 roadmap created (Phases 17-21)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [████████████████░░░░] 80% (16 of 21 phases complete across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
+- Total plans completed: 49 (v1.0: 21, v1.1: 9, v1.2: 19)
+- Average duration: ~3.5 min/plan
+- Total execution time: ~7 days (2026-03-23 to 2026-03-30)
 
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+**By Milestone:**
 
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
+| Milestone | Phases | Plans | Shipped |
+|-----------|--------|-------|---------|
+| v1.0 | 7 | 21 | 2026-03-27 |
+| v1.1 | 4 | 9 | 2026-03-27 |
+| v1.2 | 5 | 19 | 2026-03-30 |
+| v1.3 | 5 | TBD | In progress |
 
 **Recent Trend:**
-
-- Last 5 plans: -
-- Trend: -
-
-*Updated after each plan completion*
-| Phase 01 P02 | 2m | 2 tasks | 5 files |
-| Phase 01 P01 | 3min | 1 tasks | 3 files |
-| Phase 01 P03 | 6min | 3 tasks | 6 files |
-| Phase 02 P01 | 2min | 2 tasks | 5 files |
-| Phase 02 P03 | 2min | 2 tasks | 4 files |
-| Phase 03 P02 | 3min | 1 tasks | 3 files |
-| Phase 03 P01 | 4min | 2 tasks | 6 files |
-| Phase 03 P03 | 3min | 2 tasks | 5 files |
-| Phase 04 P01 | 5min | 2 tasks | 6 files |
-| Phase 04 P02 | 4min | 1 tasks | 2 files |
-| Phase 04 P03 | 9min | 1 tasks | 3 files |
-| Phase 05 P01 | 3min | 2 tasks | 4 files |
-| Phase 05 P02 | 5min | 2 tasks | 3 files |
-| Phase 13 P02 | 3min | 2 tasks | 8 files |
-| Phase 13 P03 | 2min | 2 tasks | 4 files |
-| Phase 13 P04 | 3min | 2 tasks | 5 files |
-| Phase 14 P03 | 3min | 3 tasks | 8 files |
-| Phase 15 P01 | 3min | 1 tasks | 3 files |
-| Phase 15 P02 | 2min | 2 tasks | 4 files |
-| Phase 15 P03 | 2min | 2 tasks | 4 files |
-| Phase 15 P04 | 4min | 2 tasks | 5 files |
-| Phase 16 P01 | 2min | 2 tasks | 3 files |
-| Phase 16 P02 | 2min | 2 tasks | 2 files |
-| Phase 16 P03 | 2min | 3 tasks | 4 files |
-| Phase 16 P04 | 21min | 1 tasks | 3 files |
+- v1.2 phases averaged ~4 plans each
+- Trend: Stable
 
 ## Accumulated Context
 
@@ -85,57 +59,11 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [Roadmap]: Edit reliability before all other work — edits are the P0 failure mode and have no prerequisites
-- [Roadmap]: Research recommends tenacity, structlog, langgraph-checkpoint-sqlite as targeted additions
-- [Roadmap]: Ship rebuild is the integration test that validates all hardening work
-- [Phase 01]: Used OpenAI non-beta parse() path for structured output (SDK 2.x recommended)
-- [Phase 01]: FUZZY_THRESHOLD=0.85 for anchor matching balances recall vs false-positive risk
-- [Phase 01]: 16-char SHA-256 truncated digest sufficient for file freshness detection
-- [Phase 01]: String concatenation for error feedback to avoid brace injection from code content
-- [Phase 01]: Reasoning tier (o3) falls back to router.call() since structured outputs may not be supported
-- [Phase 01]: last_validation_error as separate dict field preserves error_state string backward compat
-- [Phase 02]: Used sh -c wrapper for executor_node to preserve shell features while being async
-- [Phase 02]: Duplicated _normalize_error in graph.py and validator.py to avoid circular imports
-- [Phase 02]: Circuit breaker threshold=2 identical errors before skip/advance
-- [Phase 03]: content_hash as 16-char truncated SHA-256 in file_ops.py
-- [Phase 03]: Skeleton threshold at 200 lines, head=30 tail=10 for reader_node
-- [Phase 03]: LLMResult/LLMStructuredResult are dataclasses not Pydantic — lightweight, no validation overhead
-- [Phase 03]: Router external API unchanged (str/BaseModel) — no breaking changes to node callers
-- [Phase 03]: system_prompt_reserve default 500 tokens for ContextAssembler budget accuracy
-- [Phase 03]: Assembler build() output replaces inline context; template wraps it
-- [Phase 04]: AsyncSqliteSaver uses separate shipyard_checkpoints.db to isolate checkpoint data
-- [Phase 04]: Resume passes None to ainvoke() to trigger LangGraph checkpoint resume
-- [Phase 04]: trace_url added to Run model proactively to prevent schema conflicts with Plan 03
-- [Phase 04]: Rollback all edits with snapshots on cancel -- no partial writes survive cancellation
-- [Phase 04]: Store asyncio.Task in runs dict for all execution paths for cancellation control
-- [Phase 04]: Tag-based LangSmith trace lookup using run_id for Shipyard-to-trace correlation
-- [Phase 04]: asyncio.run_in_executor for sync LangSmith SDK calls to avoid blocking event loop
-- [Phase 05]: Refactor node does not exist -- skipped plan modifications for nonexistent file
-- [Phase 05]: Editor context uses list-join pattern matching planner_node for consistency
-- [Phase 05]: Separate auto_git node from plan-step git_ops to avoid cycle; both call git_ops_node but wire differently
-- [Phase 05]: project_id resolved from config first, state context fallback in git_ops_node
-- [Phase 13]: Analyzer/orchestrator stubs created for parallel execution compatibility
-- [Phase 13]: TOKENS_PER_LOC = 50 for cost estimation; ValidationError as Pydantic BaseModel with severity
-- [Phase 13]: LLM enrichment uses router.call_structured with analyze_enrich task type -- no direct OpenAI calls
-- [Phase 13]: Copy task dicts before TaskDAG.from_definition() to avoid pop('id') mutation
-- [Phase 14]: LLM context truncated to 2000 chars in build_decision_trace to prevent event bloat
-- [Phase 14]: FailureHeatmap placed below activity stream in bordered section per UI-SPEC
-- [Phase 15]: asyncio.Lock on all public methods prevents concurrent git race conditions
-- [Phase 15]: Dataclasses for CI pipeline models -- lightweight, no Pydantic overhead for internal structures
-- [Phase 15]: Regex-first classification with LLM fallback preserves speed for known error patterns
-- [Phase 15]: Regex-based Python import parser as lightweight stand-in for full analyzer module map
-- [Phase 15]: Ownership uses last-writer-wins for shared files; unowned files allowed through validation
-- [Phase 15]: Requeue mechanism uses main loop re-detection for simplicity
-- [Phase 15]: Context packs delivered via task.metadata dict to avoid changing executor Callable signature
-- [Phase 16]: Graph compiled once in build_agent_executor closure, reused across all task invocations
-- [Phase 16]: Ship CI pipeline uses npx for tsc/eslint; separate from Shipyard DEFAULT_PIPELINE
-- [Phase 16]: Mandatory npm install after rebuild with no escape hatch (per Pitfall 7)
-- [Phase 16]: sys.path insert for project root so deploy script runs standalone without PYTHONPATH
-- [Phase 16]: httpx async client for API smoke tests matches existing test patterns
-- [Phase 16]: Playwright serial mode for auth-dependent E2E test ordering
-- [Phase 16]: Structural import validation (not live execution) for pipeline integration tests
-- [Phase 16]: Seed output directory from source -- agent edits files, cannot generate from scratch
-- [Phase 16]: Relaxed planner validation (strict=False) for monorepo cross-package references
+- [v1.2 Phase 16]: Seed output directory from source -- agent edits files, cannot generate from scratch (v1.3 removes this)
+- [v1.3 research]: Zero new dependencies -- all features map to existing infrastructure
+- [v1.3 research]: From-scratch generation highest risk -- validate early (Phase 18)
+- [v1.3 research]: Intervention schema must be locked before first rebuild run (Phase 19 before 20)
+- [v1.3 roadmap]: Merged rebuild execution into Phase 20 with comparative analysis -- rebuild produces the data analysis consumes
 
 ### Pending Todos
 
@@ -143,12 +71,12 @@ None yet.
 
 ### Blockers/Concerns
 
-yet.
-
-- Railway trial expired -- Tasks 2-4 of Plan 16-04 blocked on billing upgrade
+- Railway billing externally blocked -- verify early, execute last (Phase 21)
+- From-scratch generation (Phase 18) is least-charted territory -- creator_node vs extended editor decision needed
+- ContractStore investigation needed before Phase 18 planning
 
 ## Session Continuity
 
-Last session: 2026-03-30T01:13:55.603Z
-Stopped at: Blocked at 16-04 Task 2: Railway trial expired
+Last session: 2026-03-30
+Stopped at: v1.3 roadmap created, ready to plan Phase 17
 Resume file: None

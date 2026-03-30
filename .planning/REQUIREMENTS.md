@@ -133,30 +133,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOOP-01 | — | Pending |
-| LOOP-02 | — | Pending |
-| LOOP-03 | — | Pending |
-| LOOP-04 | — | Pending |
-| LOOP-05 | — | Pending |
-| GEN-01 | — | Pending |
-| GEN-02 | — | Pending |
-| GEN-03 | — | Pending |
-| GEN-04 | — | Pending |
-| GEN-05 | — | Pending |
-| INTV-01 | — | Pending |
-| INTV-02 | — | Pending |
-| INTV-03 | — | Pending |
-| ANAL-01 | — | Pending |
-| ANAL-02 | — | Pending |
-| ANAL-03 | — | Pending |
-| DEPL-01 | — | Pending |
-| DEPL-02 | — | Pending |
+| LOOP-01 | Phase 17 | Pending |
+| LOOP-02 | Phase 17 | Pending |
+| LOOP-03 | Phase 17 | Pending |
+| LOOP-04 | Phase 17 | Pending |
+| LOOP-05 | Phase 17 | Pending |
+| GEN-01 | Phase 18 | Pending |
+| GEN-02 | Phase 18 | Pending |
+| GEN-03 | Phase 18 | Pending |
+| GEN-04 | Phase 18 | Pending |
+| GEN-05 | Phase 18 | Pending |
+| INTV-01 | Phase 19 | Pending |
+| INTV-02 | Phase 19 | Pending |
+| INTV-03 | Phase 19 | Pending |
+| ANAL-01 | Phase 20 | Pending |
+| ANAL-02 | Phase 20 | Pending |
+| ANAL-03 | Phase 20 | Pending |
+| DEPL-01 | Phase 21 | Pending |
+| DEPL-02 | Phase 21 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 (pending roadmap creation)
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 after initial definition*
+*Last updated: 2026-03-30 after roadmap creation*

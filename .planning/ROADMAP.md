@@ -4,7 +4,8 @@
 
 - ✅ **v1.0 Agent Core MVP** -- Phases 1-7 (shipped 2026-03-27)
 - ✅ **v1.1 IDE UI Rebuild** -- Phases 8-11 (shipped 2026-03-27)
-- 🚧 **v1.2 Autonomous Software Factory** -- Phases 12-16 (in progress)
+- ✅ **v1.2 Autonomous Software Factory** -- Phases 12-16 (shipped 2026-03-30)
+- 🚧 **v1.3 Ship Rebuild End-to-End** -- Phases 17-21 (in progress)
 
 ## Phases
 
@@ -31,103 +32,88 @@
 
 </details>
 
-### 🚧 v1.2 Autonomous Software Factory (In Progress)
+<details>
+<summary>✅ v1.2 Autonomous Software Factory (Phases 12-16) -- SHIPPED 2026-03-30</summary>
 
-**Milestone Goal:** Build a spec-driven, DAG-orchestrated multi-agent system proven by rebuilding Ship (133K LOC) end-to-end.
+- [x] Phase 12: Orchestrator + DAG Engine + Contract Foundation (3/3 plans) -- completed 2026-03-29
+- [x] Phase 13: Analyzer + Planner Agents (4/4 plans) -- completed 2026-03-29
+- [x] Phase 14: Observability + Contract Maturity (4/4 plans) -- completed 2026-03-29
+- [x] Phase 15: Execution Engine + CI Validation (4/4 plans) -- completed 2026-03-29
+- [x] Phase 16: Ship Rebuild Proof (4/4 plans) -- completed 2026-03-30
 
-- [x] **Phase 12: Orchestrator + DAG Engine + Contract Foundation** - Core DAG scheduler, dependency enforcement, persistent state, and versioned contract store (completed 2026-03-29)
-- [x] **Phase 13: Analyzer + Planner Agents** - Codebase analysis into module maps, three-layer plan decomposition (PRD -> Tech Spec -> Task DAG) (completed 2026-03-29)
-- [x] **Phase 14: Observability + Contract Maturity** - Structured logging, progress metrics, failure traces, and backward-compatible contract evolution (completed 2026-03-29)
-- [x] **Phase 15: Execution Engine + CI Validation** - Parallel agent execution with branch-per-task, failure-aware retries, and always-green CI pipeline (completed 2026-03-29)
-- [x] **Phase 16: Ship Rebuild Proof** - Full Ship rebuild through the autonomous pipeline, deployed to a public URL (completed 2026-03-30)
+</details>
+
+### 🚧 v1.3 Ship Rebuild End-to-End (In Progress)
+
+**Milestone Goal:** Prove the autonomous pipeline by rebuilding Ship entirely from scratch -- no seeding -- with a persistent agent loop, live UI integration, structured intervention logging, and a 7-section comparative analysis.
+
+- [ ] **Phase 17: Persistent Loop Infrastructure** - POST /rebuild endpoint, EventBus streaming, frontend progress panel, and CLI compatibility
+- [ ] **Phase 18: From-Scratch Code Generation** - Create-step kind in planner, file creation tool, DAG dependency ordering, seeding removal
+- [ ] **Phase 19: Intervention Logging** - Structured intervention schema, SQLite persistence, REST endpoints for capture and retrieval
+- [ ] **Phase 20: Rebuild Execution & Comparative Analysis** - End-to-end Ship rebuild from scratch, metric collection, and 7-section analysis generation
+- [ ] **Phase 21: Railway Deployment** - Billing resolution and rebuilt Ship deployed to public URL
 
 ## Phase Details
 
-### Phase 12: Orchestrator + DAG Engine + Contract Foundation
-**Goal**: User can submit a codebase and get a dependency-ordered DAG of tasks, with persistent state and a versioned contract layer agents can read from
-**Depends on**: Phase 11 (v1.1 complete)
-**Requirements**: ORCH-01, ORCH-02, ORCH-05, CNTR-01, CNTR-02
+### Phase 17: Persistent Loop Infrastructure
+**Goal**: Users can trigger, observe, and cancel a Ship rebuild from both the frontend and CLI, with real-time progress streaming through the existing WebSocket infrastructure
+**Depends on**: Phase 16 (v1.2 complete)
+**Requirements**: LOOP-01, LOOP-02, LOOP-03, LOOP-04, LOOP-05
 **Success Criteria** (what must be TRUE):
-  1. User submits a codebase path and receives a DAG visualization showing tasks with dependency edges
-  2. Orchestrator refuses to start a task whose prerequisites have not completed
-  3. Orchestrator can be killed and restarted, resuming the DAG from exactly where it left off
-  4. Agents can read versioned contracts (DB schema, OpenAPI, shared types) before executing a task and write back updates through the contract store
-**Plans**: 3 plans
-Plans:
-- [x] 12-01-PLAN.md -- DAG engine (NetworkX wrapper) + ContractStore + Pydantic models
-- [x] 12-02-PLAN.md -- DAGScheduler + SQLite persistence + EventBus extension
-- [x] 12-03-PLAN.md -- Server endpoints + test DAG factory + integration tests
-
-### Phase 13: Analyzer + Planner Agents
-**Goal**: System can analyze a codebase into a module map and decompose it into a validated, executable task DAG with bounded task sizes
-**Depends on**: Phase 12
-**Requirements**: ANLZ-01, ANLZ-02, PLAN-01, PLAN-02, PLAN-03, PLAN-04
-**Success Criteria** (what must be TRUE):
-  1. Analyzer outputs a module map with dependency graph from a real codebase (Ship repo)
-  2. Planner produces PRDs, Tech Specs, and a Task DAG from the module map without manual intervention
-  3. Every task in the generated DAG is bounded to 300 LOC and 3 files or fewer
-  4. Plan validation detects and rejects dependency cycles, flags incomplete contracts, and reports estimated cost before execution begins
-**Plans**: 4 plans
-Plans:
-- [x] 13-01-PLAN.md -- Ship fixture + Analyzer models + import parser + directory scanner
-- [x] 13-02-PLAN.md -- Planner v2 models + validation gates + prompts
-- [x] 13-03-PLAN.md -- Analyzer enrichment + top-level orchestrator + routing policy
-- [x] 13-04-PLAN.md -- Planner pipeline (PRD + Tech Spec + Task DAG) + integration tests
-
-### Phase 14: Observability + Contract Maturity
-**Goal**: Operators can monitor multi-agent execution with structured logs and metrics, and contracts evolve safely with backward compatibility checks
-**Depends on**: Phase 13
-**Requirements**: CNTR-03, OBSV-01, OBSV-02, OBSV-03
-**Success Criteria** (what must be TRUE):
-  1. All agents emit structured logs in a unified format that can be filtered by agent, task, and severity
-  2. A progress view shows tasks completed, DAG coverage percentage, and CI pass rate in real time
-  3. Failed tasks have decision traces showing what the agent attempted and a failure heatmap identifies recurring problem areas
-  4. Contract changes are validated for backward compatibility, and breaking changes require an explicit migration strategy
-**Plans**: 4 plans
-Plans:
-- [x] 14-01-PLAN.md -- TraceLogger unified format extension (OBSV-01)
-- [x] 14-02-PLAN.md -- Progress metrics WebSocket + ProgressHeader UI (OBSV-02)
-- [x] 14-03-PLAN.md -- Decision traces + failure heatmap (OBSV-03)
-- [x] 14-04-PLAN.md -- Contract backward compatibility + migration docs (CNTR-03)
+  1. User clicks "Rebuild Ship" in the frontend and sees a live progress panel updating through pipeline stages (cloning, analyzing, planning, executing, building)
+  2. POST /rebuild returns a run_id and the rebuild executes as a managed background task that survives WebSocket disconnects
+  3. Rebuild progress events stream through the existing WebSocket connection -- no polling, no separate endpoint
+  4. User can run the rebuild CLI script standalone in a terminal and see equivalent progress output
+  5. A crashed or cancelled rebuild updates its status to failed/cancelled in the database -- no silent deaths
+**Plans**: TBD
 **UI hint**: yes
 
-### Phase 15: Execution Engine + CI Validation
-**Goal**: Multiple agents execute tasks in parallel with branch isolation, ownership enforcement, failure-aware retries, and a CI gate that keeps main always green
-**Depends on**: Phase 14
-**Requirements**: ORCH-03, ORCH-04, EXEC-01, EXEC-02, EXEC-03, EXEC-04, VALD-01, VALD-02, VALD-03
+### Phase 18: From-Scratch Code Generation
+**Goal**: The agent generates every file in a codebase from PRD context alone -- no seeding, no copying from source -- with dependency-aware ordering so foundational files exist before their consumers
+**Depends on**: Phase 17
+**Requirements**: GEN-01, GEN-02, GEN-03, GEN-04, GEN-05
 **Success Criteria** (what must be TRUE):
-  1. 5-15 agents execute concurrently, each on its own git branch, submitting PRs for completed work
-  2. Agents receive scoped context packs (relevant files + contracts + recent changes) and never touch files outside their module ownership
-  3. Failed tasks are classified (syntax/contract/test/structural) and routed to the correct retry strategy -- auto-fix, spec update, debug, or replan
-  4. CI runs type checks, tests, lint, and build after every task; unstable PRs are rejected and main branch stays green
-  5. Agents are idempotent -- re-running a failed task produces the same result without corrupting shared state
-**Plans**: 4 plans
-Plans:
-- [x] 15-01-PLAN.md -- BranchManager for git branch isolation (EXEC-01, EXEC-03)
-- [x] 15-02-PLAN.md -- CI Runner + Failure Classifier (VALD-01, VALD-02)
-- [x] 15-03-PLAN.md -- Context Packs + Ownership Validator (EXEC-02, EXEC-04)
-- [x] 15-04-PLAN.md -- Scheduler integration with retry engine + CI gate (ORCH-03, ORCH-04, VALD-03)
+  1. Planner emits "create" tasks (distinct from "edit") for files that do not yet exist, with explicit file paths and PRD context
+  2. Executor generates complete file contents from PRD descriptions using a write_file/create_file tool -- not anchor-based editing
+  3. DAG execution creates foundational files (types, models, shared utilities) before files that import them
+  4. The _seed_output_from_source() workaround is removed and the rebuild starts from an empty output directory
+  5. Validator does not fail on import errors for files that are scheduled to be created later in the DAG
+**Plans**: TBD
 
-### Phase 16: Ship Rebuild Proof
-**Goal**: The autonomous pipeline rebuilds Ship's core functionality end-to-end and deploys it to a public URL, proving the system works on a real 133K LOC codebase
-**Depends on**: Phase 15
-**Requirements**: SHIP-01, SHIP-02, SHIP-03, SHIP-04, SHIP-05
+### Phase 19: Intervention Logging
+**Goal**: Every human intervention during a rebuild is captured with structured context so it can be analyzed after the run completes
+**Depends on**: Phase 18
+**Requirements**: INTV-01, INTV-02, INTV-03
 **Success Criteria** (what must be TRUE):
-  1. All 47 Ship API routes respond with correct status codes and expected payloads
-  2. Core user workflows (signup, login, create/edit/delete content, navigation) pass E2E tests
-  3. Ship UI renders in a browser without critical JavaScript errors or blank screens
-  4. Rebuilt Ship is accessible at a public URL via automated deployment scripts
-**Plans**: 4 plans
-Plans:
-- [x] 16-01-PLAN.md -- Orchestration script + agent executor + Ship CI pipeline (SHIP-01, SHIP-03)
-- [x] 16-02-PLAN.md -- Railway deployment script + env template (SHIP-04, SHIP-05)
-- [x] 16-03-PLAN.md -- API smoke tests + Playwright E2E + pipeline integration tests (SHIP-01, SHIP-02, SHIP-03, SHIP-04, SHIP-05)
-- [x] 16-04-PLAN.md -- Execute rebuild + deploy + validate against live URL (SHIP-01, SHIP-02, SHIP-03, SHIP-04, SHIP-05)
+  1. User can log an intervention with structured fields (timestamp, phase, task, type, description, resolution) via a REST endpoint or frontend control
+  2. Intervention records persist in SQLite and are retrievable via GET endpoint filtered by rebuild run
+  3. Each intervention captures enough context (current DAG state, affected files, agent state) to understand why human help was needed
+**Plans**: TBD
+
+### Phase 20: Rebuild Execution & Comparative Analysis
+**Goal**: The autonomous pipeline rebuilds Ship from scratch end-to-end, collects structured metrics, and generates a 7-section comparative analysis with evidence-backed claims
+**Depends on**: Phase 19
+**Requirements**: ANAL-01, ANAL-02, ANAL-03
+**Success Criteria** (what must be TRUE):
+  1. Ship rebuild completes from an empty repo using PRD-driven generation with all interventions logged
+  2. Agent generates all 7 analysis sections (Executive Summary, Architectural Comparison, Performance Benchmarks, Shortcomings, Advances, Trade-off Analysis, If You Built It Again) with no empty sections
+  3. Analysis cites pre-computed metrics (task success rate, build pass/fail, intervention count, token usage, time per phase) -- not hallucinated numbers from raw logs
+  4. CODEAGENT.md comparative analysis section is populated with specific claims and evidence from the actual rebuild
+**Plans**: TBD
+
+### Phase 21: Railway Deployment
+**Goal**: The rebuilt Ship app is deployed to a public URL where anyone can access it, proving the autonomous pipeline produces deployable software
+**Depends on**: Phase 20
+**Requirements**: DEPL-01, DEPL-02
+**Success Criteria** (what must be TRUE):
+  1. Railway account billing is resolved and the account is active (verified before deployment attempt)
+  2. Rebuilt Ship is accessible at a public Railway URL with working routes and no critical errors
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
+Phases execute in numeric order: 17 -> 18 -> 19 -> 20 -> 21
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -142,11 +128,16 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 9. File Explorer & Backend APIs | v1.1 | 2/2 | Complete | 2026-03-27 |
 | 10. Code & Diff Viewing | v1.1 | 2/2 | Complete | 2026-03-27 |
 | 11. Agent Activity Stream | v1.1 | 3/3 | Complete | 2026-03-27 |
-| 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete    | 2026-03-29 |
-| 13. Analyzer + Planner Agents | v1.2 | 4/4 | Complete    | 2026-03-29 |
-| 14. Observability + Contract Maturity | v1.2 | 4/4 | Complete    | 2026-03-29 |
-| 15. Execution Engine + CI Validation | v1.2 | 4/4 | Complete    | 2026-03-29 |
-| 16. Ship Rebuild Proof | v1.2 | 4/4 | Complete   | 2026-03-30 |
+| 12. Orchestrator + DAG Engine + Contract Foundation | v1.2 | 3/3 | Complete | 2026-03-29 |
+| 13. Analyzer + Planner Agents | v1.2 | 4/4 | Complete | 2026-03-29 |
+| 14. Observability + Contract Maturity | v1.2 | 4/4 | Complete | 2026-03-29 |
+| 15. Execution Engine + CI Validation | v1.2 | 4/4 | Complete | 2026-03-29 |
+| 16. Ship Rebuild Proof | v1.2 | 4/4 | Complete | 2026-03-30 |
+| 17. Persistent Loop Infrastructure | v1.3 | 0/0 | Not started | - |
+| 18. From-Scratch Code Generation | v1.3 | 0/0 | Not started | - |
+| 19. Intervention Logging | v1.3 | 0/0 | Not started | - |
+| 20. Rebuild Execution & Comparative Analysis | v1.3 | 0/0 | Not started | - |
+| 21. Railway Deployment | v1.3 | 0/0 | Not started | - |
 
 ---
 *Full v1.0 details archived in `.planning/milestones/v1.0-ROADMAP.md`*
