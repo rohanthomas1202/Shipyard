@@ -1,11 +1,49 @@
 # Requirements: Shipyard
 
-**Defined:** 2026-03-28
-**Core Value:** The agent must reliably complete real coding tasks end-to-end -- from instruction to committed code -- without producing broken edits, missing errors, or crashing mid-run.
+**Defined:** 2026-03-30
+**Core Value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
 
-## v1.2 Requirements
+## v1.3 Requirements
 
-Requirements for Autonomous Software Factory milestone. Each maps to roadmap phases.
+Requirements for Ship Rebuild End-to-End milestone. Each maps to roadmap phases.
+
+### Persistent Loop
+
+- [ ] **LOOP-01**: User can trigger a Ship rebuild from the frontend via a "Rebuild Ship" action
+- [ ] **LOOP-02**: Server exposes POST /rebuild endpoint that wraps run_rebuild() as a background task
+- [ ] **LOOP-03**: run_rebuild() streams progress via EventBus emissions instead of print() statements
+- [ ] **LOOP-04**: Frontend displays a live rebuild progress panel showing pipeline stages (cloning... analyzing N modules... executing 14/47... done)
+- [ ] **LOOP-05**: CLI script continues to work standalone for terminal usage
+
+### From-Scratch Generation
+
+- [ ] **GEN-01**: Planner emits "create" task type for files that don't exist yet, distinct from "edit" tasks
+- [ ] **GEN-02**: Executor has a write_file() / create_file() tool that generates complete files from PRD context
+- [ ] **GEN-03**: File creation follows DAG dependency ordering — dependencies generate before dependents
+- [ ] **GEN-04**: Seeding (_seed_output_from_source) is removed — all source code generated from PRDs
+- [ ] **GEN-05**: Validator tolerates incomplete codebases during build (import errors for not-yet-created files)
+
+### Intervention Logging
+
+- [ ] **INTV-01**: Interventions are logged with structured schema (timestamp, phase, task, type, description, resolution)
+- [ ] **INTV-02**: Intervention data persists in SQLite with Pydantic model and REST endpoints
+- [ ] **INTV-03**: Rebuild log captures every human intervention with enough context for analysis
+
+### Comparative Analysis
+
+- [ ] **ANAL-01**: Agent generates all 7 sections (Executive Summary, Architectural Comparison, Performance Benchmarks, Shortcomings, Advances, Trade-off Analysis, If You Built It Again)
+- [ ] **ANAL-02**: Analysis uses pre-computed metrics (task success rate, build status, intervention count, token usage) not raw logs
+- [ ] **ANAL-03**: CODEAGENT.md comparative analysis section populated with specific claims and evidence from rebuild
+
+### Deployment
+
+- [ ] **DEPL-01**: Railway billing resolved and account active
+- [ ] **DEPL-02**: Rebuilt Ship deployed to a public URL via automated scripts
+
+## Previous Milestone Requirements
+
+<details>
+<summary>v1.2 Autonomous Software Factory (29 requirements)</summary>
 
 ### Orchestration
 
@@ -60,9 +98,11 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 - [x] **SHIP-04**: Rebuilt Ship deployed to a public URL
 - [x] **SHIP-05**: Automated deployment scripts handle the full deploy pipeline
 
+</details>
+
 ## Future Requirements
 
-Deferred beyond v1.2. Tracked but not in current roadmap.
+Deferred beyond v1.3. Tracked but not in current roadmap.
 
 ### Advanced Agent Intelligence
 
@@ -81,7 +121,7 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| General-purpose code generation (arbitrary apps) | v1.2 proves the system on Ship specifically. Generalization is v2.0. |
+| General-purpose code generation (arbitrary apps) | v1.3 proves the system on Ship specifically. Generalization is v2.0. |
 | Mobile/responsive Shipyard UI | Desktop browser is the only target |
 | Multi-user Shipyard access | Single-user tool |
 | Ship feature parity (FleetGraph AI, FPKI auth, AWS infra) | Rebuild proves architecture, not every gov-specific integration |
@@ -93,41 +133,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORCH-01 | Phase 12 | Complete |
-| ORCH-02 | Phase 12 | Complete |
-| ORCH-03 | Phase 15 | Complete |
-| ORCH-04 | Phase 15 | Complete |
-| ORCH-05 | Phase 12 | Complete |
-| ANLZ-01 | Phase 13 | Complete |
-| ANLZ-02 | Phase 13 | Complete |
-| PLAN-01 | Phase 13 | Complete |
-| PLAN-02 | Phase 13 | Complete |
-| PLAN-03 | Phase 13 | Complete |
-| PLAN-04 | Phase 13 | Pending |
-| CNTR-01 | Phase 12 | Complete |
-| CNTR-02 | Phase 12 | Complete |
-| CNTR-03 | Phase 14 | Pending |
-| EXEC-01 | Phase 15 | Pending |
-| EXEC-02 | Phase 15 | Complete |
-| EXEC-03 | Phase 15 | Pending |
-| EXEC-04 | Phase 15 | Complete |
-| VALD-01 | Phase 15 | Complete |
-| VALD-02 | Phase 15 | Complete |
-| VALD-03 | Phase 15 | Complete |
-| OBSV-01 | Phase 14 | Pending |
-| OBSV-02 | Phase 14 | Complete |
-| OBSV-03 | Phase 14 | Complete |
-| SHIP-01 | Phase 16 | Complete |
-| SHIP-02 | Phase 16 | Complete |
-| SHIP-03 | Phase 16 | Complete |
-| SHIP-04 | Phase 16 | Complete |
-| SHIP-05 | Phase 16 | Complete |
+| LOOP-01 | — | Pending |
+| LOOP-02 | — | Pending |
+| LOOP-03 | — | Pending |
+| LOOP-04 | — | Pending |
+| LOOP-05 | — | Pending |
+| GEN-01 | — | Pending |
+| GEN-02 | — | Pending |
+| GEN-03 | — | Pending |
+| GEN-04 | — | Pending |
+| GEN-05 | — | Pending |
+| INTV-01 | — | Pending |
+| INTV-02 | — | Pending |
+| INTV-03 | — | Pending |
+| ANAL-01 | — | Pending |
+| ANAL-02 | — | Pending |
+| ANAL-03 | — | Pending |
+| DEPL-01 | — | Pending |
+| DEPL-02 | — | Pending |
 
 **Coverage:**
-- v1.2 requirements: 29 total
-- Mapped to phases: 29
-- Unmapped: 0
+- v1.3 requirements: 18 total
+- Mapped to phases: 0
+- Unmapped: 18 (pending roadmap creation)
 
 ---
-*Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28*
+*Requirements defined: 2026-03-30*
+*Last updated: 2026-03-30 after initial definition*
