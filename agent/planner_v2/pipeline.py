@@ -23,34 +23,47 @@ class PlanValidationError(Exception):
 async def run_pipeline(
     module_map: ModuleMap,
     router: ModelRouter,
+    strict: bool = True,
 ) -> PipelineResult:
     """Execute PRD -> Tech Spec -> Task DAG with validation gates.
 
     Per D-05: Sequential single-pass pipeline, one LLM call per layer.
     Per D-06: Structural validation only between layers.
 
-    Raises PlanValidationError if any validation gate fails.
+    Args:
+        strict: If True (default), raise on validation errors. If False,
+                downgrade errors to warnings and continue. Useful for
+                monorepo projects where cross-package references may
+                not resolve cleanly.
+
+    Raises PlanValidationError if any validation gate fails (strict mode only).
     """
     # Layer 1: PRD from module map (PLAN-01)
     prd = await generate_prd(module_map, router)
     prd_errors = validate_prd(prd, module_map)
-    if any(e.severity == "error" for e in prd_errors):
+    if strict and any(e.severity == "error" for e in prd_errors):
         raise PlanValidationError("PRD", [e for e in prd_errors if e.severity == "error"])
     prd_warnings = [e.message for e in prd_errors if e.severity == "warning"]
+    if not strict:
+        prd_warnings += [e.message for e in prd_errors if e.severity == "error"]
 
     # Layer 2: Tech Spec from PRD (PLAN-02)
     spec = await generate_tech_spec(prd, module_map, router)
     spec_errors = validate_tech_spec(spec, prd)
-    if any(e.severity == "error" for e in spec_errors):
+    if strict and any(e.severity == "error" for e in spec_errors):
         raise PlanValidationError("Tech Spec", [e for e in spec_errors if e.severity == "error"])
     spec_warnings = [e.message for e in spec_errors if e.severity == "warning"]
+    if not strict:
+        spec_warnings += [e.message for e in spec_errors if e.severity == "error"]
 
     # Layer 3: Task DAG from Tech Spec (PLAN-03)
     dag = await generate_task_dag(spec, router)
     dag_errors = validate_task_dag(dag, spec)
-    if any(e.severity == "error" for e in dag_errors):
+    if strict and any(e.severity == "error" for e in dag_errors):
         raise PlanValidationError("Task DAG", [e for e in dag_errors if e.severity == "error"])
     dag_warnings = [e.message for e in dag_errors if e.severity == "warning"]
+    if not strict:
+        dag_warnings += [e.message for e in dag_errors if e.severity == "error"]
 
     # Cost estimation (PLAN-04)
     total_tokens = estimate_cost(dag)
