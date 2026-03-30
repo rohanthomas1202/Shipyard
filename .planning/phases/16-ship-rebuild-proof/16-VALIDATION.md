@@ -38,13 +38,17 @@ created: 2026-03-29
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 16-01-01 | 01 | 1 | SHIP-01 | smoke | `python3 -m pytest tests/test_ship_smoke.py -x -q` | ❌ W0 | ⬜ pending |
-| 16-01-02 | 01 | 1 | SHIP-05 | integration | `python3 -m pytest tests/test_rebuild_pipeline.py -x -q` | ❌ W0 | ⬜ pending |
-| 16-02-01 | 02 | 2 | SHIP-02 | e2e | `npx playwright test web/e2e/ship-rebuild.spec.ts` | ❌ W0 | ⬜ pending |
-| 16-02-02 | 02 | 2 | SHIP-03 | e2e | `npx playwright test web/e2e/ship-rebuild.spec.ts --grep "renders"` | ❌ W0 | ⬜ pending |
-| 16-03-01 | 03 | 3 | SHIP-04 | smoke | `python3 -m pytest tests/test_ship_smoke.py::test_deployed_url -x -q` | ❌ W0 | ⬜ pending |
+| 16-01-01 | 01 | 1 | SHIP-01 | smoke | `python3 -m pytest tests/test_ship_smoke.py -x -q` | W0 | pending |
+| 16-01-02 | 01 | 1 | SHIP-05 | integration | `python3 -m pytest tests/test_rebuild_pipeline.py -x -q` | W0 | pending |
+| 16-02-01 | 02 | 1 | SHIP-04 | e2e | `npx playwright test web/e2e/ship-rebuild.spec.ts` | W0 | pending |
+| 16-02-02 | 02 | 1 | SHIP-03 | e2e | `npx playwright test web/e2e/ship-rebuild.spec.ts --grep "renders"` | W0 | pending |
+| 16-03-01 | 03 | 2 | SHIP-01, SHIP-02, SHIP-03 | smoke+e2e | `python3 -m pytest tests/test_ship_smoke.py --collect-only -q && npx playwright test web/e2e/ship-rebuild.spec.ts --list` | W0 | pending |
+| 16-03-02 | 03 | 2 | SHIP-04, SHIP-05 | integration | `python3 -m pytest tests/test_rebuild_pipeline.py --collect-only -q` | W0 | pending |
+| 16-04-01 | 04 | 3 | SHIP-01, SHIP-03 | execution | `test -d /tmp/ship-rebuilt && test -f /tmp/ship-rebuilt/package.json` | n/a | pending |
+| 16-04-02 | 04 | 3 | SHIP-04 | deployment | `curl -s -o /dev/null -w "%{http_code}" https://${SHIP_DEPLOYED_URL}/health` | n/a | pending |
+| 16-04-03 | 04 | 3 | SHIP-01, SHIP-02, SHIP-03, SHIP-04, SHIP-05 | full suite | `SHIP_BASE_URL=https://${SHIP_DEPLOYED_URL} python3 -m pytest tests/test_ship_smoke.py tests/test_rebuild_pipeline.py -x -q && SHIP_BASE_URL=https://${SHIP_DEPLOYED_URL} npx playwright test web/e2e/ship-rebuild.spec.ts` | n/a | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
