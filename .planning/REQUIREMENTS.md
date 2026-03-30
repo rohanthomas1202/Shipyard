@@ -55,7 +55,7 @@ Requirements for Autonomous Software Factory milestone. Each maps to roadmap pha
 ### Ship Rebuild
 
 - [x] **SHIP-01**: System rebuilds Ship's 47 API routes as functional endpoints
-- [ ] **SHIP-02**: Core user workflows pass E2E tests
+- [x] **SHIP-02**: Core user workflows pass E2E tests
 - [x] **SHIP-03**: UI renders without critical errors
 - [x] **SHIP-04**: Rebuilt Ship deployed to a public URL
 - [x] **SHIP-05**: Automated deployment scripts handle the full deploy pipeline
@@ -118,7 +118,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OBSV-02 | Phase 14 | Complete |
 | OBSV-03 | Phase 14 | Complete |
 | SHIP-01 | Phase 16 | Complete |
-| SHIP-02 | Phase 16 | Pending |
+| SHIP-02 | Phase 16 | Complete |
 | SHIP-03 | Phase 16 | Complete |
 | SHIP-04 | Phase 16 | Complete |
 | SHIP-05 | Phase 16 | Complete |

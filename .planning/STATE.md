@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Autonomous Software Factory
 status: executing
-stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-03-30T00:40:30.380Z"
+stopped_at: Completed 16-03-PLAN.md
+last_updated: "2026-03-30T00:44:27.372Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 19
-  completed_plans: 17
+  completed_plans: 18
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 ## Current Position
 
 Phase: 16 (ship-rebuild-proof) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-03-30
 
@@ -75,6 +75,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 15 P04 | 4min | 2 tasks | 5 files |
 | Phase 16 P01 | 2min | 2 tasks | 3 files |
 | Phase 16 P02 | 2min | 2 tasks | 2 files |
+| Phase 16 P03 | 2min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,9 @@ Recent decisions affecting current work:
 - [Phase 16]: Ship CI pipeline uses npx for tsc/eslint; separate from Shipyard DEFAULT_PIPELINE
 - [Phase 16]: Mandatory npm install after rebuild with no escape hatch (per Pitfall 7)
 - [Phase 16]: sys.path insert for project root so deploy script runs standalone without PYTHONPATH
+- [Phase 16]: httpx async client for API smoke tests matches existing test patterns
+- [Phase 16]: Playwright serial mode for auth-dependent E2E test ordering
+- [Phase 16]: Structural import validation (not live execution) for pipeline integration tests
 
 ### Pending Todos
 
@@ -140,6 +144,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T00:40:30.377Z
-Stopped at: Completed 16-02-PLAN.md
+Last session: 2026-03-30T00:44:27.368Z
+Stopped at: Completed 16-03-PLAN.md
 Resume file: None

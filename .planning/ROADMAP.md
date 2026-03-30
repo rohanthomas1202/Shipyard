@@ -121,7 +121,7 @@ Plans:
 Plans:
 - [x] 16-01-PLAN.md -- Orchestration script + agent executor + Ship CI pipeline (SHIP-01, SHIP-03)
 - [x] 16-02-PLAN.md -- Railway deployment script + env template (SHIP-04, SHIP-05)
-- [ ] 16-03-PLAN.md -- API smoke tests + Playwright E2E + pipeline integration tests (SHIP-01, SHIP-02, SHIP-03, SHIP-04, SHIP-05)
+- [x] 16-03-PLAN.md -- API smoke tests + Playwright E2E + pipeline integration tests (SHIP-01, SHIP-02, SHIP-03, SHIP-04, SHIP-05)
 - [ ] 16-04-PLAN.md -- Execute rebuild + deploy + validate against live URL (SHIP-01, SHIP-02, SHIP-03, SHIP-04, SHIP-05)
 
 ## Progress
@@ -146,7 +146,7 @@ Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16
 | 13. Analyzer + Planner Agents | v1.2 | 4/4 | Complete    | 2026-03-29 |
 | 14. Observability + Contract Maturity | v1.2 | 4/4 | Complete    | 2026-03-29 |
 | 15. Execution Engine + CI Validation | v1.2 | 4/4 | Complete    | 2026-03-29 |
-| 16. Ship Rebuild Proof | v1.2 | 2/4 | In Progress|  |
+| 16. Ship Rebuild Proof | v1.2 | 3/4 | In Progress|  |
 
 ---
 *Full v1.0 details archived in `.planning/milestones/v1.0-ROADMAP.md`*
