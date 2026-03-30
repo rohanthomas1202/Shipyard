@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.2 Autonomous Software Factory (Shipped: 2026-03-30)
+
+**Phases completed:** 5 phases, 19 plans
+
+**Key accomplishments:**
+
+- DAG orchestrator with NetworkX dependency graph, SQLite persistence, and EventBus extension for real-time progress streaming
+- Analyzer agent parsing codebases into module maps with dependency graphs and LLM-enriched per-module summaries
+- Planner agent with three-layer decomposition (PRD → Tech Spec → Task DAG) with validation gates and bounded task sizes (≤300 LOC / ≤3 files)
+- Contract store with versioned DB schema, OpenAPI definitions, and shared types readable/writable by agents
+- Observability layer: unified TraceLogger, progress metrics WebSocket, decision traces, failure heatmap
+- Execution engine with BranchManager (asyncio.Lock git isolation), CIRunner (4-stage pipeline), FailureClassifier (tiered retry budgets), ContextPackAssembler, OwnershipValidator
+- Ship rebuild proof: orchestration script, Ship CI pipeline, Railway deploy scripts, API smoke tests, Playwright E2E framework
+- Blocked at Railway deployment (trial expired) — billing unresolved
+
+**Pending from v1.2:** PLAN-04, CNTR-03, EXEC-01, EXEC-03, OBSV-01 (deferred, not blocking v1.3)
+
+---
+
 ## v1.1 IDE UI Rebuild (Shipped: 2026-03-27)
 
 **Phases completed:** 4 phases, 9 plans, 17 tasks
