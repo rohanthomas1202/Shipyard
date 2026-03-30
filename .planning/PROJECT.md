@@ -41,16 +41,13 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 
 ### Active
 
-- [ ] DAG-based orchestrator that decomposes complex apps into spec-driven task graphs
-- [ ] Analyzer agent that parses codebases into module maps with dependency graphs
-- [ ] Planner agent with three-layer decomposition (PRD → Tech Spec → Task DAG)
-- [ ] Versioned contract layer (DB schema, OpenAPI, shared types) as source of truth
-- [ ] Bounded parallel execution (5-15 agents, ≤300 LOC / ≤3 files per task)
-- [ ] Failure classification system (syntax→auto-fix, contract→spec, test→debug, structural→replan)
-- [ ] CI engine maintaining always-working main branch after every merge
-- [ ] Module ownership model preventing cross-agent conflicts
-- [ ] Checkpointing and recovery for long-running multi-agent builds
-- [ ] Ship rebuild proof — 47 API routes, core E2E flows, deployed to public URL
+- [ ] Persistent agent loop — WebSocket instruction flow, no fire-and-forget
+- [ ] POST /rebuild endpoint wrapping run_rebuild() as background task with EventBus streaming
+- [ ] Frontend live rebuild progress panel (clone → analyze → plan → execute → build)
+- [ ] From-scratch code generation — executor generates files from PRDs, no seeding
+- [ ] Structured intervention logging during rebuild
+- [ ] 7-section comparative analysis generated from rebuild data
+- [ ] Railway deployment of rebuilt Ship to public URL
 
 ### Validated in v1.1
 
@@ -64,6 +61,18 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 - ✓ Tabbed editor with VS Code-style preview/pin behavior — v1.1 (Phase 10)
 - ✓ Real-time agent activity stream with auto-scroll and new-event badge — v1.1 (Phase 11)
 
+### Validated in v1.2
+
+- ✓ DAG-based orchestrator with dependency enforcement and persistent state — v1.2 (Phase 12)
+- ✓ Versioned contract store (DB schema, OpenAPI, shared types) — v1.2 (Phase 12)
+- ✓ Analyzer agent producing module maps with dependency graphs — v1.2 (Phase 13)
+- ✓ Planner agent with PRD → Tech Spec → Task DAG decomposition — v1.2 (Phase 13)
+- ✓ Structured logging with progress metrics and failure heatmap — v1.2 (Phase 14)
+- ✓ Execution engine with branch isolation, CI gating, failure-aware retries — v1.2 (Phase 15)
+- ✓ Module ownership model preventing cross-agent conflicts — v1.2 (Phase 15)
+- ✓ Ship rebuild orchestration script and CI pipeline — v1.2 (Phase 16)
+- ✓ API smoke tests and Playwright E2E test framework — v1.2 (Phase 16)
+
 ### Out of Scope
 
 - Authentication/authorization on the API — single-user tool, unnecessary for v1
@@ -72,29 +81,21 @@ The agent must reliably complete real coding tasks end-to-end — from instructi
 - Real-time collaboration — single-user agent
 - Custom plugin/extension system — hardcoded pipeline sufficient for v1
 
-## Current Milestone: v1.2 Autonomous Software Factory
+## Current Milestone: v1.3 Ship Rebuild End-to-End
 
-**Goal:** Build a spec-driven, DAG-orchestrated multi-agent system proven by rebuilding Ship (133K LOC) end-to-end.
+**Goal:** Prove the autonomous pipeline by rebuilding Ship entirely from scratch — no seeding — with a persistent agent loop, live UI integration, structured intervention logging, and a 7-section comparative analysis.
 
 **Target features:**
-- Analyzer agent — module map, dependency graph, per-module summaries
-- Planner agent — PRDs → Tech Specs → Task DAG with plan validation phase
-- Contract layer — versioned DB schema, OpenAPI, shared types, migration strategy
-- Execution layer — 5-15 concurrent agents, context packs ≤5 files, git branch+PR per agent
-- Validation layer — CI after every task, failure classification (A/B/C/D types)
-- CI engine — always-working main branch, rejects unstable PRs, mock services for external deps
-- Orchestrator — owns DAG, failure-type retries, structured logging, observability
-- Ownership model — designated owner per module, orchestrator-mediated cross-module changes
-- Checkpointing — persist DAG state, resume from failure, re-run failed branches
-- Progress metrics — tasks completed, DAG coverage %, CI pass rate, scale gates
-- Automated deployment scripts for Ship rebuild proof
-
-**Build order:** Orchestrator+DAG → Planner+specs → CI+validation → Full Ship rebuild
+- Persistent agent loop — WebSocket-based instruction flow with POST /rebuild endpoint, EventBus streaming, and frontend live progress panel
+- From-scratch code generation — executor generates every file from PRDs, no seeding or templates
+- Intervention logging — structured rebuild log capturing every human intervention with context
+- Comparative analysis — agent drafts all 7 required sections from rebuild data and intervention logs
+- Railway deployment — fix billing, deploy rebuilt Ship to public URL
 
 ## Current State
 
-Phase 15 complete — Execution engine with branch isolation, CI gating, and failure-aware retries. BranchManager provides per-task git branches with asyncio.Lock serialization. CIRunner validates via 4-stage pipeline (typecheck/lint/test/build). FailureClassifier routes errors to tiered retry budgets (syntax=3, test=2, contract=1, structural=1). ContextPackAssembler delivers scoped file sets. OwnershipValidator enforces module boundaries via post-hoc diff. 82 Phase 15 tests passing.
-Shipped v1.0 (agent core) and v1.1 (IDE UI rebuild) on 2026-03-27.
+v1.2 complete (Phases 12-16). Full autonomous pipeline built: DAG orchestrator, analyzer/planner agents, observability, execution engine with CI, Ship rebuild proof scripts. Pipeline currently seeds Ship codebase and edits 2-3 files — v1.3 will make it generate everything from scratch.
+Shipped v1.0 (agent core), v1.1 (IDE UI), v1.2 (autonomous factory) across 2026-03-23 → 2026-03-30.
 
 ## Context
 
@@ -153,4 +154,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after Phase 13 completion — analyzer + planner agents*
+*Last updated: 2026-03-30 after milestone v1.3 initialization*

@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Autonomous Software Factory
-status: verifying
-stopped_at: "Blocked at 16-04 Task 2: Railway trial expired"
-last_updated: "2026-03-30T01:13:55.606Z"
+milestone: v1.3
+milestone_name: Ship Rebuild End-to-End
+status: planning
+stopped_at: ""
+last_updated: "2026-03-30"
 last_activity: 2026-03-30
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 19
-  completed_plans: 19
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -18,17 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-26)
+See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** The agent must reliably complete real coding tasks end-to-end — from instruction to committed code — without producing broken edits, missing errors, or crashing mid-run.
-**Current focus:** Phase 16 — ship-rebuild-proof
+**Current focus:** Defining requirements for v1.3
 
 ## Current Position
 
-Phase: 16 (ship-rebuild-proof) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-03-30
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-30 — Milestone v1.3 started
 
 Progress: [░░░░░░░░░░] 0%
 
