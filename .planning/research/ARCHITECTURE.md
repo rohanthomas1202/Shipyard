@@ -1,364 +1,202 @@
-# Architecture Patterns: IDE UI Rebuild (v1.1)
+# Architecture Patterns: Ship Rebuild End-to-End (v1.3)
 
-**Domain:** VS Code-style three-panel IDE UI for an AI coding agent
-**Researched:** 2026-03-27
-**Confidence:** HIGH (existing codebase fully audited, libraries verified)
-
-## Current Architecture (What Exists)
-
-The existing frontend is a React 19 SPA with this structure:
-
-```
-App
-  ErrorBoundary
-    WebSocketProvider (projectId)
-      ProjectProvider (onProjectChange)
-        AppShell
-          FileTree (left panel - currently shows project name + RunList)
-          Center (WorkspaceHome | DiffViewer | RunProgress - conditional)
-          AgentPanel (right panel)
-```
-
-### Current State Assessment
-
-| Component | Current Role | v1.1 Fate |
-|-----------|-------------|-----------|
-| `AppShell` | 3-column CSS grid layout with collapse | **Evolve** - replace CSS grid with react-resizable-panels |
-| `FileTree` | Shows project name + RunList, no actual file tree | **Replace** - needs real filesystem browsing via `/browse` API |
-| `DiffViewer` | Shows only during `waiting_for_human`, naive old-all-red/new-all-green diff | **Replace** - needs proper diff algorithm, side-by-side view, always-accessible |
-| `AgentPanel` | Right panel with StepTimeline + StreamingText | **Evolve** - keep core, add expandable LLM output sections |
-| `WorkspaceHome` | Center panel when no run active, has prompt textarea | **Evolve** - prompt moves to top bar, home becomes file viewer |
-| `RunProgress` | Center panel during active run, shows event log | **Absorb** - merge into ActivityStream, center panel shows files/diffs |
-| `WebSocketContext` | Type-based pub/sub with wildcard support | **Keep** - sufficient for new data flows |
-| `ProjectContext` | Project/run state, submitInstruction | **Evolve** - add run history fetching |
-
-### Backend APIs Already Available
-
-| Endpoint | Used By | Notes |
-|----------|---------|-------|
-| `GET /browse?path=` | ProjectPicker (directory only) | Returns `{current, parent, entries[{name, path, is_dir, has_children}]}`. Currently filters to directories only. Needs file support for file explorer. |
-| `GET /runs/{id}/edits` | DiffViewer | Returns `Edit[]` with `old_content`, `new_content`, `file_path`, `status` |
-| `PATCH /runs/{id}/edits/{id}` | DiffViewer | Approve/reject edits |
-| `WS /ws/{project_id}` | WebSocketContext | Event types: approval, error, stop, review (P0), stream, diff, git (P1), status, file, exec (P2) |
-
-### Backend Gaps
-
-| Need | Current State | Required Change |
-|------|--------------|-----------------|
-| File tree listing (files + dirs) | `/browse` returns dirs only (skips files) | Extend to include files with metadata (size, extension) |
-| File content reading | No endpoint exists | Add `GET /files?path=` returning file content with syntax hint |
-| Live file change notifications | Events exist for edits but not file-level | Agent already tracks `edit_history` in state; emit `file.changed` events |
+**Domain:** Autonomous coding agent -- persistent loop, from-scratch generation, intervention logging, comparative analysis
+**Researched:** 2026-03-30
 
 ## Recommended Architecture
 
-### Component Tree (Target)
+Extend the existing server/agent/store layered architecture. No new layers needed.
 
-```
-App
-  ErrorBoundary
-    WebSocketProvider
-      ProjectProvider
-        WorkspaceProvider (NEW - file/tab/diff selection state)
-          IDELayout (REPLACES AppShell)
-            TopBar (NEW - instruction input + run selector + project picker)
-            PanelGroup (react-resizable-panels)
-              Panel: FileExplorer (NEW - real file tree + change indicators)
-              PanelResizeHandle
-              Panel: EditorArea (NEW - tabbed file viewer + diff viewer)
-              PanelResizeHandle
-              Panel: ActivityStream (EVOLVES from AgentPanel)
-```
+### New Component Boundaries
 
-### Component Boundaries
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `IDELayout` | Top-level layout shell, mounts TopBar + PanelGroup | WorkspaceProvider (layout prefs) |
-| `TopBar` | Instruction input, run history dropdown, project selector, status indicator | ProjectContext (submit, select), WebSocketContext (status) |
-| `FileExplorer` | Recursive file tree with lazy-loading, change indicators (M/A/D) | WorkspaceProvider (select file), WebSocketContext (file change events) |
-| `EditorArea` | Tabbed container for file viewing and diff viewing | WorkspaceProvider (active tabs, selected file) |
-| `FileViewer` | Read-only code display with syntax highlighting for a single file | api.getFileContent (new endpoint) |
-| `DiffPanel` | Side-by-side or unified diff for an edit | api.getEdits, `diff` library for computation |
-| `ActivityStream` | Agent step timeline + streaming LLM output + approval actions | WebSocketContext (all event types), ProjectContext (run state) |
-| `WorkspaceProvider` | Manages open tabs, selected file, active diff, layout preferences | Consumed by EditorArea, FileExplorer, TopBar |
-
-### New Context: WorkspaceProvider
-
-The existing contexts (WebSocket, Project) handle connectivity and project/run state. The IDE needs a third context for workspace UI state that does not belong in either existing context.
-
-```typescript
-interface WorkspaceContextValue {
-  // File explorer state
-  selectedPath: string | null
-  expandedDirs: Set<string>
-
-  // Tab state
-  openTabs: Tab[]
-  activeTabId: string | null
-
-  // Change tracking (from WebSocket events)
-  changedFiles: Map<string, 'modified' | 'added' | 'deleted'>
-
-  // Actions
-  openFile: (path: string) => void
-  openDiff: (editId: string) => void
-  closeTab: (tabId: string) => void
-  setActiveTab: (tabId: string) => void
-  clearChangedFiles: () => void
-}
-
-interface Tab {
-  id: string
-  type: 'file' | 'diff' | 'welcome'
-  label: string
-  path?: string      // for file tabs
-  editId?: string    // for diff tabs
-  isPinned: boolean  // false = preview tab (replaced on next single-click)
-}
-```
-
-**Why a new context instead of extending ProjectContext:** ProjectContext manages server-side state (projects, runs, instructions). Workspace state is purely client-side UI state (which tab is open, which directory is expanded). Mixing them violates single-responsibility and would cause unnecessary re-renders across unrelated components.
+| Component | Responsibility | Location | Communicates With |
+|---|---|---|---|
+| RebuildController | POST /rebuild endpoint, rebuild lifecycle management | `server/main.py` (new routes) | EventBus, RebuildService |
+| RebuildService | Wraps `run_rebuild()` with EventBus phase tracking | `agent/orchestrator/rebuild_service.py` (new) | EventBus, ship_rebuild, InterventionStore |
+| InterventionStore | CRUD for intervention records | `store/sqlite.py` (extend) | SQLite |
+| AnalysisGenerator | Generates 7-section comparative analysis from data | `agent/orchestrator/analysis.py` (new) | ModelRouter, InterventionStore, TokenUsage |
+| RebuildPanel | Frontend rebuild progress visualization | `web/src/components/rebuild/` (new) | Zustand rebuild slice, WebSocket |
 
 ### Data Flow
 
-#### 1. File Explorer Data Flow
-
 ```
-User clicks directory in FileExplorer
-  -> api.browse(path) fetches children (files + dirs)
-  -> FileExplorer stores in local state (lazy-loaded tree)
-  -> expandedDirs updated in WorkspaceContext
-
-User clicks file in FileExplorer
-  -> WorkspaceContext.openFile(path)
-  -> Creates/activates Tab { type: 'file', path }
-  -> EditorArea renders FileViewer
-  -> FileViewer calls api.getFileContent(path) (NEW endpoint)
-  -> Renders with syntax highlighting via Shiki
-```
-
-#### 2. Live File Change Indicators
-
-```
-Agent edits a file during run
-  -> Backend emits Event(type="diff", data={file_path, status})  [already exists]
-  -> WebSocketContext distributes to 'diff' subscribers
-  -> WorkspaceProvider subscribes to 'diff' events
-  -> Updates changedFiles Map in WorkspaceContext
-  -> FileExplorer reads changedFiles, shows M/A/D badge next to filename
-```
-
-#### 3. Diff Viewing Data Flow
-
-```
-User clicks changed file indicator OR approval event arrives
-  -> WorkspaceContext.openDiff(editId)
-  -> Creates/activates Tab { type: 'diff', editId }
-  -> EditorArea renders DiffPanel
-  -> DiffPanel calls api.getEdits(runId) to get Edit record
-  -> Uses `diff` library (jsdiff) to compute line-level changes from old_content/new_content
-  -> Renders side-by-side diff with syntax highlighting
-  -> Approve/Reject buttons call api.patchEdit()
-```
-
-#### 4. Agent Stream Data Flow (mostly unchanged)
-
-```
-Run starts via TopBar instruction submit
-  -> ProjectContext.submitInstruction() (unchanged)
-  -> WebSocket events flow through WebSocketContext (unchanged)
-  -> ActivityStream subscribes to '*' wildcard (like current RunProgress)
-  -> Renders StepTimeline + expandable LLM output sections
-  -> Approval events trigger diff tab auto-opening via WorkspaceContext
+Frontend                    Server                         Agent/Orchestrator
+--------                    ------                         ------------------
+POST /rebuild          ->   RebuildController
+  or WS "rebuild"      ->     creates background task  ->  RebuildService
+                                                            |
+                              EventBus  <-  phase events  <-+
+                                |                           |
+WS event stream        <-   ConnectionManager              clone_repo()
+  rebuild_phase_changed                                    analyze_codebase()
+  task_started/completed                                   run_pipeline()
+  progress_update                                          DAGScheduler.run()
+  intervention_needed                                       |
+                                                           generate_analysis()
+POST /rebuild/{id}/    ->   RebuildController               |
+  intervention              InterventionStore  <--------->  AnalysisGenerator
+                                                            |
+GET /rebuild/{id}/     ->   RebuildController               v
+  analysis                  reads from filesystem      analysis.md on disk
 ```
 
 ## Patterns to Follow
 
-### Pattern 1: Lazy-Loading File Tree
+### Pattern 1: Phase-Tracking Wrapper
 
-**What:** Only fetch directory contents when a user expands a directory node. Cache results but invalidate on file change events.
+**What:** Wrap each rebuild stage in a context manager that emits EventBus events on entry/exit/error.
 
-**When:** Always, for the file explorer.
+**When:** Every rebuild phase transition (clone, analyze, plan, execute, build, deploy).
 
 **Example:**
-```typescript
-function useDirectoryContents(path: string | null) {
-  const [entries, setEntries] = useState<FileEntry[]>([])
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!path) return
-    setLoading(true)
-    api.browse(path).then(result => {
-      setEntries(result.entries)
-      setLoading(false)
-    })
-  }, [path])
-
-  return { entries, loading }
-}
+```python
+@asynccontextmanager
+async def rebuild_phase(event_bus: EventBus, rebuild_id: str, phase: str, project_id: str):
+    """Emit phase events and handle errors for a rebuild stage."""
+    await event_bus.emit(Event(
+        project_id=project_id, run_id=rebuild_id,
+        type="rebuild_phase_changed",
+        data={"phase": phase, "status": "started"},
+    ))
+    try:
+        yield
+    except Exception as e:
+        await event_bus.emit(Event(
+            project_id=project_id, run_id=rebuild_id,
+            type="rebuild_failed",
+            data={"phase": phase, "error": str(e)},
+        ))
+        raise
+    else:
+        await event_bus.emit(Event(
+            project_id=project_id, run_id=rebuild_id,
+            type="rebuild_phase_changed",
+            data={"phase": phase, "status": "completed"},
+        ))
 ```
 
-**Why:** Project directories can have thousands of files. Eagerly loading the entire tree would be slow and wasteful. VS Code uses lazy loading -- match that pattern.
+**Why:** Clean separation of phase tracking from business logic. The rebuild pipeline code stays focused on its job while events flow automatically.
 
-### Pattern 2: Tab-Based Navigation (Preview vs Pinned)
+### Pattern 2: Single Active Rebuild Guard
 
-**What:** Files and diffs open in tabs in the center panel. Single-click opens a preview tab (italic title, replaced by next single-click). Double-click pins it (normal title, persists).
+**What:** Only one rebuild can run at a time. Return 409 Conflict if a rebuild is already in progress.
 
-**When:** Any time a file or diff is opened.
+**When:** POST /rebuild or WS "rebuild" action.
 
-**Why:** This is the VS Code convention users expect. It prevents tab explosion while allowing multi-file work.
+**Example:**
+```python
+_active_rebuild: str | None = None
 
-```typescript
-function openFile(path: string, pin = false) {
-  const existingTab = openTabs.find(t => t.type === 'file' && t.path === path)
-  if (existingTab) {
-    setActiveTab(existingTab.id)
-    if (pin) pinTab(existingTab.id)
-    return
-  }
-
-  // Replace existing preview tab, or add new
-  const previewTab = openTabs.find(t => !t.isPinned)
-  if (previewTab && !pin) {
-    replaceTab(previewTab.id, { type: 'file', path, isPinned: false })
-  } else {
-    addTab({ type: 'file', path, isPinned: pin })
-  }
-}
+@app.post("/rebuild")
+async def start_rebuild(req: RebuildRequest):
+    global _active_rebuild
+    if _active_rebuild is not None:
+        raise HTTPException(409, f"Rebuild {_active_rebuild} already running")
+    rebuild_id = _new_id()
+    _active_rebuild = rebuild_id
+    asyncio.create_task(_run_and_clear(rebuild_id, req))
+    return {"rebuild_id": rebuild_id}
 ```
 
-### Pattern 3: Event-Driven Change Tracking
+**Why:** The agent uses significant resources (LLM calls, git worktrees, disk I/O). Running two rebuilds concurrently would create resource contention and confusing event streams.
 
-**What:** Subscribe to WebSocket diff/file events to maintain a `changedFiles` map. Use this to show M/A/D indicators in the file tree without polling.
+### Pattern 3: Intervention as Event + Record
 
-**When:** During active runs.
+**What:** Interventions are both real-time events (for the UI) and persistent records (for analysis).
 
-**Why:** The existing P0/P1/P2 event priority system already delivers diff events. Subscribe and track -- no new infrastructure needed.
+**When:** Any human intervention during rebuild.
 
-### Pattern 4: Resizable Panel Persistence
+**Example:**
+```python
+async def log_intervention(store, event_bus, rebuild_id, project_id, intervention):
+    # Persist
+    await store.save_intervention(intervention)
+    # Stream
+    await event_bus.emit(Event(
+        project_id=project_id, run_id=rebuild_id,
+        type="intervention_logged",
+        data=intervention.model_dump(),
+    ))
+```
 
-**What:** Use `react-resizable-panels` with `autoSaveId` to persist panel sizes to localStorage automatically.
+**Why:** The UI needs to show interventions in real-time (EventBus), and the analysis generator needs to query them later (SQLite). Dual-write keeps both consumers happy.
 
-**When:** Always. The library handles this natively.
+### Pattern 4: Analysis as Post-Processing
 
-**Why:** Users expect their layout to persist across sessions. The existing codebase already uses localStorage for panel collapse state (`shipyard-left-collapsed`, `shipyard-right-collapsed`) -- this replaces that with better library support.
+**What:** Generate the comparative analysis as a post-processing step after the rebuild completes, not during it.
+
+**When:** After `DAGScheduler.run()` returns and before `rebuild_completed` event.
+
+**Example:**
+```python
+async def generate_analysis(router, store, rebuild_id, source_dir, output_dir):
+    # Gather data
+    interventions = await store.get_interventions(rebuild_id)
+    task_results = await store.get_task_executions(rebuild_id)
+    token_usage = await store.get_token_usage(rebuild_id)
+
+    # Generate each section via LLM
+    sections = []
+    for section_name, data in section_inputs.items():
+        content = await router.call(
+            task_type="analysis",
+            system=ANALYSIS_SYSTEM_PROMPT,
+            user=f"Generate the {section_name} section:\n{json.dumps(data)}",
+        )
+        sections.append(f"## {section_name}\n\n{content}")
+
+    analysis_md = "\n\n".join(sections)
+    # Write to disk
+    Path(f"{output_dir}/ANALYSIS.md").write_text(analysis_md)
+    return analysis_md
+```
+
+**Why:** Analysis needs complete data. Running it mid-rebuild would produce incomplete results. The LLM calls for analysis are separate from the rebuild LLM calls and use the `general` tier (gpt-4o).
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Monaco Editor for Read-Only Viewing
+### Anti-Pattern 1: Polling for Rebuild Status
 
-**What:** Embedding Monaco Editor (or CodeMirror) for file viewing.
+**What:** Frontend polling `GET /rebuild/{id}` every N seconds.
 
-**Why bad:** Monaco adds ~2MB to the bundle. Shipyard is a read-only viewer -- users do not edit code in the browser. The agent edits; users review. Loading a full editor for read-only display is massive overkill.
+**Why bad:** Wastes HTTP requests when WebSocket already provides real-time updates.
 
-**Instead:** Use Shiki for syntax highlighting in a `<pre>` block. ~25KB core + grammars loaded on demand. Save Monaco for if/when in-browser editing is added (out of scope for v1.1).
+**Instead:** Use WebSocket `rebuild_phase_changed` events. Frontend subscribes to the rebuild's run_id and receives push updates.
 
-### Anti-Pattern 2: Global File Content Cache in Context
+### Anti-Pattern 2: Storing Analysis in SQLite
 
-**What:** Storing all fetched file contents in WorkspaceContext.
+**What:** Putting the full Markdown analysis document in a SQLite column.
 
-**Why bad:** File contents can be large. Storing them in context causes re-renders across all consumers when any file loads. Memory pressure grows with open tabs.
+**Why bad:** Large text blobs in SQLite are inefficient to query. The analysis is read-once, not queried.
 
-**Instead:** Each FileViewer/DiffPanel manages its own content via local `useState`. The context only tracks which tabs are open and which is active, not their content.
+**Instead:** Write analysis to filesystem (`{output_dir}/ANALYSIS.md`). Store the file path in the `rebuild_runs` table. Serve via `GET /rebuild/{id}/analysis` which reads the file.
 
-### Anti-Pattern 3: Replacing WebSocket Architecture
+### Anti-Pattern 3: Separate WebSocket for Rebuild
 
-**What:** Adding React Query or SWR alongside the existing WebSocket pub/sub.
+**What:** Creating a new WebSocket endpoint `/ws/rebuild` separate from the existing `/ws`.
 
-**Why bad:** The WebSocket infrastructure already handles real-time updates with priority routing, reconnection, and replay. Adding another data layer creates confusion about source of truth.
+**Why bad:** The existing WebSocket infrastructure (ConnectionManager, subscription model, reconnect/replay) works perfectly. A separate endpoint duplicates all that logic.
 
-**Instead:** Use existing WebSocket subscribe pattern for real-time data. Use plain `fetch` (via existing `api` module) for one-shot data loads (file contents, edit records). No new data layer needed.
+**Instead:** Use the existing `/ws` with rebuild events flowing through the same EventBus. The client subscribes to the rebuild's run_id just like any other run.
 
-### Anti-Pattern 4: Putting Prompt Input in Center Panel
+### Anti-Pattern 4: Complex State Machine for Rebuild Phases
 
-**What:** Keeping the WorkspaceHome prompt as the center panel default view.
+**What:** Building a formal state machine (like the EditRecord approval FSM) for rebuild phase transitions.
 
-**Why bad:** In an IDE layout, the center panel should always show code/diffs. A centered prompt box wastes the most valuable screen real estate and breaks the IDE mental model.
+**Why bad:** Rebuild phases are strictly linear (clone -> analyze -> plan -> execute -> build -> deploy). A state machine adds complexity for a flow that never branches or backtracks.
 
-**Instead:** Move the instruction input to the TopBar (always accessible). The center panel shows a welcome tab or open files/diffs.
+**Instead:** Simple sequential execution with phase tracking via the context manager pattern above.
 
-## Integration Points with Existing Architecture
+## Scalability Considerations
 
-### WebSocketContext (NO CHANGES NEEDED)
-
-The existing `subscribe(eventType, handler)` pattern is sufficient. New components subscribe to relevant event types:
-
-| New Component | Subscribes To | Purpose |
-|--------------|---------------|---------|
-| WorkspaceProvider | `'diff'` | Track which files changed (M/A/D indicators) |
-| ActivityStream | `'*'` (wildcard) | All events for stream display |
-| DiffPanel | `'approval'` | React to approval status changes |
-| TopBar | `'status'` | Show current agent node/step |
-
-### ProjectContext (MINOR ADDITIONS)
-
-The `runs` state is currently stubbed as an empty array. It needs to fetch runs for the current project to populate the run history dropdown in TopBar:
-
-```typescript
-// Current (stubbed):
-const [runs] = useState<Run[]>([])
-
-// Needed:
-const [runs, setRuns] = useState<Run[]>([])
-// Fetch on project change + after run completes
-```
-
-### API Module (ADDITIONS)
-
-Two new endpoints needed, plus extending `/browse`:
-
-```typescript
-// Extend existing:
-browse: (path?: string, includeFiles?: boolean) => ...
-
-// New:
-getFileContent: (path: string) =>
-  request<{ content: string; language: string; size: number }>(`/files?path=${encodeURIComponent(path)}`)
-
-getRuns: (projectId: string) =>
-  request<Run[]>(`/projects/${projectId}/runs`)
-```
-
-## Build Order (Dependency-Aware)
-
-Components must be built bottom-up based on dependencies:
-
-```
-Phase 1: Foundation (no component dependencies)
-  1. WorkspaceProvider context
-  2. Install react-resizable-panels, diff, shiki
-  3. IDELayout shell (replaces AppShell with PanelGroup)
-  4. TopBar (instruction input + project selector + run dropdown)
-
-Phase 2: File Explorer (depends on Phase 1 + backend extension)
-  5. Backend: extend /browse to include files
-  6. Backend: add GET /files endpoint for content
-  7. FileExplorer component with lazy-loading recursive tree
-  8. File change indicator integration (WebSocket 'diff' events -> changedFiles)
-
-Phase 3: Editor Area (depends on Phase 1 + Phase 2 partially)
-  9. Tab bar and tab management in EditorArea
-  10. FileViewer with Shiki syntax highlighting
-  11. DiffPanel with jsdiff algorithm + side-by-side rendering
-  12. Approval actions in DiffPanel (reuse existing api.patchEdit)
-
-Phase 4: Activity Stream (depends on Phase 1, parallel with Phases 2-3)
-  13. ActivityStream (evolve from AgentPanel + absorb RunProgress)
-  14. Expandable LLM output sections (click step -> see full prompt/response)
-  15. Inline approval actions + auto-open diff tab on approval events
-```
-
-**Why this order:**
-- WorkspaceProvider must exist before any component that opens tabs or tracks files
-- IDELayout must exist before panels can be placed
-- Backend file endpoints must exist before FileExplorer can show real files
-- Tab system must exist before FileViewer/DiffPanel can be mounted in tabs
-- ActivityStream is independent of file/diff viewing and can be built in parallel
+Not applicable for v1.3 -- this is a single-user demo tool running one rebuild at a time. The architecture choices (single active rebuild, asyncio.create_task, in-process EventBus) are correct for this scale and would need rethinking only if Shipyard becomes multi-tenant.
 
 ## Sources
 
-- Existing codebase audit: `web/src/` -- all components, contexts, hooks, types, api module read directly
-- [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) - v4.7.6, actively maintained, 1777 npm dependents
-- [jsdiff](https://github.com/kpdecker/jsdiff) - text differencing library, Myers O(ND) algorithm
-- [Shiki](https://shiki.style/) - VS Code-compatible syntax highlighter using TextMate grammars
+- Project codebase analysis: `server/main.py`, `agent/events.py`, `server/websocket.py`, `agent/orchestrator/scheduler.py`, `scripts/ship_rebuild.py`
+- FastAPI background tasks documentation
+- Existing project architectural patterns (v1.0-v1.2)
+
+---
+*Architecture patterns for: Shipyard v1.3 Ship Rebuild End-to-End*
+*Researched: 2026-03-30*

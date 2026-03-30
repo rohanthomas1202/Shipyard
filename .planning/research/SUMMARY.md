@@ -1,204 +1,186 @@
 # Project Research Summary
 
-**Project:** Shipyard v1.1 IDE UI Rebuild
-**Domain:** VS Code-style IDE UI for an AI coding agent (React SPA with real-time WebSocket streaming)
-**Researched:** 2026-03-27
+**Project:** Shipyard v1.3 — Ship Rebuild End-to-End
+**Domain:** Autonomous coding agent — persistent loop, from-scratch generation, intervention logging, comparative analysis
+**Researched:** 2026-03-30
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Shipyard v1.1 is a UI rebuild, not a new product. The existing React 19 + Tailwind CSS + FastAPI stack is sound and does not need replacement. The work is surgical: swap the layout engine from CSS grid to `react-resizable-panels`, add three small libraries (`react-resizable-panels`, `diff`, `shiki` — total ~48KB gzipped), introduce a new `WorkspaceProvider` context for IDE UI state, and replace three key components (AppShell, FileTree, DiffViewer) with production-quality equivalents. Two minor backend endpoints are needed — extending `/browse` to include files and adding `GET /files` for content — both using only existing Python dependencies. The architecture research has the highest confidence of any area: the entire existing codebase was audited directly.
+Shipyard v1.3 is a capability milestone: prove the agent can rebuild a real production app (Ship) from scratch using PRD-driven task generation, then document the process honestly with structured intervention logs and a 7-section comparative analysis. Research across all four areas converges on one clear finding — the existing infrastructure (FastAPI, EventBus, LangGraph, SQLite, DAGScheduler, BranchManager, ModelRouter) already provides every primitive needed. Zero new Python or frontend dependencies are required. The entire milestone is application code: new endpoints, new nodes, new schemas, and new prompts wired to existing machinery.
 
-The recommended approach is a four-phase build ordered by strict dependency: foundation first (WorkspaceProvider + layout + TopBar), then file explorer (backend + FileExplorer), then editor area (tabs + FileViewer + DiffPanel), then activity stream evolution (ActivityStream absorbing RunProgress). This order is non-negotiable because WorkspaceProvider must exist before any component can open tabs, the backend file endpoints must exist before FileExplorer can render real data, and the tab system must exist before FileViewer/DiffPanel can mount within it.
+The single highest-complexity feature is from-scratch file generation. The entire agent pipeline — reader, editor, validator — assumes files already exist. The `_seed_output_from_source()` workaround in `ship_rebuild.py` exists precisely because the agent cannot generate from scratch today. Removing seeding without adding a `create` step kind and a corresponding code path (new `creator_node` or extended editor) breaks the core pipeline immediately. This must be solved before EventBus wiring or the frontend panel, because all observable rebuild progress depends on the agent actually creating files.
 
-The dominant risks are all performance-related and all front-loaded: WebSocket render storms, React Context propagation cascade, non-virtualized file tree, and non-virtualized agent stream each require architectural decisions in Phase 1 that are expensive to retrofit later. The research is unambiguous — use Zustand for all high-frequency state (WebSocket events, file statuses), use `react-resizable-panels` for layout, use React Arborist or TanStack Virtual for the file tree, and use Shiki (not Monaco) for syntax highlighting. Taking shortcuts here doubles implementation time when the inevitable rewrite hits.
+The second critical dependency chain is observability. The current `run_rebuild()` script uses `print()` statements and runs outside the FastAPI process. Converting it to a managed background task with EventBus streaming, proper cancellation, and persistent status is prerequisite work for every downstream feature. Railway account verification belongs in Phase 1 as a prerequisite check — discovering billing issues after a completed rebuild wastes the entire effort.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack is kept intact. Three new frontend libraries cover the entire feature surface. `react-resizable-panels` (v4.7, ~8KB) is the industry standard for IDE-style resizable panels — it is what shadcn/ui wraps, handles localStorage persistence natively via `autoSaveId`, and eliminates the panel-resize-jank pitfall at no extra complexity cost. `diff` (jsdiff, v7.0, ~15KB) provides the Myers O(ND) line-diff algorithm needed for a correct side-by-side diff view. `shiki` (v3.0, ~25KB core + grammars on demand) provides VS Code-quality syntax highlighting for the read-only file viewer without the 2MB+ bundle cost of Monaco. No backend Python dependencies are added.
+The existing stack is fully adequate for v1.3. Research explicitly identified 15+ libraries that should NOT be added (Celery, Redis, Socket.IO, SQLAlchemy, Jinja2, react-query, Pandas, Markdown parsers, etc.) and demonstrated that every capability maps to an existing primitive. The only new system dependency is the Railway CLI (`railway`) installed via npm or Homebrew — not a Python package.
 
-Zustand is not in STACK.md but is strongly implied by PITFALLS.md as a requirement, not an optional optimization. The roadmap should treat it as a Phase 1 dependency.
+Two new SQLite tables are required (`interventions`, `rebuild_runs`) following the established aiosqlite + Pydantic BaseModel pattern used by Project, Run, Event, and EditRecord. A new Zustand slice handles frontend rebuild state. All other additions are new Python modules and React components within existing library budgets.
 
 **Core technologies:**
-- `react-resizable-panels` ^4.7: IDE panel layout with drag-resize and collapse — de facto standard, WAI-ARIA compliant, localStorage persistence built-in
-- `diff` (jsdiff) ^7.0: Line-level diff computation for side-by-side diff view — Myers O(ND), most widely used JS diff library
-- `shiki` ^3.0: Syntax highlighting for read-only file viewer — VS Code TextMate grammars, 200+ languages, on-demand grammar loading
-- Zustand (add in Phase 1): State management for high-frequency WebSocket-derived state — required to avoid render storm and Context propagation pitfalls
+- `asyncio.create_task()`: Persistent rebuild loop — single-process uvicorn cannot use Celery/ARQ; established pattern already in `server/main.py`
+- `EventBus` (existing `agent/events.py`): Rebuild progress streaming — add new event type strings to `_P0_TYPES`, pass server's EventBus instance into DAGScheduler
+- `file_ops.write_file()` (extend `agent/tools/file_ops.py`): From-scratch file creation — distinct from `edit_file()` anchor replacement; must call `makedirs(exist_ok=True)`
+- `aiosqlite` + Pydantic (existing `store/`): Intervention records — same pattern as EditRecord; no ORM needed
+- `ModelRouter.call()` (existing `agent/router.py`): Analysis generation — gpt-4o general tier with pre-computed structured metrics as input, not raw logs
+- Railway CLI: Deployment — `railway up` via `run_command_async()`; set `NIXPACKS_BUILD_CMD` for pnpm monorepo
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Three-panel resizable layout with collapse — core IDE convention; missing means prototype
-- File explorer with real directory tree (lazy-loaded) — cannot review agent work without one
-- Syntax-highlighted read-only file viewer in tabs — raw text feels broken in an IDE
-- Side-by-side diff view for agent edits with approve/reject — primary agent review workflow
-- Top bar with instruction input + project selector — prompt must always be accessible
-- Agent activity stream with step timeline — users must see what the agent is doing
-- Run status indicator in TopBar — always-visible agent state
+**Must have (table stakes) — all P1 for v1.3:**
+- `POST /rebuild` endpoint with managed background task lifecycle — returns `run_id`, streams events, supports cancellation
+- EventBus wired to DAGScheduler — currently disconnected in `ship_rebuild.py`; scheduler already accepts `event_bus` param
+- From-scratch file creation in agent — new `create` step kind, `creator_node` or extended editor, `write_file()` tool
+- Remove `_seed_output_from_source()` — rebuild must start from empty git repo
+- PRD-style task descriptions — planner outputs "create" steps with explicit file paths, not "edit" steps
+- `Intervention` Pydantic model + SQLite table — 9-field structured schema defined before first rebuild run
+- Metric collection hooks in scheduler — timing, LOC, success rate, token usage per task
+- LLM-driven CODEAGENT.md population — fill `[FILL AFTER REBUILD]` placeholders from structured metrics
+- Frontend rebuild progress panel — clone/analyze/plan/execute/build/deploy stages with task-level progress
+- Railway deployment — account verified early, rebuilt Ship deployed to public URL
 
-**Should have (high-value differentiators to ship in v1.1):**
-- Live file change indicators (M/A/D) in file tree — low complexity, high impact for agent observability
-- Auto-open diff on approval request — low complexity, dramatically improves edit review UX
-- Preview vs pinned tabs (VS Code convention) — prevents tab explosion, expected by power users
+**Should have (competitive differentiators):**
+- Intervention auto-detection — detect corrective instruction after failure, auto-log as intervention
+- Token cost breakdown per rebuild phase — tag ModelRouter calls with phase/task_id
+- Rebuild cancellation with worktree cleanup — extend run cancellation to DAGScheduler
+- Persistent loop with WebSocket reconnect and event replay — already 90% built via existing EventBus replay
 
-**Defer to v1.2:**
-- Run history dropdown (requires new backend endpoint, not critical for demo)
-- Expandable LLM output in activity stream (agent stream shows step summaries; full output is secondary)
-- Keyboard shortcuts beyond existing Ctrl+Shift+P
-- Inline approval in activity stream (users can approve in the diff tab)
-- In-browser code editing (explicit anti-feature for v1.1 — the agent edits, users review)
-- Git graph visualization, terminal panel, file search, minimap
+**Defer to v2+:**
+- Multi-project rebuild support
+- Incremental rebuild (only regenerate files changed in PRD)
+- Test generation as a rebuild step
+- Cross-agent collaboration for module parallelism
+- Live task DAG visualization (graph rendering library)
+- Custom PRD editor in UI
 
 ### Architecture Approach
 
-The target architecture adds one new context (WorkspaceProvider), one new layout shell (IDELayout replacing AppShell), four primary components (TopBar, FileExplorer, EditorArea, ActivityStream), and two sub-components (FileViewer, DiffPanel). The existing WebSocketContext and ProjectContext are kept with minor extensions. The key structural principle is single-responsibility: WorkspaceProvider owns client-side UI state only (open tabs, selected path, expanded dirs, changed files map); ProjectContext owns server-side state (projects, runs, instructions); WebSocketContext owns the connection and dispatch. All high-frequency WebSocket-derived state (file statuses, event stream) belongs in Zustand stores outside React reconciliation.
+Extend the existing server/agent/store three-layer architecture with five new components, all fitting within established boundaries. No new layers, no new process boundaries. The rebuild pipeline uses a strictly sequential phase model (clone → analyze → plan → execute → build → deploy) wrapped in an async context manager that emits EventBus events automatically on entry, exit, and error. A single active rebuild guard (`_active_rebuild` global in `server/main.py`) prevents resource contention. Analysis generation runs as a post-processing step after the DAG completes, receiving pre-computed structured metrics as LLM input — not raw logs.
+
+Key anti-patterns explicitly called out by research: do NOT poll `GET /rebuild/{id}` from the frontend (WebSocket already delivers push updates), do NOT store the full Markdown analysis in SQLite (write to filesystem, store path), do NOT create a separate `/ws/rebuild` WebSocket endpoint (existing `/ws` with ConnectionManager handles rebuild events via run_id subscription).
 
 **Major components:**
-1. `WorkspaceProvider` — new context managing tab state, selected path, expanded dirs, changed file tracking; consumed by all panels
-2. `IDELayout` — replaces AppShell; mounts TopBar + react-resizable-panels PanelGroup
-3. `TopBar` — instruction input, project selector, run status indicator (always visible)
-4. `FileExplorer` — lazy-loaded recursive file tree from extended `/browse` API; M/A/D indicators from WebSocket diff events; virtualized via React Arborist
-5. `EditorArea` — tab container managing FileViewer and DiffPanel; preview/pinned tab semantics
-6. `FileViewer` — read-only code display with Shiki syntax highlighting; local state for content (not in Context)
-7. `DiffPanel` — side-by-side diff with jsdiff; approve/reject reuses existing `api.patchEdit`; memoized by edit_id
-8. `ActivityStream` — evolves from AgentPanel; absorbs RunProgress; virtualized event list via TanStack Virtual
-
-**Backend additions (no new Python dependencies):**
-- Extend `GET /browse` to include files (remove `is_dir()` filter, add file metadata)
-- Add `GET /files?path=` for file content (pathlib read + mimetypes language detection)
-- Add path validation to `/browse` and `/files` to prevent directory traversal (`os.path.commonpath` check)
+1. `RebuildController` (`server/main.py` new routes) — POST /rebuild endpoint, single-active-rebuild guard, task lifecycle management with try/except and status persistence
+2. `RebuildService` (`agent/orchestrator/rebuild_service.py` new) — wraps `run_rebuild()` with EventBus phase tracking via `rebuild_phase()` async context manager
+3. `InterventionStore` (`store/sqlite.py` extend) — CRUD for `Intervention` records; dual-write to EventBus + SQLite for real-time UI and analysis queries
+4. `AnalysisGenerator` (`agent/orchestrator/analysis.py` new) — generates 7-section comparative analysis from pre-computed structured metrics dict; validates sections before accepting output
+5. `RebuildPanel` (`web/src/components/rebuild/` new) — React component + Zustand rebuild slice; subscribes to rebuild run_id via existing WebSocket subscription model
 
 ### Critical Pitfalls
 
-1. **WebSocket render storms** — Each WebSocket message dispatched to `useState` handlers triggers its own render cycle (React 18 batching does not apply across `onmessage` callbacks). At 20-50 messages/second during runs, all panels re-render 20-50 times/second. Prevention: move WebSocket event distribution into a Zustand store; each panel subscribes to its own slice. Must be decided in Phase 1 — retrofitting is a full-codebase rewrite (~2-3 days recovery).
+1. **Background task silently dies with no status update** — wrap entire `run_rebuild()` body in try/except catching ALL exceptions; update run status to "failed" in DB; emit `rebuild_failed` event; store `asyncio.Task` reference in `app.state.rebuild_task`; replace all `print()` calls with `EventBus.emit()`; handle graceful shutdown in lifespan; use `asyncio.shield()` around critical git operations
 
-2. **React Context propagation cascade** — The existing `WebSocketContext` bundles stable refs with frequently-changing values (`snapshot`, `status`). Every consumer re-renders on any value change, bypassing `React.memo`. With three IDE panels consuming this context, a snapshot update re-renders every panel simultaneously. Prevention: keep Context only for static data; move all dynamic state to Zustand with fine-grained selectors. Phase 1 architectural decision.
+2. **Editor node cannot create files (entire pipeline assumes files exist)** — add `PlanStep.kind = "create"`, route to a creation code path with `file_ops.write_file()` (full LLM-generated content, no anchor matching, `makedirs`); update validator to handle files with no LSP baseline; planner must output "create" steps with explicit file paths for all files in an empty output directory
 
-3. **Non-virtualized file tree** — Real project directories include node_modules, __pycache__, dist with thousands of files. Without virtualization, expanding any large directory freezes the browser. The `/browse` endpoint currently has no gitignore filtering (confirmed in codebase audit). Prevention: use React Arborist (virtualized file explorer) from day one; filter node_modules/.git/dist on the backend. Retrofitting virtualization requires a complete component rewrite (~2 days recovery).
+3. **Intervention schema defined too late — cannot be retroactively applied** — `Intervention` Pydantic model with all 9 required fields (`trigger`, `category`, `agent_state_snapshot`, `files_affected`, `resolution`, `could_agent_have_done_this`, `time_spent_seconds`, etc.) must be finalized before the first rebuild run; free-text logs cannot be structured after the fact
 
-4. **Naive diff algorithm** — The existing `DiffViewer.tsx` marks every old line as removed and every new line as added (confirmed: `buildDiffLines` function in codebase). This produces unreadable output and freezes the main thread on files >500 lines. Prevention: use `diff.diffLines()` for actual change computation; memoize computed diffs by `edit_id`; for files >2000 lines, consider Web Worker or fallback summary.
+4. **Comparative analysis generates hallucinated metrics** — pre-compute all hard metrics (task completion rate, build success boolean, intervention count, time per phase, LOC, token cost) before invoking LLM; feed as structured dict, not raw logs; hard-code all 7 section headings in prompt; validate generated numbers against pre-computed values; require a "Limitations and Failures" section
 
-5. **Syntax highlighting bundle bloat and render blocking** — Monaco adds ~2MB to the bundle and 50-100MB per instance; Shiki's `codeToHtml()` is synchronous and blocks 50-200ms on large files if called during render. Prevention: use Shiki only (never Monaco for v1.1); lazy-load via dynamic import; load language grammars on demand; call via `useEffect` so initial render shows plain text; code-split via `React.lazy()`.
+5. **Memory leak over multi-hour rebuild** — each DAG task must use a fresh `AgentState` (current `ship_executor.py` does this — verify it stays true on any changes); after task completion, store only summary data (edit count, files modified, success/failure), discard full state; limit `runs` dict to sliding window of 50; `add_messages` reducer in `AgentState` appends without bound — state reuse across tasks would exhaust memory within 50 tasks
 
 ## Implications for Roadmap
 
-The architecture research provides an explicit four-phase build order with hard dependencies. This should map directly to roadmap phases.
+Based on research, suggested phase structure:
 
-### Phase 1: Foundation — Layout, State Architecture, TopBar
+### Phase 1: Persistent Loop Infrastructure
+**Rationale:** Everything downstream depends on the rebuild being observable, cancellable, and survivable across server restarts. This is the plumbing phase. Railway account verification belongs here as a prerequisite check — not a final step.
+**Delivers:** `POST /rebuild` endpoint with managed task lifecycle; EventBus wired to DAGScheduler; WebSocket streaming of rebuild events; task cancellation (`POST /rebuild/{id}/cancel`); memory management strategy (fresh state per task, runs dict window); git worktree cleanup in scheduler `finally` block; phase-weighted progress reporting; Railway "hello world" deployed to verify account
+**Addresses:** POST /rebuild endpoint, EventBus wiring, persistent loop with WebSocket reconnect
+**Avoids:** Background task silent failure (Pitfall 1), memory leak (Pitfall 7), git worktree accumulation (Pitfall 9), erratic progress display (Pitfall 8), Railway billing surprise (Pitfall 6)
 
-**Rationale:** WorkspaceProvider and the Zustand state management architecture must exist before any panel component can be built. IDELayout must exist before panels can be placed. This phase also addresses the two highest-recovery-cost pitfalls (render storms, Context cascade) — 2-3 days each to fix retroactively vs. 0 days if designed correctly upfront.
+### Phase 2: From-Scratch Code Generation
+**Rationale:** The headline capability and highest technical risk. Must be proven functional before the full rebuild pipeline runs. Planner, editor, and validator all need changes that are foundational to Phase 4.
+**Delivers:** `PlanStep.kind = "create"` with creator code path; `file_ops.write_file()` tool; planner prompt changes for `generation_mode: from_scratch`; `_seed_output_from_source()` removed; DAG ordering enforcing foundational files (types, models, utils) before consumers; post-merge import validation
+**Uses:** Existing LangGraph graph extended; existing `file_ops.py` extended; existing planner with new prompts
+**Implements:** Creator node or extended editor; file creation tool path; PRD-style task descriptions
+**Avoids:** Editor "file must exist" assumption (Pitfall 2), planner edit-vs-create confusion (Pitfall 10), cross-module circular imports (Pitfall 11)
 
-**Delivers:** Working IDE shell with resizable panels, persistent layout sizes, instruction input always visible in TopBar, run status indicator. Panels render as placeholders pending real data.
+### Phase 3: Intervention Logging
+**Rationale:** Schema must be locked before the first real rebuild run. Unstructured logs cannot be retroactively structured. Low implementation cost but permanent consequences if skipped.
+**Delivers:** `Intervention` Pydantic model with all required fields; SQLite `interventions` table + index; `POST /rebuild/{id}/intervention` and `GET /rebuild/{id}/interventions` endpoints; auto-context snapshot on log (current DAG state, recent events); dual-write (EventBus + SQLite); floating "Log Intervention" button always visible during rebuild
+**Uses:** Existing aiosqlite + Pydantic pattern; existing EventBus emit; existing SQLite store
+**Avoids:** Wrong intervention granularity (Pitfall 4), SQLite write contention from separate table (Pitfall 3 partial)
 
-**Addresses:** Table stakes: resizable three-panel layout, TopBar instruction input, run status indicator, panel collapse/expand
+### Phase 4: Full Rebuild Pipeline Run
+**Rationale:** First end-to-end run of the rebuild against the real Ship repo. Phases 1-3 provide the infrastructure; this phase executes it and validates that PRD-driven generation produces a buildable app.
+**Delivers:** Complete Ship rebuild from empty repo; structured intervention log from the actual run; all metric collection working (timing, LOC, tokens, task success rate); CODEAGENT.md `[FILL AFTER REBUILD]` placeholders populated with real data
+**Uses:** All infrastructure from Phases 1-3; existing DAGScheduler; existing BranchManager; existing CIRunner
 
-**Avoids:** Pitfall 1 (WebSocket render storms — design Zustand integration here), Pitfall 2 (Context propagation cascade — split state architecture here), Pitfall 6 (panel resize jank — react-resizable-panels)
+### Phase 5: Comparative Analysis Generation
+**Rationale:** Final deliverable. Requires complete data from Phase 4. Analysis quality is determined by pre-computed metrics, not LLM inference from raw logs.
+**Delivers:** `AnalysisGenerator` component; 7-section ANALYSIS.md with all sections non-empty; quantitative claims verified against pre-computed metrics; `GET /rebuild/{id}/analysis` endpoint serving the file; `analysis_ready` EventBus event
+**Uses:** Existing ModelRouter (gpt-4o general tier); structured metrics dict from Phase 4; intervention records from Phase 3
+**Avoids:** Comparative analysis fiction (Pitfall 5), missing analysis sections (Pitfall 12)
 
-**Stack:** `react-resizable-panels`, Zustand (install in this phase)
-
-### Phase 2: File Explorer — Backend Extensions + FileExplorer Component
-
-**Rationale:** Depends on Phase 1 (WorkspaceProvider must exist for file selection state and changedFiles map). Backend file endpoints must exist before FileExplorer can show real data. Virtualization must be the foundation — React Arborist has a fundamentally different API from a naive recursive tree and cannot be incrementally added later.
-
-**Delivers:** Real file tree browsing with lazy-loading, M/A/D change indicators during agent runs, files accessible by path, security-hardened backend endpoints.
-
-**Addresses:** Table stakes: file explorer with real directory tree; differentiator: live M/A/D change indicators
-
-**Avoids:** Pitfall 4 (file tree collapse/freeze — React Arborist virtualization from day one), security: Pitfall 10 (/browse path traversal — `os.path.commonpath` validation)
-
-**Stack:** React Arborist (new frontend dependency), backend uses existing Python only
-
-### Phase 3: Editor Area — Tabs, FileViewer, DiffPanel
-
-**Rationale:** Depends on Phase 1 (WorkspaceProvider tab state) and Phase 2 (file content endpoint from `/files`). Tab system must exist before FileViewer/DiffPanel can mount in tabs. Diff algorithm and Shiki loading strategy are architectural decisions that cannot be changed incrementally.
-
-**Delivers:** Full code review workflow — open files in syntax-highlighted tabs, view side-by-side diffs for agent edits, approve/reject from diff view, preview/pinned tab semantics, stale file detection banner.
-
-**Addresses:** Table stakes: syntax-highlighted file viewer, diff view with approve/reject; differentiator: preview vs pinned tabs, auto-open diff on approval request
-
-**Avoids:** Pitfall 3 (diff rendering freeze — jsdiff + memoization), Pitfall 5 (highlighting bloat — Shiki async, not Monaco), Pitfall 8 (tab state loss — local state per component not Context), Pitfall 9 (stale file content — external change banner), Pitfall 11 (glassmorphic diff color conflicts — higher-opacity diff backgrounds, e.g., `rgba(239,68,68,0.25)`)
-
-**Stack:** `shiki`, `diff` (jsdiff) — install in this phase
-
-### Phase 4: Activity Stream — AgentPanel Evolution + RunProgress Absorption
-
-**Rationale:** Depends on Phase 1 (WorkspaceProvider.openDiff for auto-open on approval events). Independent of Phases 2-3 and can overlap them partially. Completing it last ensures the full WorkspaceContext integration is in place. Agent stream virtualization reuses the TanStack Virtual pattern established in Phase 2.
-
-**Delivers:** Unified activity stream replacing both AgentPanel and RunProgress. Virtualized event list for long runs. Auto-opens diff tab when agent requests approval. Step summaries expandable to full agent detail. WebSocket reconnection replays missed events via `lastSeqRef`.
-
-**Addresses:** Table stakes: agent activity stream with step timeline; differentiator: auto-open diff on approval
-
-**Avoids:** Pitfall 7 (agent stream DOM growth — TanStack Virtual with dynamic row heights), UX pitfall: auto-scroll overrides user position (sticky scroll pattern)
+### Phase 6: Railway Deployment
+**Rationale:** Final demo requirement. Account verified in Phase 1; this phase executes actual deployment of the rebuilt Ship app to a public URL.
+**Delivers:** Rebuilt Ship deployed to public Railway URL; `pnpm build` clean pass; `PORT` binding correct; `railway.toml` or `NIXPACKS_BUILD_CMD` configured for pnpm monorepo
+**Avoids:** Railway trial expiry surprise (Pitfall 6 — already handled by Phase 1 verification)
 
 ### Phase Ordering Rationale
 
-- WorkspaceProvider is a dependency of every panel component — it cannot move out of Phase 1.
-- Backend endpoints block FileExplorer from displaying real data — they must precede Phase 2 component work.
-- Tab system blocks FileViewer and DiffPanel from mounting — it must precede Phase 3.
-- ActivityStream's auto-open-diff behavior requires `WorkspaceProvider.openDiff()` — Phase 1 dependency, but the component itself can be built in Phase 4.
-- All performance architecture decisions (Zustand, virtualization) cost 2-3x more to retrofit than to design correctly upfront.
+- Phase 1 before everything: silent background task failures cascade into every observable feature; memory management and cancellation cannot be retrofitted
+- Phase 2 before Phase 4: the rebuild pipeline is meaningless if the agent cannot create files; seeding is a v1.2 workaround, not a fallback for v1.3
+- Phase 3 before Phase 4: intervention schema cannot be retroactively applied to logs from a completed rebuild; this has no recovery path
+- Phase 5 after Phase 4: comparative analysis requires completed rebuild data; cannot be generated speculatively
+- Phase 6 last: depends on Phase 4 producing a buildable app; Railway account verification (Phase 1 check) separates infrastructure readiness from final deployment
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
+- **Phase 2:** From-scratch generation is the least-charted territory in this codebase — `creator_node` design, DAG ordering for dependency satisfaction, contract-first generation pattern, and planner prompt engineering all need implementation research before coding starts; the existing `ContractStore` reference (Pitfall 11) needs investigation
+- **Phase 4:** First real rebuild run will surface unknown failure modes; plan for at least one iteration cycle
 
-- **Phase 1 (Zustand store architecture):** Zustand was not in STACK.md — it emerged from PITFALLS.md analysis. Store shape for WebSocket event distribution (per-event-type slices vs. unified event log) should be decided before building consumers. Confirm Zustand version and selector patterns for React 19.
-- **Phase 2 (React Arborist compatibility):** Not in STACK.md — recommended by PITFALLS.md for virtualized file tree. Confirm React 19 compatibility before starting Phase 2. TanStack Virtual is the fallback if incompatible.
-- **Phase 3 (Large-file diff strategy):** PITFALLS.md recommends `@git-diff-view/react` or CodeMirror 6 merge extension for files >2000 lines, but STACK.md recommends jsdiff + custom renderer. Validate the custom renderer approach handles the "Looks Done But Isn't" checklist items (new file with null old_content, deleted file with null new_content, 5000-line file).
-
-Phases with well-documented standard patterns (skip research-phase):
-
-- **Phase 1 (react-resizable-panels layout):** Library is mature, well-documented, API is clear. Standard integration with `autoSaveId` for persistence.
-- **Phase 1 (TopBar instruction input):** Moves existing WorkspaceHome textarea to TopBar. Straightforward refactor.
-- **Phase 3 (approve/reject actions):** Reuses existing `api.patchEdit` — no new API surface.
-- **Phase 4 (WebSocket event subscription):** Uses existing wildcard subscribe pattern unchanged.
+Phases with standard patterns (skip research-phase):
+- **Phase 1:** AsyncIO background task lifecycle, EventBus wiring, and WebSocket streaming are well-documented patterns already established in the codebase
+- **Phase 3:** Pydantic model + SQLite table + CRUD endpoint is a direct repeat of existing store patterns (EditRecord, Project, Run)
+- **Phase 5:** LLM-driven analysis with structured input is a standard prompt-engineering task; data collection patterns are established
+- **Phase 6:** Railway CLI deployment is a single command; configuration is table-stakes Node.js deployment
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All existing dependencies verified in package.json. New libraries verified on npm with version numbers. No speculative choices. |
-| Features | HIGH | Based on VS Code UX conventions (de facto standard) and direct audit of existing Shipyard components. Feature boundaries are clear and well-reasoned. |
-| Architecture | HIGH | Entire `web/src/` codebase audited directly. Component boundaries, data flows, and integration points based on actual code. Backend endpoints verified in `server/main.py`. |
-| Pitfalls | HIGH | Each critical pitfall confirmed against actual codebase: naive diff in `DiffViewer.tsx` (`buildDiffLines`), no path validation in `/browse`, stable refs mixed with dynamic values in `WebSocketContext.tsx` — all verified directly. |
+| Stack | HIGH | All recommendations traced directly to specific files and line numbers in the existing codebase; zero new dependencies means no external verification needed |
+| Features | HIGH | Features defined in PROJECT.md with explicit CODEAGENT.md deliverables; dependency graph is unambiguous; all P1 features required for demo |
+| Architecture | HIGH | Extends existing patterns without new layers; component boundaries and data flow are well-defined; anti-patterns explicitly documented |
+| Pitfalls | HIGH | Pitfalls grounded in specific line numbers (`print()` calls in `ship_rebuild.py` lines 252/263/278/283, `add_messages` reducer in `agent/state.py`, `runs` dict in `server/main.py` line 27); not speculative |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Zustand version and store shape:** Zustand is recommended by PITFALLS.md but not specified with a version. Add to STACK.md and confirm install during Phase 1 planning. Store shape for WebSocket event distribution should be decided before building consumers.
-- **React Arborist + React 19 compatibility:** Confirm before Phase 2 starts. TanStack Virtual is the fallback.
-- **Large file diff strategy:** For files >2000 lines, the jsdiff + custom renderer approach may need a Web Worker. The checklist item "Files >5000 lines show graceful fallback" needs an explicit implementation decision in Phase 3 planning.
-- **Path normalization for display:** PITFALLS.md flags that raw server absolute paths should not reach the browser. Decide in Phase 2 whether the backend strips the project root or the frontend computes relative paths from the known project root.
-- **File content caching strategy:** Decide during Phase 3 whether to cache file contents across tab switches or re-fetch. Re-fetching is simpler and always current; caching is faster for large files but adds invalidation complexity on agent edits.
+- **Creator node design decision:** Research identifies what must change but the exact implementation — extend `editor_node` vs build a separate `creator_node` — requires a design decision during Phase 2 planning; either path is valid but must be chosen before coding
+- **ContractStore investigation:** Pitfall 11 references an existing `ContractStore` for cross-module contract sharing; this component needs investigation before Phase 2 planning to confirm it exists and is usable for dependency ordering
+- **SQLite write contention threshold:** Research recommends write batching at 100ms windows under 10x concurrent load, but the actual contention threshold for this codebase's event volume is unknown; measure during Phase 4 rather than preemptively optimizing
+- **Intervention auto-detection mechanism:** Detecting that a user instruction is a "corrective intervention" (vs a new instruction) is not designed; deferred to v1.3.x but needs acknowledgment as a gap in the auto-logging story
 
 ## Sources
 
-### Primary (HIGH confidence — direct codebase audit)
-- `web/src/` — All components, contexts, hooks, types, api module (full audit)
-- `server/main.py` — Backend endpoints, `/browse` implementation, path handling
-- `web/src/components/DiffViewer.tsx` — Naive diff algorithm confirmed (`buildDiffLines`)
-- `web/src/contexts/WebSocketContext.tsx` — Context value mixing stable refs with changing values confirmed
-- `web/package.json` — Existing dependency versions confirmed
+### Primary (HIGH confidence)
 
-### Primary (HIGH confidence — library verification)
-- [react-resizable-panels npm](https://www.npmjs.com/package/react-resizable-panels) — v4.7.6, 1777 npm dependents
-- [diff (jsdiff) npm](https://www.npmjs.com/package/diff) — v7.0, Myers O(ND) algorithm
-- [Shiki](https://shiki.style/) — v3.0, VS Code TextMate grammars, 200+ languages
+- Codebase audit: `scripts/ship_rebuild.py`, `agent/nodes/editor.py`, `agent/state.py`, `server/main.py`, `agent/orchestrator/scheduler.py`, `agent/orchestrator/ship_executor.py`, `agent/events.py`, `store/models.py`, `agent/router.py` — all recommendations traced to specific files and line numbers
+- FastAPI official documentation — background task pattern with `asyncio.create_task()`, lifespan context manager
+- SQLite official documentation — WAL mode concurrency, write serialization characteristics
+- Python asyncio documentation — task exception handling, `asyncio.shield()`, task cancellation
 
-### Secondary (MEDIUM confidence — community sources)
-- [React Context Performance Trap: useSyncExternalStore](https://azguards.com/performance-optimization/the-propagation-penalty-bypassing-react-context-re-renders-via-usesyncexternalstore/)
-- [Streaming Backends & React: Controlling Re-render Chaos](https://www.sitepoint.com/streaming-backends-react-controlling-re-render-chaos/)
-- [React State Management: Context API vs Zustand](https://medium.com/@bloodturtle/react-state-management-why-context-api-might-be-causing-performance-issues-and-how-zustand-can-ec7718103a71)
-- [Git Diff View — High-Performance Diff Component](https://mrwangjusttodo.github.io/git-diff-view/)
-- [Building High Performance Directory Components in React](https://dev.to/jdetle/memoization-generators-virtualization-oh-my-building-a-high-performance-directory-component-in-react-3efm)
-- [Shiki vs react-syntax-highlighter — Vercel AI Elements #14](https://github.com/vercel/ai-elements/issues/14)
-- [TanStack Virtual](https://tanstack.com/virtual/latest)
-- [react-resizable-panels GitHub](https://github.com/bvaughn/react-resizable-panels)
-- VS Code UX conventions (de facto standard for IDE UI patterns)
+### Secondary (MEDIUM confidence)
+
+- Railway CLI documentation — `RAILWAY_TOKEN`, `railway up`, `NIXPACKS_BUILD_CMD` for pnpm monorepos, ephemeral filesystem behavior
+- Oracle: What Is the AI Agent Loop — persistent loop architecture patterns
+- LoginRadius: Auditing and Logging AI Agent Activity — intervention log schema design
+- IEEE: Comparative Analysis between AI Generated Code and Human Written Code — analysis section framing and metrics selection
+- ChatPRD: Writing PRDs for AI Code Generation Tools — PRD-style task description format for from-scratch generation
+
+### Tertiary (LOW confidence)
+
+- ASDLC.io: Ralph Loop Pattern — referenced for comparison; deliberately not adopted in favor of existing DAGRun persistence (existing pattern is sufficient)
+- Anthropic: Measuring Agent Autonomy — `could_agent_have_done_this` field inspiration in Intervention schema (validate against final CODEAGENT.md requirements)
 
 ---
-*Research completed: 2026-03-27*
+*Research completed: 2026-03-30*
 *Ready for roadmap: yes*
